@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#081218"><meta name="description" content="고요한 우주를 떠돌고, 행성의 왕을 회수하는 1인칭 파괴 샌드박스."><title>왕들의 궤도 · KINGS’ ORBIT</title><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230d1b23'/%3E%3Ccircle cx='32' cy='32' r='18' fill='none' stroke='%23dcb682' stroke-width='2'/%3E%3Cellipse cx='32' cy='32' rx='29' ry='8' fill='none' stroke='%23dcb682' stroke-width='2' transform='rotate(-25 32 32)'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="src/ui/styles.css"></head><body>
+<canvas id="world" tabindex="0" aria-label="왕들의 궤도 3D 게임"></canvas>
+<div id="ui">
+ <div id="title">
+  <div id="titleContent">
+   <div class="brandMark"><i class="orbitMark"></i><div class="eyebrow">A SOLITARY VOYAGE<br>INTO THE QUIET</div></div>
+   <h1>KINGS’<span class="thin">ORBIT</span></h1>
+   <div class="koreanTitle">왕들의 궤도</div>
+   <p class="tagline">우주는 고요하다.<br>당신이 내려앉기 전까지는.</p>
+   <div class="titleActions"><button id="startBtn" class="primary">항해 시작 <span>↗</span></button><button id="titleHelp" class="ghost">조작 안내</button></div>
+  </div>
+  <div class="titleFoot"><span>NØMAD / FIRST CONTACT</span><span class="muted">1인칭 우주 유랑 · 파괴 샌드박스</span><button class="linkButton" id="titleSettings">설정</button></div>
+ </div>
+ <div id="hud" class="hidden">
+  <div class="topline"><div class="areaLabel"><div class="eyebrow" id="sector">MOTHERSHIP · NØMAD</div><h2 id="area">조종실</h2></div><div class="tools"><button id="soundBtn" class="iconButton" title="소리 켜기 또는 끄기" aria-label="소리 전환">♪</button><button id="fullBtn" class="iconButton" title="전체 화면" aria-label="전체 화면">⛶</button><button id="menuBtn" class="iconButton" title="메뉴 / 일시정지">Ⅱ</button></div></div>
+  <div id="crosshair"><div id="hitmarker"></div></div><div id="context"></div><div id="pullMeter" class="hidden"><div></div></div>
+  <div id="prompt" class="hidden"><kbd>E</kbd><span></span></div>
+  <div class="bottomline"><div id="status"><div id="statusTitle">선내 보행</div><div id="statusValue">NØMAD</div></div><div id="controlHint"></div></div>
+  <div id="spaceTarget" class="hidden"><div class="diamond"></div><strong>EDEN / 01</strong><small id="distanceLabel"></small></div>
+  <button id="spaceAction" class="hidden">T · 에덴으로 자동항해</button><button id="returnAction" class="iconButton hidden">R · 모선 귀환</button>
+  <div id="worldLabels"></div>
+  <div id="touch"><div id="joystick"><div id="stickKnob"></div></div><button id="touchBoost" class="touchButton">가속</button><button id="touchFire" class="touchButton">광선<small>길게 누르기</small></button><button id="touchGrab" class="touchButton">견인</button><button id="touchPulse" class="touchButton">충격파</button><button id="touchUp" class="touchButton">↑</button><button id="touchDown" class="touchButton">↓</button><button id="touchInteract" class="touchButton">상호작용</button></div>
+  <div id="portraitTip">가로 화면에서 더 넓게 볼 수 있습니다.</div>
+ </div>
+ <div id="toast" class="toast"><strong></strong><span></span></div>
+ <div id="damageFlash"></div>
+ <div id="transition"><div><strong></strong><span></span></div></div>
+ <div id="loading" class="loading"><div class="loadInner"><div class="orbitMark"></div><div class="eyebrow" id="loadTitle">AWAKENING NØMAD</div><div class="loadBar"><div></div></div><div class="loadDesc" id="loadDesc">항법 장치와 선내 시스템을 깨우는 중</div></div></div>
+ <div id="panelWrap" class="panelBackdrop hidden"><section id="panel" class="panel" role="dialog" aria-modal="true" aria-label="게임 메뉴"></section></div>
+ <div id="fatal" class="panelBackdrop hidden"><section class="panel"><div class="eyebrow">SYSTEM INTERRUPTED</div><h2>항해를 시작하지 못했습니다.</h2><p class="text" id="fatalText"></p><div class="panelActions"><button class="primary" onclick="location.reload()">다시 시도 ↗</button></div></section></div>
+ <div id="debug" class="hidden"></div>
+</div>
+
+<script src="src/core/math.js"></script>
+<script src="src/core/engine.js"></script>
+<script src="src/core/input.js"></script>
+<script src="src/core/audio.js"></script>
+<script src="src/core/save.js"></script>
+<script src="src/ui/ui.js"></script>
+<script src="src/worlds/models.js"></script>
+<script src="src/worlds/space.js"></script>
+<script src="src/worlds/interior.js"></script>
+<script src="src/vehicles/destroyer.js"></script>
+<script src="src/planets/registry.js"></script>
+<script src="src/main.js"></script>
+</body></html>

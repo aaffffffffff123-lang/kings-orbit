@@ -1,0 +1,1 @@
+{"name":"kings-orbit","version":"0.1.0","private":true,"description":"A first-person cosmic wandering and destruction sandbox. No runtime dependencies.","scripts":{"build":"python3 tools/build.py","start":"python3 -m http.server 8080"},"license":"UNLICENSED"}
