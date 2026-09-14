@@ -177,7 +177,7 @@ if(type>9.5&&type<18.5){
  else if(type<15.5){float bands=.5+.5*sin(q.y*30.+fbm(qp*7.)*7.);land=base*(.39+bands*.79);float eye=length((q.xz-vec2(.25,-.5))*vec2(2.5,1.));land=mix(land,base*vec3(1.35,.62,.37),exp(-eye*eye*35.)*.8);}
  else if(type<16.5){land=base*(.09+fine*.24);float seam=1.-smoothstep(.012,.035,abs(noise(qp*12.)-.5));land+=base*seam*.32;}
  else {float cells=floor(fine*7.)/7.;land=base*(.28+cells*1.15);land+=vec3(.25,.3,.46)*pow(max(dot(reflect(-L,N),V),0.),50.);}
- if(type<10.5||type>13.5&&type<14.5){float clouds=smoothstep(.56,.72,fbm(qp*9.+vec3(uTime*.004,0.,0.)));land=mix(land,base*.3+vec3(.57),clouds*.7*(1.-damage));}
+ if(type<10.5||type>13.5&&type<14.5){float clouds=smoothstep(.56,.72,fbm(qp*9.+vec3(uTime*.004,0.,0.)));land=mix(land,base*.3+vec3(.57),clouds*.7*max(0.,1.-damage*1.9));}
  float ice=smoothstep(.87,.99,abs(q.y)+fine*.07);if(type<10.5)land=mix(land,vec3(.86,.92,.91),ice);
  float cracks=1.-smoothstep(.004,.018+damage*.035,abs(noise(qp*6.5)-.5));
  float pits=noise(qp*3.2+vec3(4.,2.,1.));
@@ -185,7 +185,7 @@ if(type>9.5&&type<18.5){
  vec3 lit=land*(.075+nd*1.12)*(1.-damage*.49);
  lit+=vec3(1.8,.32,.035)*cracks*damage*(.7+damage*.85);
  float rim=pow(1.-max(dot(N,V),0.),3.1);lit+=base*rim*(.25+nd)*.6*(1.-damage*.7);
- if(type<10.5){float cities=step(.985,hash(floor(qp*450.)))*smoothstep(.54,.63,low)*(1.-smoothstep(.02,.18,nd));lit+=vec3(1.,.5,.13)*cities*.65*(1.-damage);}
+ if(type<14.5||type>15.5){vec3 cell=floor(qp*450.);float cities=step(.985,hash(cell))*smoothstep(type<10.5?.54:.45,type<10.5?.63:.62,low)*(1.-smoothstep(.02,.18,nd));float alive=step(damage+.001,hash(cell+vec3(7.,3.,1.)));lit+=vec3(1.,.5,.13)*cities*alive*.72;}
  outColor=vec4(lit,alpha);return;
 }
 if(type>1.5&&type<2.5){vec3 q=normalize(vLocal);float land=fbm(q*4.4+vec3(8.,3.,1.));float detail=fbm(q*30.);col=mix(vec3(.021,.09,.135),vec3(.047,.28,.285),smoothstep(.35,.56,land));col=mix(col,vec3(.3,.47,.33),smoothstep(.535,.57,land));col=mix(col,vec3(.68,.67,.48),smoothstep(.64,.76,land));float clouds=smoothstep(.53,.68,fbm(q*9.+vec3(uTime*.004,0.,0.)));col=mix(col,vec3(.88,.94,.92),clouds*.83);float ice=smoothstep(.83,.98,abs(q.y)+detail*.1);col=mix(col,vec3(.85,.92,.91),ice);float light=.045+nd*1.15;col*=light;float rim=pow(1.-max(dot(N,V),0.),3.);col+=vec3(.15,.45,.64)*rim*(.25+nd);float cities=step(.985,hash(floor(q*450.)))*smoothstep(.52,.61,land)*(1.-smoothstep(.02,.18,nd));col+=vec3(1.,.52,.16)*cities*.7;outColor=vec4(col,alpha);return;}
@@ -1106,7 +1106,16 @@ class OrbitalWeapons{
   if(final){
    if(this.space.target.id===def.id){this.space.auto=false;this.space.velocity=[0,0,0];}
    this.game.ui.toast(def.name+' · 행성 소멸',u.hasTrophy(def.id)?'왕관은 전시실에 남아 있습니다.':'그 행성의 왕을 회수할 수 없게 되었습니다.',6);
-  }else this.game.ui.toast(def.name+' · 지각 붕괴',u.hits(def.id)>=4?'한 번 더 명중하면 행성이 소멸합니다.':'충돌 흔적은 저장됩니다. 지금 떠나도 됩니다.',3);
+  }else{
+   const n=u.hits(def.id),known=u.scan(def.id)>=4,name=u.displayName(def.id);
+   const STAGE=[
+    ['대기권 관통','구름 띠가 찢어졌습니다.'],
+    ['지표 타격',known?'밤면의 불빛 일부가 꺼졌습니다.':'밤면을 돌아보면 무엇이 꺼졌는지 보입니다.'],
+    ['지각 붕괴','맨틀이 노출되어 균열이 빛나기 시작했습니다.'],
+    ['자전 붕괴','자전축이 흔들리고 고리가 무너집니다. 한 번 더 명중하면 소멸합니다.']
+   ][Math.min(3,n-1)];
+   this.game.ui.toast(name+' · '+STAGE[0],STAGE[1],3);
+  }
   this.space.refreshTimer=0;
  }
  createBurst(def,normal,final){
@@ -1177,7 +1186,9 @@ class Space{
  }
  findNearest(trackDiscovery=true){
   let closest=null,d=Infinity;
-  for(const def of this.universe.planets){if(this.universe.destroyed(def.id))continue;const q=M.dist(this.position,def.position)-def.radius;if(q<d){d=q;closest=def;}}
+  let anyDef=null,anyD=Infinity;
+  for(const def of this.universe.planets){const q=M.dist(this.position,def.position)-def.radius;if(q<anyD){anyD=q;anyDef=def;}if(this.universe.destroyed(def.id))continue;if(q<d){d=q;closest=def;}}
+  this.scanDef=anyDef;this.scanAltitude=Math.max(0,anyD);
   this.nearestDef=closest;this.nearestAltitude=Math.max(0,d);
   if(trackDiscovery&&closest&&d<closest.radius*5+1500)this.universe.markSeen(closest.id);
  }
@@ -1204,17 +1215,20 @@ class Space{
   for(const id of keep)if(!this.visuals.has(id))this.makeVisual(this.universe.get(id));
  }
  fadeBody(body){
-  const a=1-this.atmosphere();body.globe.alpha=a*a;body.ring.alpha=.65*a*a;body.atmosphere.alpha=.17*a;
+  const a=1-this.atmosphere(),h=this.universe.hits(body.def.id);
+  body.globe.alpha=a*a;body.ring.alpha=.65*a*a*Math.max(0,1-h*.27);body.atmosphere.alpha=.17*a*Math.max(0,1-h*.33);
  }
  syncVisuals(dt){
-  const outside=1-this.atmosphere();
+  const outside=1-this.atmosphere();this.clock=(this.clock||0)+dt;
   for(const body of this.visuals.values()){
    const def=body.def,dist=M.dist(this.position,def.position),scale=this.renderScale(def.position);
    body.group.p=this.renderPoint(def.position);body.group.s=[scale,scale,scale];body.group.visible=outside>.001;
    const destroyed=this.universe.destroyed(def.id),burst=this.weapons.bursts.find(b=>b.final&&b.def.id===def.id);
    const ruptured=destroyed&&(!burst||burst.t>.42);
    body.globe.visible=!ruptured;body.globe.geo=dist<def.radius*14&&this.game.settings.quality!=='low'?'planet':'sphere';
-   body.globe.r[1]+=dt*.006;body.globe.detail=this.universe.hits(def.id)/5;
+   const hh=this.universe.hits(def.id),wob=hh>=4?1:0;body.globe.r[1]+=dt*.006;body.globe.detail=hh/5;
+   body.globe.r[0]=def.tilt[0]+Math.sin(this.clock*2.3)*.07*wob;body.globe.r[2]=def.tilt[2]+Math.cos(this.clock*1.73)*.06*wob;
+   body.ring.r[0]=def.tilt[0]+Math.sin(this.clock*1.1)*.13*wob;
    body.ring.visible=!ruptured&&def.rings;body.atmosphere.visible=!ruptured;
    body.core.visible=!ruptured&&this.universe.hits(def.id)>=3;body.core.alpha=outside;
    if(ruptured&&!body.ruins)this.makeRuins(body);
@@ -1310,7 +1324,7 @@ class Space{
   const n=u.advanceScan(def.id),line=u.scanLines(def.id)[n-1];
   this.game.ui.toast((n>=5?'정밀 스캔 완료 · ':'정밀 스캔 '+n+'/5 · ')+u.displayName(def.id),line,5);
  }
- scanLabel(){return this.scanOn&&this.scanOn===this.nearestDef?.id?' · 정밀 스캔 '+Math.min(99,Math.floor(this.scanHold/6.5*100))+'%':'';}
+ scanLabel(){return this.scanOn&&this.scanOn===this.scanDef?.id?' · 정밀 스캔 '+Math.min(99,Math.floor(this.scanHold/6.5*100))+'%':'';}
  update(dt,input,background=false){
   this.refreshTimer-=dt;
   if(this.refreshTimer<=0){this.findNearest();this.refreshVisuals();this.refreshTimer=.2;}
