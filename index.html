@@ -6,6 +6,25 @@
 @media(max-height:520px){#title{padding:5vw}h1{font-size:56px}.brandMark{margin-bottom:18px}.koreanTitle{margin-bottom:15px;font-size:11px}.tagline{margin-bottom:19px;font-size:11px}.primary{padding:12px 20px;min-width:170px}.titleFoot{bottom:15px}.topline{top:14px}.brandMark .eyebrow{font-size:8px}#joystick{width:107px;height:107px;bottom:31px;left:27px}#touchBoost{bottom:149px;left:49px}#touchFire{width:64px;height:64px;bottom:29px}#touchGrab{bottom:102px;width:53px;height:53px}#touchPulse{bottom:33px;right:100px;width:56px;height:56px}#touchUp,#touchDown{bottom:173px;height:39px;width:44px}#touchInteract{bottom:77px}body.touch #prompt{bottom:121px;font-size:11px}body.touch #spaceAction{bottom:87px;right:120px}.toast{top:62px}.toast strong{margin-bottom:4px}#statusValue{font-size:20px}#statusTitle{margin-bottom:5px}.bottomline{bottom:18px}.panel{max-height:calc(100dvh - 20px);padding:20px}#returnAction{top:61px}.areaLabel h2{font-size:14px;margin-top:3px}}
 @media(orientation:portrait) and (max-width:760px){#portraitTip{display:block}.titleActions{flex-direction:column;align-items:stretch;width:210px}#titleContent{margin-top:-45px}h1{font-size:66px}.brandMark{margin-bottom:28px}.titleFoot{bottom:33px}.tagline{max-width:260px}.primary{width:100%}.areaLabel{max-width:220px}#prompt{white-space:normal;text-align:center;width:80vw}.tools .soundText{display:none}#spaceTarget{width:120px}.toast{top:115px}#joystick{left:20px;bottom:50px;width:112px;height:112px}#touchBoost{left:46px;bottom:179px}#touchFire{right:17px;bottom:50px}#touchGrab{right:23px;bottom:130px}#touchPulse{right:99px;bottom:56px}#touchUp{right:22px;bottom:204px}#touchDown{right:80px;bottom:204px}body.touch #spaceAction{right:20px;bottom:273px}body.touch #prompt{bottom:266px}#touchInteract{bottom:218px}#returnAction{top:70px}.controlsTable{grid-template-columns:105px 1fr}}
 
+/* 0.1.1 — floating left stick, right-thumb hold-to-boost. Keep empty view space usable. */
+#joystick{--stick-size:130px;left:0;top:0;bottom:auto;width:var(--stick-size);height:var(--stick-size);transform:translate(-50%,-50%);pointer-events:none;opacity:0;transition:opacity .12s;will-change:left,top}
+#joystick.active{opacity:1}
+#stickKnob{pointer-events:none}
+#moveHint{position:absolute;left:max(25px,env(safe-area-inset-left));bottom:78px;font-size:10px;letter-spacing:.3px;color:rgba(172,199,190,.55);pointer-events:none;transition:opacity .15s}
+#moveHint.quiet{opacity:0}
+#touchBoost{left:auto;right:max(108px,calc(env(safe-area-inset-right) + 96px));bottom:128px;width:78px;height:53px;border-radius:18px;font-size:11px;gap:3px}
+#touchBoost small{font-size:9px}
+#touchBoost.held{box-shadow:0 0 20px rgba(220,182,130,.15);color:#f0d5a7}
+body.touch #spaceAction{right:max(26px,env(safe-area-inset-right));bottom:272px}
+@media(max-height:520px){#joystick{--stick-size:107px}#moveHint{bottom:63px;font-size:9px}#touchBoost{left:auto;right:max(106px,calc(env(safe-area-inset-right) + 94px));bottom:104px;width:76px;height:50px}body.touch #spaceAction{bottom:230px;font-size:10px;padding:11px 14px}}
+@media(max-height:350px){body.touch #spaceAction{bottom:214px}}
+@media(orientation:portrait) and (max-width:760px){#joystick{--stick-size:112px}#touchBoost{left:auto;right:max(101px,calc(env(safe-area-inset-right) + 89px));bottom:136px}body.touch #spaceAction{right:20px;bottom:273px}#moveHint{left:22px;bottom:94px;max-width:150px;line-height:1.7}}
+
+/* Cloud account UI: no new in-game HUD panel, no changes to touch controls. */
+.cloudTitle{margin-top:18px;display:flex;flex-direction:column;gap:3px;align-items:flex-start;max-width:360px}.cloudTitle .linkButton{border-bottom:1px solid var(--line);font-size:12px;padding:6px 0}#cloudTitleStatus{font-size:10px;color:var(--muted);line-height:1.7}.cloudMenu{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:15px 0;border-block:1px solid var(--line)}.cloudMenu p{font-size:11px;line-height:1.6;max-width:295px;overflow-wrap:anywhere;color:var(--muted);margin:7px 0 0}.cloudMenu button{flex-shrink:0;padding:11px 13px}.cloudForm{display:flex;flex-direction:column;gap:10px}.cloudForm>label{font-size:12px;color:#b5c9c1;margin-top:7px}.cloudForm>input{background:#09161c;border:1px solid var(--line);padding:12px 14px;color:var(--ink);font-size:16px;width:100%;border-radius:0;min-height:45px}.cloudForm input:focus{outline:1px solid var(--gold)}.cloudCheck{display:flex;align-items:center;gap:10px;line-height:1.6}.cloudCheck input{accent-color:var(--mint);width:17px;height:17px;flex-shrink:0}.cloudError{font-size:12px;line-height:1.7;color:#ddbda0;min-height:20px;margin:8px 0;overflow-wrap:anywhere}.cloudDetail{font-size:11px;line-height:1.7;color:var(--muted);overflow-wrap:anywhere}.cloudForm .panelActions{margin-top:5px}button:disabled{opacity:.5;cursor:wait}.panel .cloudError:empty{display:none}.panel .panelActions button{justify-content:space-between;overflow-wrap:anywhere}
+@media(max-height:520px){.cloudTitle{margin-top:11px;gap:0}.cloudTitle .linkButton{font-size:11px}#cloudTitleStatus{font-size:9px}.panel .cloudForm{gap:6px}.cloudForm>input{padding:9px 12px;min-height:40px}}
+@media(orientation:portrait) and (max-width:760px){.cloudTitle{max-width:270px;margin-top:17px}.cloudMenu{gap:8px}.cloudMenu p{max-width:185px}.cloudForm .primary{min-width:0;gap:15px}.cloudForm .secondary{padding:12px}.panel .panelActions{gap:8px}.panel .panelActions .primary{min-width:150px}.cloudForm .panelActions .primary{min-width:160px}}
+
 </style></head><body>
 <canvas id="world" tabindex="0" aria-label="왕들의 궤도 3D 게임"></canvas>
 <div id="ui">
@@ -16,6 +35,7 @@
    <div class="koreanTitle">왕들의 궤도</div>
    <p class="tagline">우주는 고요하다.<br>당신이 내려앉기 전까지는.</p>
    <div class="titleActions"><button id="startBtn" class="primary">항해 시작 <span>↗</span></button><button id="titleHelp" class="ghost">조작 안내</button></div>
+   <div class="cloudTitle"><button id="titleCloud" class="linkButton">이름으로 저장 / 이어하기</button><span id="cloudTitleStatus"></span></div>
   </div>
   <div class="titleFoot"><span>NØMAD / FIRST CONTACT</span><span class="muted">1인칭 우주 유랑 · 파괴 샌드박스</span><button class="linkButton" id="titleSettings">설정</button></div>
  </div>
@@ -27,7 +47,7 @@
   <div id="spaceTarget" class="hidden"><div class="diamond"></div><strong>EDEN / 01</strong><small id="distanceLabel"></small></div>
   <button id="spaceAction" class="hidden">T · 에덴으로 자동항해</button><button id="returnAction" class="iconButton hidden">R · 모선 귀환</button>
   <div id="worldLabels"></div>
-  <div id="touch"><div id="joystick"><div id="stickKnob"></div></div><button id="touchBoost" class="touchButton">가속</button><button id="touchFire" class="touchButton">광선<small>길게 누르기</small></button><button id="touchGrab" class="touchButton">견인</button><button id="touchPulse" class="touchButton">충격파</button><button id="touchUp" class="touchButton">↑</button><button id="touchDown" class="touchButton">↓</button><button id="touchInteract" class="touchButton">상호작용</button></div>
+  <div id="touch"><div id="moveHint">왼쪽 화면을 드래그해 이동</div><div id="joystick" aria-hidden="true"><div id="stickKnob"></div></div><button id="touchBoost" class="touchButton" aria-pressed="false" aria-label="누르는 동안 가속"><span>가속</span><small>누르는 동안</small></button><button id="touchFire" class="touchButton">광선<small>길게 누르기</small></button><button id="touchGrab" class="touchButton">견인</button><button id="touchPulse" class="touchButton">충격파</button><button id="touchUp" class="touchButton">↑</button><button id="touchDown" class="touchButton">↓</button><button id="touchInteract" class="touchButton hidden"></button></div>
   <div id="portraitTip">가로 화면에서 더 넓게 볼 수 있습니다.</div>
  </div>
  <div id="toast" class="toast"><strong></strong><span></span></div>
@@ -110,7 +130,7 @@ in vec3 vWorld;in vec3 vNormal;in vec3 vLocal;in vec4 vColor;in vec4 vProps;
 uniform vec3 uCamera,uSun,uFog;uniform float uFogD,uTime,uAmbient,uShadow;out vec4 outColor;
 ${noiseGL}
 void main(){if(uShadow>.5){outColor=vec4(.017,.049,.039,.32);return;}vec3 N=normalize(vNormal),V=normalize(uCamera-vWorld),L=normalize(uSun);float nd=max(dot(N,L),0.);float type=vProps.y;vec3 col=vColor.rgb;float alpha=vColor.a;float em=vProps.x;float dist=length(uCamera-vWorld);
-if(type>1.5&&type<2.5){vec3 q=normalize(vLocal);float land=fbm(q*4.4+vec3(8.,3.,1.));float detail=fbm(q*30.);col=mix(vec3(.021,.09,.135),vec3(.047,.28,.285),smoothstep(.35,.56,land));col=mix(col,vec3(.3,.47,.33),smoothstep(.535,.57,land));col=mix(col,vec3(.68,.67,.48),smoothstep(.64,.76,land));float clouds=smoothstep(.53,.68,fbm(q*9.+vec3(uTime*.004,0.,0.)));col=mix(col,vec3(.88,.94,.92),clouds*.83);float ice=smoothstep(.83,.98,abs(q.y)+detail*.1);col=mix(col,vec3(.85,.92,.91),ice);float light=.045+nd*1.15;col*=light;float rim=pow(1.-max(dot(N,V),0.),3.);col+=vec3(.15,.45,.64)*rim*(.25+nd);float cities=step(.985,hash(floor(q*450.)))*smoothstep(.52,.61,land)*(1.-smoothstep(.02,.18,nd));col+=vec3(1.,.52,.16)*cities*.7;outColor=vec4(col,1.);return;}
+if(type>1.5&&type<2.5){vec3 q=normalize(vLocal);float land=fbm(q*4.4+vec3(8.,3.,1.));float detail=fbm(q*30.);col=mix(vec3(.021,.09,.135),vec3(.047,.28,.285),smoothstep(.35,.56,land));col=mix(col,vec3(.3,.47,.33),smoothstep(.535,.57,land));col=mix(col,vec3(.68,.67,.48),smoothstep(.64,.76,land));float clouds=smoothstep(.53,.68,fbm(q*9.+vec3(uTime*.004,0.,0.)));col=mix(col,vec3(.88,.94,.92),clouds*.83);float ice=smoothstep(.83,.98,abs(q.y)+detail*.1);col=mix(col,vec3(.85,.92,.91),ice);float light=.045+nd*1.15;col*=light;float rim=pow(1.-max(dot(N,V),0.),3.);col+=vec3(.15,.45,.64)*rim*(.25+nd);float cities=step(.985,hash(floor(q*450.)))*smoothstep(.52,.61,land)*(1.-smoothstep(.02,.18,nd));col+=vec3(1.,.52,.16)*cities*.7;outColor=vec4(col,alpha);return;}
 if(type>2.5&&type<3.5){float r=length(vLocal.xz);float band=.4+.6*noise(vec3(r*190.,1.,3.));alpha*=band;col*=.65+nd*.45;outColor=vec4(col,alpha);return;}
 if(type>3.5&&type<4.5){float rim=pow(1.-abs(dot(N,V)),3.2);alpha*=rim;outColor=vec4(col*(.4+max(dot(N,L),0.)*.6),alpha);return;}
 if(type>4.5&&type<5.5){float g=fbm(vWorld*.024);col*=.77+g*.42;float grid=pow(1.-abs(sin(vWorld.x*.035)*sin(vWorld.z*.039)),14.);col+=vec3(.01,.024,.014)*grid;}
@@ -124,13 +144,36 @@ const fullscreen=`#version 300 es
 precision highp float;out vec2 uv;
 void main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);uv=p;gl_Position=vec4(p*2.-1.,0.,1.);}`;
 const skyFrag=`#version 300 es
-precision highp float;in vec2 uv;out vec4 outColor;uniform float uAspect,uFov,uTime,uSurface;uniform mat4 uRotation;uniform vec3 uSun;
+precision highp float;in vec2 uv;out vec4 outColor;uniform float uAspect,uFov,uTime,uSurface,uAtmosphere;uniform mat4 uRotation;uniform vec3 uSun,uSkyOffset;
 ${noiseGL}
 void main(){vec2 st=uv*2.-1.;vec3 rd=normalize((uRotation*vec4(st.x*uAspect*uFov,st.y*uFov,-1.,0.)).xyz);vec3 sun=normalize(uSun);float sund=dot(rd,sun);
 vec3 space=vec3(.004,.008,.017);float band=exp(-pow((rd.y+.28*rd.x-.06)*4.,2.));float n=fbm(rd*3.5+4.);space+=vec3(.027,.038,.061)*band*n;space+=vec3(.027,.014,.045)*pow(fbm(rd*6.+7.),3.);
 vec3 cell=rd*680.;float star=pow(max(0.,hash(floor(cell))-.993)/.007,6.);vec3 offset=fract(cell)-.5;star*=exp(-dot(offset,offset)*10.);space+=vec3(.66,.78,1.)*star*2.;vec3 c2=rd*175.;float s2=step(.9992,hash(floor(c2)))*pow(max(0.,1.-length(fract(c2)-.5)*1.7),5.);space+=vec3(1.,.77,.5)*s2*1.8;
 space+=vec3(.47,.59,.78)*pow(max(sund,0.),650.)*.45;space+=vec3(1.)*smoothstep(.99995,.99998,sund);
-float h=clamp(rd.y*.7+.24,0.,1.);vec3 sky=mix(vec3(.69,.82,.73),vec3(.1,.36,.47),pow(h,.4));sky+=vec3(.6,.44,.21)*pow(max(sund,0.),36.)*.28;sky+=vec3(1.,.87,.55)*smoothstep(.9994,.99965,sund);float cloud=fbm(rd*6.+vec3(uTime*.008,0.,0.));sky=mix(sky,vec3(.89,.87,.70),smoothstep(.57,.72,cloud)*smoothstep(.03,.2,rd.y)*.57);outColor=vec4(mix(space,sky,uSurface),1.);}`;
+float h=clamp(rd.y*.7+.24,0.,1.);vec3 sky=mix(vec3(.69,.82,.73),vec3(.1,.36,.47),pow(h,.4));sky+=vec3(.6,.44,.21)*pow(max(sund,0.),36.)*.28;sky+=vec3(1.,.87,.55)*smoothstep(.9994,.99965,sund);float cloud=fbm(rd*6.+vec3(uTime*.008,0.,0.));sky=mix(sky,vec3(.89,.87,.70),smoothstep(.57,.72,cloud)*smoothstep(.03,.2,rd.y)*.57);vec3 environment=mix(space,sky,uSurface);
+if(uAtmosphere>.001){
+ // Stylized cloud-top panorama: no separate entry screen and no distant miniature globe.
+ float elevation=rd.y;
+ vec3 upper=mix(vec3(.71,.84,.84),vec3(.085,.31,.50),pow(clamp(elevation*.75+.12,0.,1.),.52));
+ float glow=pow(max(sund,0.),16.);
+ upper+=vec3(.48,.32,.14)*glow*.55;
+ upper+=vec3(1.,.86,.61)*smoothstep(.9992,.99965,sund);
+ float highCloud=smoothstep(.53,.70,fbm(rd*6.2+uSkyOffset+vec3(uTime*.006,4.,2.)))*smoothstep(.06,.48,elevation);
+ upper=mix(upper,vec3(.93,.93,.87),highCloud*.69);
+ vec3 q=vec3(rd.x/max(-elevation,.14),0.,rd.z/max(-elevation,.14))*.65+uSkyOffset;
+ float banks=fbm(q+vec3(uTime*.004,7.,3.));
+ float detail=noise(q*4.+vec3(3.,1.,0.));
+ vec3 sea=mix(vec3(.24,.47,.53),vec3(.91,.92,.84),smoothstep(.33,.62,banks));
+ sea*=.84+.16*detail;
+ float haze=exp(-abs(elevation)*9.);
+ sea=mix(sea,vec3(.76,.85,.82),haze*.88);
+ vec3 cloudSky=mix(upper,sea,1.-smoothstep(-.24,-.025,elevation));
+ // The approach passes through a short, thin veil rather than fading to a menu.
+ float veil=sin(uAtmosphere*3.14159265)*.13;
+ cloudSky=mix(cloudSky,vec3(.79,.86,.84),veil);
+ environment=mix(environment,cloudSky,uAtmosphere);
+}
+outColor=vec4(environment,1.);}`;
 const postFrag=`#version 300 es
 precision highp float;in vec2 uv;out vec4 outColor;uniform sampler2D uTex;uniform vec2 uPixel;uniform float uTime,uGlow,uImpact;
 void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for(int x=-1;x<=1;x++){for(int y=-1;y<=1;y++){vec3 q=texture(uTex,p+vec2(x,y)*uPixel*5.).rgb;b+=max(q-.68,0.)/(1.+float(x*x+y*y));}}}c+=b*.15*uGlow;float vignette=1.-.22*pow(length(uv-.5)*1.25,2.);c*=vignette;c=mix(c,c*vec3(1.12,.83,.62),uImpact*.25);c=vec3(1.)-exp(-c*1.12);c=pow(c,vec3(.85));float grain=fract(sin(dot(gl_FragCoord.xy+uTime,vec2(12.9898,78.233)))*43758.5453);c+=(grain-.5)/230.;outColor=vec4(c,1.);}`;
@@ -141,16 +184,16 @@ function geomCylinder(seg=16,top=1){let p=[],n=[],idx=[];for(let y=0;y<2;y++)for
 function geomRing(inner=.64,seg=128){let p=[],n=[],idx=[];for(let i=0;i<=seg;i++){let a=i/seg*Math.PI*2;for(let r of[inner,1]){p.push(Math.sin(a)*r,0,Math.cos(a)*r);n.push(0,1,0)}}for(let i=0;i<seg;i++){let j=i*2;idx.push(j,j+1,j+2,j+1,j+3,j+2)}return{p,n,idx}}
 function geomTorus(R=.72,r=.08,N=40,S=6){let p=[],n=[],idx=[];for(let i=0;i<=N;i++)for(let j=0;j<=S;j++){let a=i/N*Math.PI*2,b=j/S*Math.PI*2;p.push((R+r*Math.cos(b))*Math.sin(a),r*Math.sin(b),(R+r*Math.cos(b))*Math.cos(a));n.push(Math.cos(b)*Math.sin(a),Math.sin(b),Math.cos(b)*Math.cos(a))}for(let i=0;i<N;i++)for(let j=0;j<S;j++){let a=i*(S+1)+j,b=a+S+1;idx.push(a,b,a+1,b,b+1,a+1)}return{p,n,idx}}
 class Node{
- constructor(geo=null,p=[0,0,0],s=[1,1,1],color='#ffffff',props={}){this.geo=geo;this.p=p.slice();this.s=s.slice();this.r=[0,0,0];this.color=M.hex(color).slice();this.alpha=props.alpha??1;this.em=props.em??0;this.type=props.type??0;this.children=[];this.visible=true;this.world=M.id();this.parent=null;}
- add(n){n.parent=this;this.children.push(n);return n}remove(n){const i=this.children.indexOf(n);if(i>=0)this.children.splice(i,1);n.parent=null}update(parent){this.world=parent?M.mm(parent,M.compose(this.p,this.r,this.s)):M.compose(this.p,this.r,this.s);for(const n of this.children)if(n.visible)n.update(this.world)}
+ constructor(geo=null,p=[0,0,0],s=[1,1,1],color='#ffffff',props={}){this.geo=geo;this.p=p.slice();this.s=s.slice();this.r=[0,0,0];this.color=M.hex(color).slice();this.alpha=props.alpha??1;this.em=props.em??0;this.type=props.type??0;this.children=[];this.visible=true;this.world=M.id();this.parent=null;this.localMatrix=null;}
+ add(n){n.parent=this;this.children.push(n);return n}remove(n){const i=this.children.indexOf(n);if(i>=0)this.children.splice(i,1);n.parent=null}update(parent){const local=this.localMatrix||M.compose(this.p,this.r,this.s);this.world=parent?M.mm(parent,local):local;for(const n of this.children)if(n.visible)n.update(this.world)}
 }
 class Engine{
- constructor(canvas){this.canvas=canvas;const gl=canvas.getContext('webgl2',{antialias:false,alpha:false,powerPreference:'high-performance',preserveDrawingBuffer:true});if(!gl)throw new Error('WebGL 2를 사용할 수 없습니다. Chrome 또는 Samsung Internet에서 다시 열어 주세요.');this.gl=gl;this.main=makeProgram(gl,vertex,fragment);this.sky=makeProgram(gl,fullscreen,skyFrag);this.post=makeProgram(gl,fullscreen,postFrag);this.geometries={};this.locations=new Map();this.quality='balanced';this.resolutionScale=1;this.camera={p:[0,2,0],yaw:0,pitch:0,roll:0,fov:73};this.vp=M.id();this.sun=[.6,.7,-.4];this.fog=[.55,.7,.65];this.fogD=0;this.ambient=.5;this.surface=0;this.impact=0;this.drawCalls=0;this.triangles=0;this.addGeometry('box',geomBox());this.addGeometry('sphere',geomSphere(18,12));this.addGeometry('planet',geomSphere(96,64));this.addGeometry('dome',geomSphere(16,8,true));this.addGeometry('cylinder',geomCylinder());this.addGeometry('hex',geomCylinder(6));this.addGeometry('cone',geomCylinder(12,.02));this.addGeometry('ring',geomRing());this.addGeometry('torus',geomTorus());this.addGeometry('disc',geomCylinder(36));this.addGeometry('lowSphere',geomSphere(10,8));this.fbo=gl.createFramebuffer();this.texture=gl.createTexture();this.depth=gl.createRenderbuffer();this.fsVao=gl.createVertexArray();this.resize();gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.disable(gl.CULL_FACE);}
+ constructor(canvas){this.canvas=canvas;const gl=canvas.getContext('webgl2',{antialias:false,alpha:false,powerPreference:'high-performance',preserveDrawingBuffer:true});if(!gl)throw new Error('WebGL 2를 사용할 수 없습니다. Chrome 또는 Samsung Internet에서 다시 열어 주세요.');this.gl=gl;this.main=makeProgram(gl,vertex,fragment);this.sky=makeProgram(gl,fullscreen,skyFrag);this.post=makeProgram(gl,fullscreen,postFrag);this.geometries={};this.locations=new Map();this.quality='balanced';this.resolutionScale=1;this.camera={p:[0,2,0],yaw:0,pitch:0,roll:0,fov:73};this.vp=M.id();this.sun=[.6,.7,-.4];this.fog=[.55,.7,.65];this.fogD=0;this.ambient=.5;this.surface=0;this.atmosphere=0;this.skyBasis=null;this.skyOffset=[0,0,0];this.impact=0;this.drawCalls=0;this.triangles=0;this.addGeometry('box',geomBox());this.addGeometry('sphere',geomSphere(18,12));this.addGeometry('planet',geomSphere(96,64));this.addGeometry('dome',geomSphere(16,8,true));this.addGeometry('cylinder',geomCylinder());this.addGeometry('hex',geomCylinder(6));this.addGeometry('cone',geomCylinder(12,.02));this.addGeometry('ring',geomRing());this.addGeometry('torus',geomTorus());this.addGeometry('disc',geomCylinder(36));this.addGeometry('lowSphere',geomSphere(10,8));this.fbo=gl.createFramebuffer();this.texture=gl.createTexture();this.depth=gl.createRenderbuffer();this.fsVao=gl.createVertexArray();this.resize();gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.disable(gl.CULL_FACE);}
  loc(p,n){const key=p===this.main?'m':p===this.sky?'s':'p';const k=key+n;if(!this.locations.has(k))this.locations.set(k,this.gl.getUniformLocation(p,n));return this.locations.get(k)}
  addGeometry(name,g){const gl=this.gl,vao=gl.createVertexArray();gl.bindVertexArray(vao);const vb=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,vb);let a=new Float32Array(g.p.length*2);for(let i=0;i<g.p.length/3;i++){a.set(g.p.slice(i*3,i*3+3),i*6);a.set(g.n.slice(i*3,i*3+3),i*6+3)}gl.bufferData(gl.ARRAY_BUFFER,a,gl.STATIC_DRAW);gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,3,gl.FLOAT,false,24,0);gl.enableVertexAttribArray(1);gl.vertexAttribPointer(1,3,gl.FLOAT,false,24,12);const ib=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ib);const indices=new Uint32Array(g.idx);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,indices,gl.STATIC_DRAW);const inst=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,inst);for(let k=0;k<6;k++){gl.enableVertexAttribArray(k+2);gl.vertexAttribPointer(k+2,4,gl.FLOAT,false,96,k*16);gl.vertexAttribDivisor(k+2,1)}gl.bindVertexArray(null);this.geometries[name]={vao,vb,ib,inst,count:indices.length,data:new Float32Array(96*16),capacity:0};}
  removeGeometry(name){const g=this.geometries[name];if(!g)return;const gl=this.gl;gl.deleteVertexArray(g.vao);for(let b of[g.vb,g.ib,g.inst])gl.deleteBuffer(b);delete this.geometries[name]}
  resize(){const gl=this.gl;let ratios={low:.8,balanced:1,high:1.5};const d=Math.min(devicePixelRatio||1,ratios[this.quality])*this.resolutionScale;const w=Math.max(2,Math.round(innerWidth*d)),h=Math.max(2,Math.round(innerHeight*d));if(this.canvas.width===w&&this.canvas.height===h)return;this.canvas.width=w;this.canvas.height=h;gl.bindTexture(gl.TEXTURE_2D,this.texture);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,w,h,0,gl.RGBA,gl.UNSIGNED_BYTE,null);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);gl.bindFramebuffer(gl.FRAMEBUFFER,this.fbo);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,this.texture,0);gl.bindRenderbuffer(gl.RENDERBUFFER,this.depth);gl.renderbufferStorage(gl.RENDERBUFFER,gl.DEPTH_COMPONENT24,w,h);gl.framebufferRenderbuffer(gl.FRAMEBUFFER,gl.DEPTH_ATTACHMENT,gl.RENDERBUFFER,this.depth);if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE)throw new Error('렌더링 버퍼를 만들지 못했습니다.');gl.bindFramebuffer(gl.FRAMEBUFFER,null);}
- render(root,time,overlay=null){const gl=this.gl,c=this.camera,w=this.canvas.width,h=this.canvas.height;this.drawCalls=0;this.triangles=0;this.vp=M.mm(M.perspective(c.fov*Math.PI/180,w/h),M.view(c.p,c.yaw,c.pitch,c.roll));gl.bindFramebuffer(gl.FRAMEBUFFER,this.fbo);gl.viewport(0,0,w,h);gl.clearColor(0,0,0,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.disable(gl.DEPTH_TEST);gl.disable(gl.BLEND);gl.useProgram(this.sky);gl.bindVertexArray(this.fsVao);gl.uniform1f(this.loc(this.sky,'uAspect'),w/h);gl.uniform1f(this.loc(this.sky,'uFov'),Math.tan(c.fov*Math.PI/360));gl.uniform1f(this.loc(this.sky,'uTime'),time);gl.uniform1f(this.loc(this.sky,'uSurface'),this.surface);gl.uniform3fv(this.loc(this.sky,'uSun'),this.sun);gl.uniformMatrix4fv(this.loc(this.sky,'uRotation'),false,M.compose([0,0,0],[c.pitch,c.yaw,c.roll]));gl.drawArrays(gl.TRIANGLES,0,3);gl.enable(gl.DEPTH_TEST);this.drawRoot(root,time,this.surface>.5&&this.quality!=='low');
+ render(root,time,overlay=null){const gl=this.gl,c=this.camera,w=this.canvas.width,h=this.canvas.height;this.drawCalls=0;this.triangles=0;this.vp=M.mm(M.perspective(c.fov*Math.PI/180,w/h),M.view(c.p,c.yaw,c.pitch,c.roll));gl.bindFramebuffer(gl.FRAMEBUFFER,this.fbo);gl.viewport(0,0,w,h);gl.clearColor(0,0,0,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.disable(gl.DEPTH_TEST);gl.disable(gl.BLEND);gl.useProgram(this.sky);gl.bindVertexArray(this.fsVao);gl.uniform1f(this.loc(this.sky,'uAspect'),w/h);gl.uniform1f(this.loc(this.sky,'uFov'),Math.tan(c.fov*Math.PI/360));gl.uniform1f(this.loc(this.sky,'uTime'),time);gl.uniform1f(this.loc(this.sky,'uSurface'),this.surface);gl.uniform1f(this.loc(this.sky,'uAtmosphere'),this.atmosphere);gl.uniform3fv(this.loc(this.sky,'uSkyOffset'),this.skyOffset);gl.uniform3fv(this.loc(this.sky,'uSun'),this.sun);const skyRotation=M.compose([0,0,0],[c.pitch,c.yaw,c.roll]);gl.uniformMatrix4fv(this.loc(this.sky,'uRotation'),false,this.skyBasis?M.mm(this.skyBasis,skyRotation):skyRotation);gl.drawArrays(gl.TRIANGLES,0,3);gl.enable(gl.DEPTH_TEST);this.drawRoot(root,time,this.surface>.5&&this.quality!=='low');
  if(overlay){gl.clear(gl.DEPTH_BUFFER_BIT);overlay.p=c.p.slice();overlay.r=[c.pitch,c.yaw,c.roll];this.drawRoot(overlay,time,false)}
  gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,w,h);gl.disable(gl.DEPTH_TEST);gl.disable(gl.BLEND);gl.useProgram(this.post);gl.bindVertexArray(this.fsVao);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.texture);gl.uniform1i(this.loc(this.post,'uTex'),0);gl.uniform2f(this.loc(this.post,'uPixel'),1/w,1/h);gl.uniform1f(this.loc(this.post,'uTime'),time);gl.uniform1f(this.loc(this.post,'uGlow'),this.quality==='low'?0:1);gl.uniform1f(this.loc(this.post,'uImpact'),this.impact);gl.drawArrays(gl.TRIANGLES,0,3);gl.bindVertexArray(null);}
  drawRoot(root,time,shadows=false){if(!root)return;const gl=this.gl;root.update();const groups={},transparent={},shadowGroups={};const visit=(n)=>{if(!n.visible)return;if(n.geo){const coll=n.alpha<.995?transparent:groups;(coll[n.geo]??=[]).push(n);if(shadows&&n.alpha>=.995&&n.type<1.5&&n.world[13]>1&&n.world[13]<80&&Math.hypot(n.world[12],n.world[14])<310&&n.geo!=='disc'&&n.geo!=='ring'&&n.geo!=='torus')(shadowGroups[n.geo]??=[]).push(n)}for(let c of n.children)visit(c)};visit(root);gl.useProgram(this.main);gl.uniformMatrix4fv(this.loc(this.main,'uVP'),false,this.vp);gl.uniform3fv(this.loc(this.main,'uCamera'),this.camera.p);gl.uniform3fv(this.loc(this.main,'uSun'),this.sun);gl.uniform3fv(this.loc(this.main,'uFog'),this.fog);gl.uniform1f(this.loc(this.main,'uFogD'),this.fogD);gl.uniform1f(this.loc(this.main,'uAmbient'),this.ambient);gl.uniform1f(this.loc(this.main,'uTime'),time);
@@ -168,27 +211,115 @@ K.beam=(root,a,b,width,color,em=0)=>{const d=M.sub(b,a),len=M.len(d),mid=M.mul(M
 (function(K){
 'use strict';
 class Input{
- constructor(canvas){this.canvas=canvas;this.keys=new Set();this.pressed=new Set();this.dx=0;this.dy=0;this.fire=false;this.mobile=matchMedia('(pointer: coarse)').matches;this.stick=[0,0];this.vertical=0;this.touchBoost=false;this.sensitivity=1;this.enabled=false;this.drag=null;this.onPause=()=>{};this.cleanup=[];this.pointers=new Map();this.lockPending=false;
- const on=(el,ev,fn,opts)=>{el.addEventListener(ev,fn,opts);this.cleanup.push(()=>el.removeEventListener(ev,fn,opts))};
- on(window,'keydown',e=>{if(['INPUT','SELECT','TEXTAREA'].includes(document.activeElement?.tagName))return;if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Tab'].includes(e.code))e.preventDefault();if(!this.keys.has(e.code))this.pressed.add(e.code);this.keys.add(e.code);if(e.code==='Escape'||e.code==='KeyP'){this.clear();this.onPause()}});
- on(window,'keyup',e=>{this.keys.delete(e.code)});
- on(window,'blur',()=>this.clear());on(document,'visibilitychange',()=>{if(document.hidden){this.clear();this.onBlur?.()}});
- on(canvas,'contextmenu',e=>e.preventDefault());
- on(canvas,'pointerdown',e=>{if(!this.enabled)return;if(e.pointerType==='touch'){this.pointers.set(e.pointerId,[e.clientX,e.clientY]);canvas.setPointerCapture(e.pointerId);return;}if(e.button===0){this.fire=true;if(document.pointerLockElement!==canvas&&!this.mobile)this.requestLock();}if(e.button===2)this.drag=[e.clientX,e.clientY];});
- on(window,'pointerup',e=>{this.pointers.delete(e.pointerId);if(e.pointerType!=='touch'){this.fire=false;this.drag=null}});
- on(window,'pointercancel',e=>{this.pointers.delete(e.pointerId);this.fire=false;this.drag=null});
- on(window,'pointermove',e=>{if(!this.enabled)return;if(e.pointerType==='touch'){const p=this.pointers.get(e.pointerId);if(p){this.dx+=(e.clientX-p[0])*.0045*this.sensitivity;this.dy+=(e.clientY-p[1])*.0045*this.sensitivity;this.pointers.set(e.pointerId,[e.clientX,e.clientY])}return;}if(document.pointerLockElement===canvas){this.dx+=e.movementX*.0021*this.sensitivity;this.dy+=e.movementY*.0021*this.sensitivity;}else if(this.drag){this.dx+=(e.clientX-this.drag[0])*.003*this.sensitivity;this.dy+=(e.clientY-this.drag[1])*.003*this.sensitivity;this.drag=[e.clientX,e.clientY]}});
- on(document,'pointerlockchange',()=>{this.lockPending=false;this.fire=false;if(document.pointerLockElement!==canvas)this.drag=null;});on(document,'pointerlockerror',()=>{this.lockPending=false});
+ constructor(canvas){
+  this.canvas=canvas;this.keys=new Set();this.pressed=new Set();this.dx=0;this.dy=0;
+  this.fire=false;this.mouseFire=false;this.touchFire=false;this.mobile=matchMedia('(pointer: coarse)').matches;
+  this.stick=[0,0];this.vertical=0;this.touchUp=false;this.touchDown=false;this.touchBoost=false;
+  this.sensitivity=1;this.enabled=false;this.drag=null;this.onPause=()=>{};this.cleanup=[];
+  this.pointers=new Map();this.movePointer=null;this.stickOrigin=[0,0];this.holdPointers=new Map();this.lockPending=false;
+  this.on(window,'keydown',e=>{
+   if(['INPUT','SELECT','TEXTAREA'].includes(document.activeElement?.tagName))return;
+   if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Tab'].includes(e.code))e.preventDefault();
+   if(e.code==='Escape'||e.code==='KeyP'){if(!e.repeat){this.clear();this.onPause()}return;}
+   if(!this.enabled)return;
+   if(!this.keys.has(e.code))this.pressed.add(e.code);this.keys.add(e.code);
+  });
+  this.on(window,'keyup',e=>this.keys.delete(e.code));
+  this.on(window,'blur',()=>this.clear());this.on(window,'resize',()=>this.clear());
+  this.on(document,'visibilitychange',()=>{if(document.hidden){this.clear();this.onBlur?.()}});
+  this.on(canvas,'contextmenu',e=>e.preventDefault());
+  this.on(canvas,'pointerdown',e=>{
+   if(!this.enabled)return;
+   if(e.pointerType==='touch'||e.pointerType==='pen'){
+    e.preventDefault();
+    if(this.mobile&&e.clientX<innerWidth*.5){
+     // A second left thumb never steals the first thumb's movement origin.
+     if(this.movePointer!==null)return;
+     this.movePointer=e.pointerId;this.stickOrigin=[e.clientX,e.clientY];this.stick=[0,0];
+     const pad=document.getElementById('joystick');
+     if(pad){pad.style.left=e.clientX+'px';pad.style.top=e.clientY+'px';pad.classList.add('active');}
+     document.getElementById('moveHint')?.classList.add('quiet');
+    }else{
+     if(this.pointers.size)return;
+     this.pointers.set(e.pointerId,[e.clientX,e.clientY]);
+    }
+    try{canvas.setPointerCapture(e.pointerId)}catch{}return;
+   }
+   if(e.button===0){this.mouseFire=true;this.syncFire();if(document.pointerLockElement!==canvas&&!this.mobile)this.requestLock();}
+   if(e.button===2)this.drag=[e.clientX,e.clientY];
+  });
+  const release=e=>{
+   if(e.pointerId===this.movePointer)this.releaseStick();
+   this.pointers.delete(e.pointerId);
+   // Releasing a movement/look finger must not release a different finger's weapon.
+   if(e.pointerType!=='touch'&&e.pointerType!=='pen'){
+    if(e.button===0||e.type==='pointercancel'){this.mouseFire=false;this.syncFire();}
+    if(e.button===2||e.type==='pointercancel')this.drag=null;
+   }
+  };
+  this.on(window,'pointerup',release);this.on(window,'pointercancel',release);
+  this.on(canvas,'lostpointercapture',release);
+  this.on(window,'pointermove',e=>{
+   if(!this.enabled)return;
+   if(e.pointerType==='touch'||e.pointerType==='pen'){
+    if(e.pointerId===this.movePointer){this.moveStick(e);return;}
+    const p=this.pointers.get(e.pointerId);
+    if(p){this.dx+=(e.clientX-p[0])*.0045*this.sensitivity;this.dy+=(e.clientY-p[1])*.0045*this.sensitivity;this.pointers.set(e.pointerId,[e.clientX,e.clientY])}
+    return;
+   }
+   if(document.pointerLockElement===canvas){this.dx+=e.movementX*.0021*this.sensitivity;this.dy+=e.movementY*.0021*this.sensitivity;}
+   else if(this.drag){this.dx+=(e.clientX-this.drag[0])*.003*this.sensitivity;this.dy+=(e.clientY-this.drag[1])*.003*this.sensitivity;this.drag=[e.clientX,e.clientY]}
+  });
+  this.on(document,'pointerlockchange',()=>{this.lockPending=false;this.mouseFire=false;this.syncFire();if(document.pointerLockElement!==canvas)this.drag=null;});
+  this.on(document,'pointerlockerror',()=>{this.lockPending=false});
  }
+ on(el,ev,fn,opts){el.addEventListener(ev,fn,opts);this.cleanup.push(()=>el.removeEventListener(ev,fn,opts))}
+ syncFire(){this.fire=this.mouseFire||this.touchFire}
  requestLock(){if(!this.enabled||this.mobile||this.lockPending||!this.canvas.requestPointerLock)return;this.lockPending=true;try{const p=this.canvas.requestPointerLock();if(p?.catch)p.catch(()=>{this.lockPending=false})}catch{this.lockPending=false}}
- bindTouch(){const pad=document.getElementById('joystick'),knob=document.getElementById('stickKnob');let active=null;const set=e=>{const r=pad.getBoundingClientRect();let x=(e.clientX-(r.x+r.width/2))/(r.width*.35),y=(e.clientY-(r.y+r.height/2))/(r.height*.35);const l=Math.hypot(x,y);if(l>1){x/=l;y/=l}this.stick=[x,-y];knob.style.transform=`translate(${x*35}px,${y*35}px)`};pad.addEventListener('pointerdown',e=>{e.preventDefault();active=e.pointerId;pad.setPointerCapture(e.pointerId);set(e)});pad.addEventListener('pointermove',e=>{if(active===e.pointerId)set(e)});const release=()=>{active=null;this.stick=[0,0];knob.style.transform='translate(0,0)'};for(const ev of['pointerup','pointercancel','lostpointercapture'])pad.addEventListener(ev,release);
- const hold=(id,start,end)=>{const b=document.getElementById(id);b.addEventListener('pointerdown',e=>{e.preventDefault();b.setPointerCapture(e.pointerId);start();b.classList.add('held')});for(const ev of['pointerup','pointercancel','lostpointercapture'])b.addEventListener(ev,()=>{end();b.classList.remove('held')})};hold('touchFire',()=>this.fire=true,()=>this.fire=false);hold('touchUp',()=>this.keys.add('Space'),()=>this.keys.delete('Space'));hold('touchDown',()=>this.keys.add('KeyC'),()=>this.keys.delete('KeyC'));hold('touchBoost',()=>this.touchBoost=true,()=>this.touchBoost=false);for(const[id,key]of[['touchGrab','KeyQ'],['touchPulse','KeyF'],['touchInteract','KeyE']])document.getElementById(id).addEventListener('click',()=>this.pressed.add(key));
+ moveStick(e){
+  const pad=document.getElementById('joystick'),knob=document.getElementById('stickKnob');
+  const radius=(pad?.getBoundingClientRect().width||112)*.35;
+  let x=(e.clientX-this.stickOrigin[0])/radius,y=(e.clientY-this.stickOrigin[1])/radius;
+  const length=Math.hypot(x,y);if(length>1){x/=length;y/=length;}
+  const l=Math.min(length,1),amount=l<.08?0:(l-.08)/.92;
+  this.stick=l?[x/l*amount,-y/l*amount]:[0,0];
+  if(knob)knob.style.transform=`translate(${x*radius}px,${y*radius}px)`;
  }
- axes(){return{x:(this.keys.has('KeyD')?1:0)-(this.keys.has('KeyA')?1:0)+this.stick[0],z:(this.keys.has('KeyW')||this.keys.has('ArrowUp')?1:0)-(this.keys.has('KeyS')||this.keys.has('ArrowDown')?1:0)+this.stick[1],y:(this.keys.has('Space')?1:0)-(this.keys.has('KeyC')||this.keys.has('ControlLeft')?1:0),boost:this.keys.has('ShiftLeft')||this.keys.has('ShiftRight')||this.touchBoost}}
+ releaseStick(){this.movePointer=null;this.stick=[0,0];document.getElementById('joystick')?.classList.remove('active');const k=document.getElementById('stickKnob');if(k)k.style.transform='translate(0,0)';document.getElementById('moveHint')?.classList.remove('quiet');}
+ bindTouch(){
+  const hold=(id,field)=>{
+   const b=document.getElementById(id);
+   this.on(b,'pointerdown',e=>{
+    if(!this.enabled||b.classList.contains('hidden'))return;
+    if(e.pointerType==='mouse'&&e.button!==0)return;
+    e.preventDefault();if(this.holdPointers.has(id))return;
+    this.holdPointers.set(id,e.pointerId);this[field]=true;this.syncFire();
+    b.classList.add('held');b.setAttribute('aria-pressed','true');
+    try{b.setPointerCapture(e.pointerId)}catch{}
+   });
+   const release=e=>{
+    if(this.holdPointers.get(id)!==e.pointerId)return;
+    this.holdPointers.delete(id);this[field]=false;this.syncFire();b.classList.remove('held');b.setAttribute('aria-pressed','false');
+   };
+   for(const ev of['pointerup','pointercancel','lostpointercapture'])this.on(b,ev,release);
+  };
+  hold('touchFire','touchFire');hold('touchUp','touchUp');hold('touchDown','touchDown');hold('touchBoost','touchBoost');
+  for(const[id,key]of[['touchGrab','KeyQ'],['touchPulse','KeyF'],['touchInteract','KeyE']])this.on(document.getElementById(id),'click',()=>{if(this.enabled&&!document.getElementById(id).classList.contains('hidden'))this.pressed.add(key)});
+ }
+ axes(){return{x:(this.keys.has('KeyD')?1:0)-(this.keys.has('KeyA')?1:0)+this.stick[0],z:(this.keys.has('KeyW')||this.keys.has('ArrowUp')?1:0)-(this.keys.has('KeyS')||this.keys.has('ArrowDown')?1:0)+this.stick[1],y:(this.keys.has('Space')||this.touchUp?1:0)-(this.keys.has('KeyC')||this.keys.has('ControlLeft')||this.touchDown?1:0),boost:this.keys.has('ShiftLeft')||this.keys.has('ShiftRight')||this.touchBoost}}
  take(key){const yes=this.pressed.has(key);this.pressed.delete(key);return yes}
- look(){let p=[this.dx,this.dy];this.dx=this.dy=0;return p}
+ look(){const p=[this.dx,this.dy];this.dx=this.dy=0;return p}
  end(){this.pressed.clear()}
- clear(){this.keys.clear();this.pressed.clear();this.fire=false;this.stick=[0,0];this.vertical=0;this.touchBoost=false;this.dx=this.dy=0;this.drag=null;this.pointers.clear()}
+ clear(){
+  const captured=[...this.pointers.keys(),this.movePointer];
+  this.keys.clear();this.pressed.clear();this.mouseFire=false;this.touchFire=false;this.fire=false;
+  this.vertical=0;this.touchUp=false;this.touchDown=false;this.touchBoost=false;this.dx=this.dy=0;this.drag=null;
+  this.pointers.clear();this.releaseStick();
+  for(const id of captured)if(id!==null){try{if(this.canvas.hasPointerCapture(id))this.canvas.releasePointerCapture(id)}catch{}}
+  const holds=[...this.holdPointers];this.holdPointers.clear();
+  for(const[id,pointer]of holds){const b=document.getElementById(id);try{if(b?.hasPointerCapture(pointer))b.releasePointerCapture(pointer)}catch{}}
+  document.querySelectorAll('#touch .held').forEach(b=>{b.classList.remove('held');b.setAttribute('aria-pressed','false')});
+ }
  dispose(){this.clear();for(const f of this.cleanup)f()}
 }
 K.Input=Input;
@@ -220,18 +351,220 @@ K.AudioSystem=AudioSystem;
 // FILE: src/core/save.js
 (function(K){
 'use strict';
-const KEY='kings-orbit-save-v1',BACKUP=KEY+'-backup';
+const KEY='kings-orbit-save-v1', ACTIVE='kings-orbit-cloud-active-v1';
 class SaveManager{
- constructor(){this.available=true;this.data=this.fresh();try{let text=localStorage.getItem(KEY);if(text){try{this.data=this.validate(JSON.parse(text))}catch{const backup=localStorage.getItem(BACKUP);this.data=backup?this.validate(JSON.parse(backup)):this.fresh()}}}catch{this.available=false}}
+ constructor(){
+  this.available=true;this.onWrite=null;this.key=KEY;this.profile=null;this.data=this.fresh();
+  try{
+   const p=JSON.parse(localStorage.getItem(ACTIVE)||'null');
+   if(p&&typeof p.id==='string'&&typeof p.name==='string'&&/^[a-f0-9]{64}$/.test(p.proof||'')){
+    this.profile=p;this.key=this.profileKey(p.id);
+   }
+   const text=localStorage.getItem(this.key);
+   if(text){try{this.data=this.validate(JSON.parse(text));}catch{const b=localStorage.getItem(this.key+'-backup');this.data=b?this.validate(JSON.parse(b)):this.fresh();}}
+  }catch{this.available=false;}
+ }
  fresh(){return{version:1,trophies:[],planetStates:{},space:{p:[0,0,0],yaw:0,pitch:0},settings:{quality:'balanced',volume:.5,sensitivity:1,shake:.55},visited:[],lastMode:'interior'}}
- validate(x){if(!x||x.version!==1)throw new Error('Unknown save version');const d=this.fresh();d.trophies=Array.isArray(x.trophies)?x.trophies.filter(t=>t&&t.id==='eden-ruler'&&typeof t.time==='string'):[];d.planetStates=x.planetStates&&typeof x.planetStates==='object'?x.planetStates:{};if(x.space&&Array.isArray(x.space.p)&&x.space.p.length===3&&x.space.p.every(Number.isFinite)&&x.space.p.every(v=>Math.abs(v)<1e9))d.space={p:x.space.p,yaw:Number.isFinite(x.space.yaw)?x.space.yaw:0,pitch:K.M.clamp(Number(x.space.pitch)||0,-1.45,1.45)};if(x.settings){d.settings.quality=['low','balanced','high'].includes(x.settings.quality)?x.settings.quality:'balanced';for(const[k,min,max]of[['volume',0,1],['sensitivity',.3,2],['shake',0,1]])if(Number.isFinite(x.settings[k]))d.settings[k]=K.M.clamp(x.settings[k],min,max)}d.visited=Array.isArray(x.visited)?x.visited.filter(v=>typeof v==='string'):[];return d}
- write(){try{const old=localStorage.getItem(KEY);if(old)localStorage.setItem(BACKUP,old);localStorage.setItem(KEY,JSON.stringify(this.data));this.available=true;return true}catch{this.available=false;return false}}
- addTrophy(t){if(!this.data.trophies.some(x=>x.id===t.id)){this.data.trophies.push(t);this.write();return true}return false}
- reset(){this.data=this.fresh();try{localStorage.removeItem(KEY);localStorage.removeItem(BACKUP)}catch{this.available=false}}
- export(){return JSON.stringify(this.data,null,2)}
- import(text){const next=this.validate(JSON.parse(text));this.data=next;this.write()}
+ validate(x){if(!x||x.version!==1)throw new Error('Unknown save version');const d=this.fresh();d.trophies=Array.isArray(x.trophies)?x.trophies.filter(t=>t&&t.id==='eden-ruler'&&typeof t.time==='string'):[];d.planetStates=x.planetStates&&typeof x.planetStates==='object'&&!Array.isArray(x.planetStates)?x.planetStates:{};if(x.space&&Array.isArray(x.space.p)&&x.space.p.length===3&&x.space.p.every(Number.isFinite)&&x.space.p.every(v=>Math.abs(v)<1e9))d.space={p:x.space.p,yaw:Number.isFinite(x.space.yaw)?x.space.yaw:0,pitch:K.M.clamp(Number(x.space.pitch)||0,-1.45,1.45)};if(x.settings){d.settings.quality=['low','balanced','high'].includes(x.settings.quality)?x.settings.quality:'balanced';for(const[k,min,max]of[['volume',0,1],['sensitivity',.3,2],['shake',0,1]])if(Number.isFinite(x.settings[k]))d.settings[k]=K.M.clamp(x.settings[k],min,max)}d.visited=Array.isArray(x.visited)?x.visited.filter(v=>typeof v==='string'):[];return d}
+ profileKey(id){return KEY+'-user-'+encodeURIComponent(id);}
+ useProfile(profile,data){this.profile=profile;this.key=profile?this.profileKey(profile.id):KEY;this.data=this.validate(data);}
+ readProfile(id){try{const text=localStorage.getItem(id?this.profileKey(id):KEY);return text?this.validate(JSON.parse(text)):null;}catch{return null;}}
+ write(reason='auto'){
+  try{const old=localStorage.getItem(this.key);if(old)localStorage.setItem(this.key+'-backup',old);localStorage.setItem(this.key,JSON.stringify(this.data));this.available=true;}catch{this.available=false;}
+  this.onWrite?.(reason);return this.available;
+ }
+ addTrophy(t){if(!this.data.trophies.some(x=>x.id===t.id)){this.data.trophies.push(t);this.write('checkpoint');return true;}return false;}
+ reset(){if(this.profile)throw new Error('온라인 항해 기록은 서버 저장 메뉴에서 초기화하세요.');this.data=this.fresh();try{localStorage.removeItem(this.key);localStorage.removeItem(this.key+'-backup');}catch{this.available=false;}}
+ export(){return JSON.stringify(this.data,null,2);}
+ import(text){this.data=this.validate(JSON.parse(text));this.write('checkpoint');}
 }
+SaveManager.ACTIVE_KEY=ACTIVE;SaveManager.ROOT_KEY=KEY;
 K.SaveManager=SaveManager;
+})(window.KO ||= {});
+
+
+// FILE: src/core/cloud.js
+/* 0.1.2 — acknowledged, revision-checked cloud saves. Guest saves stay separate.
+ * The endpoint is the user's existing arcade Apps Script deployment.
+ * Passwords never go in URLs. No JSONP for private data, no opaque "saved" claims.
+ */
+(function(K){
+'use strict';
+const ENDPOINT='https://script.google.com/macros/s/AKfycbzKmIYdOCYXNwXbNzvZWR2mQZk59Hhbpk7le-86VGqwzrgJZYqwGegYmRHcKhQ59fVV/exec';
+const ACTIVE=K.SaveManager.ACTIVE_KEY, META='kings-orbit-cloud-meta-v1-';
+const copy=x=>JSON.parse(JSON.stringify(x));
+const idKey=name=>name.normalize('NFKC').trim().replace(/\s+/g,' ').toLowerCase();
+const random=()=>Array.from(crypto.getRandomValues(new Uint8Array(16)),n=>n.toString(16).padStart(2,'0')).join('');
+class CloudError extends Error{constructor(code,message,record){super(message);this.code=code;this.record=record;}}
+class CloudSave{
+ constructor(game){
+  this.game=game;this.save=game.save;this.meta=this.save.profile;this.ready=false;this.conflict=null;this.accountBusy=false;
+  this.state=this.meta?'checking':'local';this.message='';this.onChange=null;this.suppress=false;this.flight=null;this.restoreFlight=null;this.timer=null;this.lastAttempt=0;this.failures=0;
+  this.signature=this.serialize();this.save.onWrite=reason=>this.changed(reason);
+  window.addEventListener('online',()=>{if(this.state!=='auth')this.restore().catch(()=>{});});
+  window.addEventListener('offline',()=>{if(this.meta)this.status('offline','오프라인 · 이 기기에 보관 중');});
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&this.meta){game.persist();this.flush({keepalive:true}).catch(()=>{});}});
+  this.interval=setInterval(()=>{if(this.meta&&!this.conflict&&this.state!=='auth'){if(this.ready)this.flush().catch(()=>{});else if(Date.now()-this.lastAttempt>Math.min(300000,45000*2**Math.min(this.failures,3)))this.restore().catch(e=>this.failed(e));}},60000);
+  if(this.meta)setTimeout(()=>this.restore().catch(e=>this.failed(e)),300);
+ }
+ pack(data=this.save.data){return copy({version:data.version,trophies:data.trophies,planetStates:data.planetStates,space:data.space,visited:data.visited,lastMode:'interior'});}
+ serialize(data=this.save.data){return JSON.stringify(this.pack(data));}
+ store(){
+  if(!this.meta)return;
+  try{localStorage.setItem(ACTIVE,JSON.stringify(this.meta));const m={...this.meta};delete m.proof;localStorage.setItem(META+encodeURIComponent(m.id),JSON.stringify(m));}catch{this.save.available=false;}
+ }
+ status(state,message=''){this.state=state;this.message=message;this.onChange?.();}
+ changed(reason){
+  if(this.suppress||!this.meta)return;
+  const sig=this.serialize();if(sig===this.signature)return;
+  this.signature=sig;this.meta.dirty=true;this.store();
+  if(this.conflict){this.status('conflict','다른 기기의 기록과 충돌 · 자동 업로드 중지');return;}
+  if(this.state!=='saving')this.status(this.ready?'pending':'offline',this.ready?'이 기기에 저장 · 서버 동기화 대기':'이 기기에 저장 · 서버 연결 대기');
+  if(reason==='checkpoint'&&this.ready){clearTimeout(this.timer);this.timer=setTimeout(()=>this.flush().catch(()=>{}),Math.max(900,4000-(Date.now()-this.lastAttempt)));}
+ }
+ async request(action,extra={},options={}){
+  if(!globalThis.fetch)throw new CloudError('BROWSER','이 브라우저는 서버 저장을 지원하지 않습니다.');
+  const ctrl=new AbortController(),timeout=setTimeout(()=>ctrl.abort(),20000);
+  try{
+   const url=ENDPOINT+'?game=kings-orbit'+(action==='ping'?'&action=ping':'');
+   const optionsFetch={method:action==='ping'?'GET':'POST',mode:'cors',credentials:'omit',redirect:'follow',cache:'no-store',signal:ctrl.signal,referrerPolicy:'no-referrer'};
+   if(action!=='ping'){optionsFetch.headers={'Content-Type':'text/plain;charset=UTF-8'};optionsFetch.body=JSON.stringify({game:'kings-orbit',protocol:1,action,...extra});if(options.keepalive)optionsFetch.keepalive=true;}
+   const response=await fetch(url,optionsFetch);
+   if(!response.ok)throw new CloudError('HTTP','서버 연결을 확인하지 못했습니다. 기록은 이 기기에 남습니다.');
+   let r;try{r=await response.json();}catch{throw new CloudError('SETUP','서버 저장 기능이 아직 배포되지 않았습니다. Apps Script 설정을 확인하세요.');}
+   if(!r||r.game!=='kings-orbit'||r.protocol!==1)throw new CloudError('SETUP','기존 서버에 왕들의 궤도 저장 기능을 먼저 추가해야 합니다.');
+   if(!r.ok)throw new CloudError(r.code||'SERVER',r.message||'서버 저장을 확인하지 못했습니다.',r.record);
+   return r;
+  }catch(e){if(e instanceof CloudError)throw e;throw new CloudError('NETWORK',e.name==='AbortError'?'서버 응답이 늦습니다. 이 기기 기록은 유지됩니다.':'서버 연결에 실패했습니다. 네트워크·배포 권한을 확인하세요.');}
+  finally{clearTimeout(timeout);}
+ }
+ async ping(){const r=await this.request('ping');if(!r.ready)throw new CloudError('SETUP','서버에서 setupKingsOrbit를 실행하고 기존 배포를 새 버전으로 갱신하세요.');return r;}
+ async proof(name,password){
+  if(typeof password!=='string'||password.length<6||password.length>64)throw new CloudError('PASSWORD','저장 비밀번호는 6~64자입니다.');
+  if(!crypto?.subtle)throw new CloudError('HTTPS','서버 저장은 HTTPS 게임 주소에서 이용하세요.');
+  const enc=new TextEncoder(),key=await crypto.subtle.importKey('raw',enc.encode(password),'PBKDF2',false,['deriveBits']);
+  const bits=await crypto.subtle.deriveBits({name:'PBKDF2',hash:'SHA-256',salt:enc.encode('kings-orbit-v1\n'+idKey(name)),iterations:210000},key,256);
+  return Array.from(new Uint8Array(bits),n=>n.toString(16).padStart(2,'0')).join('');
+ }
+ name(name){const n=name.normalize('NFKC').trim().replace(/\s+/g,' ');if(!/^[가-힣ㄱ-ㅎㅏ-ㅣA-Za-z0-9][가-힣ㄱ-ㅎㅏ-ㅣA-Za-z0-9 ._-]{0,23}$/.test(n))throw new CloudError('NAME','이름은 한글·영문·숫자로 시작하는 1~24자입니다.');return n;}
+ credentials(){return {name:this.meta.name,proof:this.meta.proof};}
+ validRecord(r){if(!r||!Number.isSafeInteger(r.rev)||r.rev<1||typeof r.name!=='string'||!r.save)throw new CloudError('DATA','서버 응답 형식이 다릅니다. 기존 기록을 유지합니다.');this.save.validate(r.save);return r;}
+ // Account changes wait for old asynchronous work. A late old login must never
+ // restore one player's save into another player's newly selected identity.
+ async identityTask(work){
+  if(this.accountBusy)throw new CloudError('BUSY','이전 계정 요청이 끝난 뒤 다시 시도하세요.');
+  this.accountBusy=true;clearTimeout(this.timer);
+  try{if(this.restoreFlight)await this.restoreFlight.catch(()=>{});if(this.flight)await this.flight.catch(()=>{});return await work();}
+  finally{this.accountBusy=false;}
+ }
+ async connect(name,password,register=false,carry=true){return this.identityTask(()=>this.connectAccount(name,password,register,carry));}
+ async connectAccount(name,password,register=false,carry=true){
+  name=this.name(name);await this.ping();const proof=await this.proof(name,password);this.game.persist();
+  if(this.meta?.dirty&&this.meta.id!==idKey(name)){await this.flush({accountTask:true});if(this.meta.dirty)throw new CloudError('PENDING','현재 항해자의 미전송 기록부터 저장하거나 내보내 보관하세요.');}
+  const extra={name,proof};
+  if(register){extra.opId=random();extra.save=carry?this.pack():this.pack(this.save.fresh());}
+  // Retrying a registration with the same object after a lost acknowledgment is idempotent.
+  let r;try{r=await this.request(register?'register':'login',extra);}catch(e){if(register&&e.code==='NETWORK')r=await this.request('register',extra);else throw e;}
+  this.validRecord(r);
+  const id=idKey(r.name);let old=null;try{old=JSON.parse(localStorage.getItem(META+encodeURIComponent(id))||'null');}catch{}
+  const local=this.save.readProfile(id);
+  this.meta={id,name:r.name,proof,rev:r.rev,updatedAt:r.updatedAt,dirty:false,pending:null};this.ready=true;this.conflict=null;
+  if(!register&&old?.dirty&&local){
+   this.meta={...old,id,name:r.name,proof};this.apply(local);this.reconcile(r);
+  }else{this.apply(r.save);this.store();this.status('saved','서버에서 항해 기록을 불러왔습니다.');}
+  this.game.ui.toast(register?'항해자가 등록되었습니다.':'항해 기록을 불러왔습니다.',this.meta.name+' · 다른 기기에서도 같은 이름과 저장 비밀번호로 이어갈 수 있습니다.',5);
+  return r;
+ }
+ apply(data){
+  const g=this.game,settings={...g.settings};this.suppress=true;
+  try{
+   // Dispose the old world BEFORE switching saves; its dispose() snapshots its old state.
+   if(g.planet){g.planet.dispose();g.planet=null;}
+   const next=this.save.validate(data);next.settings=settings;this.save.useProfile(this.meta,next);g.settings=next.settings;
+   this.save.write();this.signature=this.serialize();g.mode='interior';g.descent=0;g.space.position=next.space.p.slice();g.space.yaw=next.space.yaw;g.space.pitch=next.space.pitch;g.space.velocity=[0,0,0];g.space.auto=false;g.space.wasInSky=g.nearPlanet();g.interior.spawn('bridge');g.setEnvironment();g.ui.mode('interior');g.currentInteract=null;g.input.clear();
+   const btn=document.getElementById('startBtn');if(btn)btn.innerHTML=next.trophies.length||next.visited.length?'항해 이어가기 <span>↗</span>':'항해 시작 <span>↗</span>';
+  }finally{this.suppress=false;}
+ }
+ reconcile(r){
+  this.validRecord(r);const m=this.meta;
+  if(m.pending&&r.opId===m.pending.opId){m.rev=r.rev;m.updatedAt=r.updatedAt;m.dirty=this.serialize()!==this.serialize(m.pending.save);m.pending=null;}
+  if(m.dirty){
+   if(Number(m.rev)!==r.rev){this.conflict=r;this.ready=false;this.store();this.status('conflict','다른 기기의 새 기록이 있습니다. 자동 덮어쓰기를 중단했습니다.');return;}
+   this.ready=true;this.store();this.status('pending','이 기기의 미전송 기록을 서버에 동기화합니다.');clearTimeout(this.timer);this.timer=setTimeout(()=>this.flush().catch(()=>{}),1000);
+  }else{
+   if(this.game.started&&this.serialize()!==this.serialize(r.save)){this.conflict=r;this.ready=false;this.store();this.status('conflict','서버의 새 기록을 확인하세요. 현재 플레이는 유지합니다.');return;}
+   m.rev=r.rev;m.updatedAt=r.updatedAt;m.pending=null;
+   // If play began while reconnecting, changed() will have marked the new local state dirty.
+   if(!this.game.started)this.apply(r.save);this.ready=true;this.store();this.status('saved','서버 저장 완료');
+  }
+ }
+ async restore(){
+  if(!this.meta||this.accountBusy)return;
+  if(this.restoreFlight)return this.restoreFlight;
+  const task=async()=>{this.lastAttempt=Date.now();this.status('checking','서버 기록 확인 중');try{if(this.flight)await this.flight.catch(()=>{});if(this.game.started)this.game.persist();await this.ping();const r=await this.request('login',this.credentials());if(this.game.started)this.game.persist();this.failures=0;this.reconcile(r);return r;}catch(e){this.failed(e);throw e;}};
+  this.restoreFlight=task();try{return await this.restoreFlight;}finally{this.restoreFlight=null;}
+ }
+ async begin(){
+  if(this.game.started)return;
+  if(this.meta&&!this.ready&&!this.conflict&&this.state!=='auth'){try{await this.restore();}catch{this.game.ui.toast('이 기기의 기록으로 시작합니다.','서버에 연결되면 저장 버전을 확인한 뒤 동기화합니다.',5);}}
+  if(this.conflict){this.game.cloudUI.openConflict();return;}
+  this.game.start();
+ }
+ failed(e){this.failures++;this.ready=false;this.store();if(e.code==='CONFLICT'&&e.record){this.conflict=e.record;this.status('conflict',e.message);this.game.ui.toast('서버 기록이 바뀌었습니다.','메뉴의 서버 저장에서 사용할 기록을 선택하세요.',6);}else this.status(['AUTH','LOCKED'].includes(e.code)?'auth':'offline',e.message||'연결 실패 · 이 기기에 보관 중');}
+ async flush(options={}){
+  if((this.accountBusy&&!options.accountTask)||!this.meta||this.conflict)return false;
+  if(this.flight)return this.flight;
+  if(!this.ready)return false;
+  if(!this.meta.dirty)return true;
+  const task=async()=>{
+   const m=this.meta;if(!m.pending)m.pending={opId:random(),baseRev:m.rev,save:this.pack()};
+   const pending=copy(m.pending);this.store();this.lastAttempt=Date.now();this.status('saving','서버에 저장 중');
+   try{
+    const r=await this.request('save',{...this.credentials(),...pending},options);
+    if(!Number.isSafeInteger(r.rev)||r.opId!==pending.opId)throw new CloudError('ACK','서버의 저장 확인 응답이 다릅니다. 기록을 유지합니다.');
+    m.rev=r.rev;m.updatedAt=r.updatedAt;m.pending=null;m.dirty=this.serialize()!==this.serialize(pending.save);this.failures=0;this.store();
+    this.status(m.dirty?'pending':'saved',m.dirty?'최근 진행 동기화 대기':'서버 저장 완료');
+    if(m.dirty){clearTimeout(this.timer);this.timer=setTimeout(()=>this.flush().catch(()=>{}),5000);}
+    return true;
+   }catch(e){this.failed(e);throw e;}
+  };
+  this.flight=task();try{return await this.flight;}finally{this.flight=null;}
+ }
+ backup(){try{localStorage.setItem(this.save.key+'-conflict-backup',this.save.export());}catch{}return this.save.export();}
+ async resolve(useLocal){
+  if(!this.conflict)return;
+  const remote=this.conflict;this.backup();
+  if(useLocal){
+   const payload={...this.credentials(),opId:random(),baseRev:remote.rev,save:this.pack()};
+   const r=await this.request('save',payload);
+   if(r.opId!==payload.opId)throw new CloudError('ACK','서버 저장 확인 응답이 다릅니다.');
+   this.meta.rev=r.rev;this.meta.updatedAt=r.updatedAt;this.meta.pending=null;this.meta.dirty=false;this.conflict=null;this.ready=true;this.store();this.status('saved','선택한 이 기기 기록을 서버에 저장했습니다.');
+  }else{
+   // Fetch once more; a third device may have updated the server since the dialog opened.
+   const latest=this.validRecord(await this.request('login',this.credentials()));
+   this.meta.rev=latest.rev;this.meta.updatedAt=latest.updatedAt;this.meta.pending=null;this.meta.dirty=false;this.conflict=null;this.apply(latest.save);this.ready=true;this.store();this.status('saved','최신 서버 기록으로 이어갑니다.');
+  }
+ }
+ async resetProgress(){
+  if(!this.meta)return;
+  if(this.conflict)throw new CloudError('CONFLICT','먼저 사용할 기록을 선택하세요.',this.conflict);
+  if(!this.ready)await this.restore();
+  if(this.conflict)throw new CloudError('CONFLICT','다른 기기의 기록을 먼저 확인하세요.',this.conflict);
+  if(this.flight)await this.flight;
+  const fresh=this.pack(this.save.fresh()),opId=random();
+  const r=await this.request('save',{...this.credentials(),baseRev:this.meta.rev,opId,save:fresh});
+  if(r.opId!==opId)throw new CloudError('ACK','초기화를 확인하지 못했습니다.');
+  this.backup();this.meta.rev=r.rev;this.meta.updatedAt=r.updatedAt;this.meta.pending=null;this.meta.dirty=false;this.apply(fresh);this.store();this.status('saved','서버 항해 기록을 초기화했습니다.');
+ }
+ async logout(){return this.identityTask(()=>this.logoutAccount());}
+ async logoutAccount(){
+  this.game.persist();if(this.meta?.dirty){await this.flush({accountTask:true});if(this.meta.dirty)throw new CloudError('PENDING','아직 서버에 전송하지 못한 기록이 있습니다. 저장 확인 후 계정을 바꾸세요.');}
+  this.store();try{localStorage.removeItem(ACTIVE);}catch{}
+  this.meta=null;this.ready=false;this.conflict=null;this.apply(this.save.readProfile(null)||this.save.fresh());this.status('local','이 기기에만 저장');
+ }
+}
+CloudSave.ENDPOINT=ENDPOINT;CloudSave.CloudError=CloudError;CloudSave.idKey=idKey;
+K.CloudSave=CloudSave;
 })(window.KO ||= {});
 
 
@@ -240,28 +573,120 @@ K.SaveManager=SaveManager;
 'use strict';
 const $=id=>document.getElementById(id);
 class UI{
- constructor(game){this.game=game;this.toastUntil=0;this.hitUntil=0;this.cache={};this.pausedFromTitle=false;this.hud=$('hud');$('startBtn').onclick=()=>game.start();$('titleHelp').onclick=()=>this.help();$('titleSettings').onclick=()=>this.menu();$('menuBtn').onclick=()=>this.menu();$('soundBtn').onclick=()=>{game.audio.setMuted(!game.audio.muted);$('soundBtn').textContent=game.audio.muted?'×♪':'♪'};$('fullBtn').onclick=()=>{try{if(document.fullscreenElement)document.exitFullscreen()?.catch(()=>{});else document.documentElement.requestFullscreen?.()?.catch(()=>this.toast('전체 화면을 지원하지 않는 환경입니다.'))}catch{}};$('spaceAction').onclick=()=>game.space.toggleAuto();$('returnAction').onclick=()=>game.returnHome();game.input.bindTouch();this.mobile(game.input.mobile);$('panelWrap').addEventListener('click',e=>{if(e.target===$('panelWrap'))this.close()});}
- mobile(v){document.body.classList.toggle('touch',v);this.game.input.mobile=v}
+ constructor(game){this.game=game;this.toastUntil=0;this.hitUntil=0;this.cache={};this.pausedFromTitle=false;this.hud=$('hud');$('startBtn').onclick=()=>{if(game.cloud)game.cloud.begin().catch(e=>this.toast('항해 기록을 확인하지 못했습니다.',e.message));else game.start();};$('titleHelp').onclick=()=>this.help();$('titleSettings').onclick=()=>this.menu();$('menuBtn').onclick=()=>this.menu();$('soundBtn').onclick=()=>{game.audio.setMuted(!game.audio.muted);$('soundBtn').textContent=game.audio.muted?'×♪':'♪'};$('fullBtn').onclick=()=>{try{if(document.fullscreenElement)document.exitFullscreen()?.catch(()=>{});else document.documentElement.requestFullscreen?.()?.catch(()=>this.toast('전체 화면을 지원하지 않는 환경입니다.'))}catch{}};$('spaceAction').onclick=()=>game.space.toggleAuto();$('returnAction').onclick=()=>game.returnHome();game.input.bindTouch();this.mobile(game.input.mobile);$('panelWrap').addEventListener('click',e=>{if(e.target===$('panelWrap'))this.close()});}
+ mobile(v){this.game.input.clear();document.body.classList.toggle('touch',v);this.game.input.mobile=v}
  start(){ $('title').classList.add('hidden');this.hud.classList.remove('hidden');this.mode('interior');}
- mode(mode){this.cache.mode=mode;$('spaceAction').classList.toggle('hidden',mode!=='space');$('returnAction').classList.toggle('hidden',mode!=='planet');$('spaceTarget').classList.toggle('hidden',mode!=='space');$('touchFire').classList.toggle('hidden',mode!=='planet');$('touchGrab').classList.toggle('hidden',mode!=='planet');$('touchPulse').classList.toggle('hidden',mode!=='planet');$('touchUp').classList.toggle('hidden',mode==='interior');$('touchDown').classList.toggle('hidden',mode==='interior');$('worldLabels').innerHTML='';$('context').textContent='';$('pullMeter').classList.add('hidden');const hint={interior:'<kbd>W A S D</kbd> 이동　마우스 시선　<kbd>E</kbd> 상호작용　<kbd>Shift</kbd> 빠르게 걷기',space:'<kbd>W A S D</kbd> 비행　<kbd>Space</kbd><kbd>C</kbd> 상승·하강　<kbd>Shift</kbd> 가속　<kbd>X</kbd> 정지　<kbd>T</kbd> 자동항해',planet:'<kbd>W A S D</kbd> 비행　<kbd>Space</kbd><kbd>C</kbd> 고도　좌클릭 광선　<kbd>Q</kbd> 견인·놓기　<kbd>F</kbd> 충격파　<kbd>Shift</kbd> 돌진'}[mode];$('controlHint').innerHTML=hint;this.setStatus(mode==='interior'?'선내 보행':'','NØMAD');}
+ mode(mode){this.cache.mode=mode;this.prompt('',false,'');$('spaceAction').classList.toggle('hidden',mode!=='space');$('returnAction').classList.toggle('hidden',mode!=='planet');$('spaceTarget').classList.toggle('hidden',mode!=='space');$('touchFire').classList.toggle('hidden',mode!=='planet');$('touchGrab').classList.toggle('hidden',mode!=='planet');$('touchPulse').classList.toggle('hidden',mode!=='planet');$('touchUp').classList.toggle('hidden',mode==='interior');$('touchDown').classList.toggle('hidden',mode==='interior');$('worldLabels').innerHTML='';$('context').textContent='';$('pullMeter').classList.add('hidden');const hint={interior:'<kbd>W A S D</kbd> 이동　마우스 시선　<kbd>E</kbd> 표시된 행동　<kbd>Shift</kbd> 빠르게 걷기',space:'<kbd>W A S D</kbd> 비행　<kbd>Space</kbd><kbd>C</kbd> 상승·하강　<kbd>Shift</kbd> 누르는 동안 가속　<kbd>X</kbd> 정지　<kbd>T</kbd> 자동항해',planet:'<kbd>W A S D</kbd> 비행　<kbd>Space</kbd><kbd>C</kbd> 고도　좌클릭 광선　<kbd>Q</kbd> 견인·놓기　<kbd>F</kbd> 충격파　<kbd>Shift</kbd> 돌진'}[mode];$('controlHint').innerHTML=hint;this.setStatus(mode==='interior'?'선내 보행':'','NØMAD');}
  setArea(sector,area){if(this.cache.sector!==sector){$('sector').textContent=sector;this.cache.sector=sector}if(this.cache.area!==area){$('area').textContent=area;this.cache.area=area}}
  setStatus(a,b){if(this.cache.status!==a){$('statusTitle').textContent=a;this.cache.status=a}if(this.cache.value!==b){$('statusValue').textContent=b;this.cache.value=b}}
- prompt(text,active){const p=$('prompt');p.classList.toggle('hidden',!text);p.querySelector('span').textContent=text;p.querySelector('kbd').style.display=this.game.input.mobile?'none':'';$('touchInteract').classList.toggle('hidden',!active);$('touchInteract').textContent=this.cache.mode==='space'?'일어나기':'상호작용';}
+ prompt(text,active,verb=''){
+  const p=$('prompt');p.classList.toggle('hidden',!text);p.querySelector('span').textContent=text;
+  p.querySelector('kbd').style.display=this.game.input.mobile||!active?'none':'';
+  const button=$('touchInteract');button.classList.toggle('hidden',!active||!verb);button.textContent=active?verb:'';
+  button.setAttribute('aria-label',active?text:'');
+ }
  context(text,active=false,progress=-1){$('context').textContent=text;$('crosshair').classList.toggle('active',active);$('pullMeter').classList.toggle('hidden',progress<0);if(progress>=0)$('pullMeter').firstElementChild.style.width=`${K.M.clamp(progress,0,1)*100}%`;}
  hit(){this.hitUntil=performance.now()+80;$('hitmarker').classList.add('hit')}
  toast(a,b='',seconds=4.5){$('toast').querySelector('strong').textContent=a;$('toast').querySelector('span').textContent=b;$('toast').classList.add('show');this.toastUntil=performance.now()+seconds*1000;}
- update(){let t=performance.now();if(t>this.toastUntil)$('toast').classList.remove('show');if(t>this.hitUntil)$('hitmarker').classList.remove('hit');const g=this.game;if(g.mode==='space'){const p=K.M.project(g.space.planetPosition,g.engine.vp,innerWidth,innerHeight);const outside=!p.front||p.x<80||p.x>innerWidth-80||p.y<80||p.y>innerHeight-120;$('spaceTarget').style.left=`${K.M.clamp(p.x,80,innerWidth-80)}px`;$('spaceTarget').style.top=`${K.M.clamp(p.y,100,innerHeight-130)}px`;$('spaceTarget').style.opacity=outside?.38:.85;$('distanceLabel').textContent=`${Math.round(g.space.distance()).toLocaleString()} m · ${g.nearPlanet()?'출격 가능':'행성까지'}`;$('spaceAction').textContent=g.space.auto?'T · 자동항해 해제':'T · 에덴으로 자동항해';}}
+ update(){
+  const t=performance.now();if(t>this.toastUntil)$('toast').classList.remove('show');if(t>this.hitUntil)$('hitmarker').classList.remove('hit');
+  const g=this.game,boost=g.input.enabled&&g.input.axes().boost;
+  const boostText=g.mode==='interior'?(boost?'빠른 걸음':'빠르게 걷기'):(boost?'가속 중':'가속');
+  if(this.cache.boostText!==boostText){$('touchBoost').querySelector('span').textContent=boostText;this.cache.boostText=boostText;}
+  $('touchBoost').classList.toggle('held',!!boost);$('touchBoost').setAttribute('aria-pressed',String(!!boost));
+  $('touchBoost').setAttribute('aria-label',g.mode==='interior'?'누르는 동안 빠르게 걷기':'누르는 동안 가속');
+  if(g.mode==='space'){
+   const p=K.M.project(g.space.planetPosition,g.engine.vp,innerWidth,innerHeight);
+   const outside=!p.front||p.x<80||p.x>innerWidth-80||p.y<80||p.y>innerHeight-120;
+   $('spaceTarget').classList.toggle('hidden',g.space.atmosphere()>.5);
+   $('spaceTarget').style.left=`${K.M.clamp(p.x,80,innerWidth-80)}px`;$('spaceTarget').style.top=`${K.M.clamp(p.y,100,innerHeight-130)}px`;
+   $('spaceTarget').style.opacity=outside?.38:.85;
+   $('distanceLabel').textContent=`${Math.round(g.space.distance()).toLocaleString()} m · 지표까지`;
+   const parked=g.nearPlanet()&&!g.space.auto&&K.M.len(g.space.velocity)<1;
+   $('spaceAction').classList.toggle('hidden',parked);
+   const prefix=g.input.mobile?'':'T · ';
+   $('spaceAction').textContent=prefix+(g.space.auto?'자동항해 해제':'에덴 상공으로 자동항해');
+  }
+ }
  async transition(title,subtitle,fn,white=false){const el=$('transition');el.querySelector('strong').textContent=title;el.querySelector('span').textContent=subtitle;el.classList.toggle('white',white);el.classList.add('show');await new Promise(r=>setTimeout(r,600));try{await fn();await new Promise(r=>setTimeout(r,400))}finally{el.classList.remove('show');await new Promise(r=>setTimeout(r,520));}}
  loading(done=false){if(done){$('loading').classList.add('fade');setTimeout(()=>$('loading').classList.add('hidden'),850)}}
  open(html){const g=this.game;this.pausedFromTitle=!g.started;g.paused=true;g.input.clear();g.input.enabled=false;document.exitPointerLock?.();g.audio.stop();$('panel').innerHTML=html;$('panelWrap').classList.remove('hidden');$('panel').querySelector('button')?.focus();}
- close(){this.game.paused=false;this.game.input.enabled=this.game.started;this.game.input.clear();$('panelWrap').classList.add('hidden');}
- menu(){const g=this.game,s=g.settings;this.open(`<div class="eyebrow">NØMAD / SHIP SYSTEMS</div><h2>${g.started?'잠시 정박':'항해 설정'}</h2><div class="panelRow"><label for="quality">화면 품질</label><select id="quality"><option value="low">저사양</option><option value="balanced">균형</option><option value="high">높음</option></select></div><div class="panelRow"><label for="volume">소리</label><input id="volume" type="range" min="0" max="1" step=".05" value="${s.volume}"></div><div class="panelRow"><label for="sensitivity">시선 감도</label><input id="sensitivity" type="range" min=".3" max="2" step=".05" value="${s.sensitivity}"></div><div class="panelRow"><label for="shake">충돌 화면 흔들림</label><input id="shake" type="range" min="0" max="1" step=".05" value="${s.shake}"></div><div class="panelRow"><label for="touchSetting">화면 터치 조작 표시</label><input id="touchSetting" type="checkbox" ${g.input.mobile?'checked':''}></div><div class="panelActions"><button class="primary" id="resume">${g.started?'항해 계속':'닫기'} ↗</button><button class="secondary" id="helpBtn">조작 안내</button></div><div class="panelActions slim"><button class="secondary" id="exportSave">저장 내보내기</button><button class="secondary" id="importSave">저장 불러오기</button><input id="importInput" type="file" accept=".json,application/json"></div><div class="panelActions slim"><button class="ghost danger" id="resetBtn">진행 기록 초기화</button></div><div class="finePrint">자동 저장: 왕의 머리 회수 · 행성 귀환 · 주기적 항해 저장<br>로컬 파일·시크릿 모드에서는 저장이 제한될 수 있습니다. 저장 파일을 따로 보관할 수 있습니다.<br>이 버전: 에덴 행성 1개 / 1인칭 파괴정 / 선내 자유보행</div>`);$('quality').value=s.quality;$('quality').onchange=e=>{s.quality=e.target.value;g.engine.quality=s.quality;g.engine.resolutionScale=1;g.engine.resize();g.persist()};for(const id of['volume','sensitivity','shake'])$(id).oninput=e=>{s[id]=Number(e.target.value);g.audio.volume=s.volume;g.audio.applyVolume();g.input.sensitivity=s.sensitivity;g.persist()};$('touchSetting').onchange=e=>this.mobile(e.target.checked);$('resume').onclick=()=>this.close();$('helpBtn').onclick=()=>this.help();$('exportSave').onclick=()=>{g.persist();const blob=new Blob([g.save.export()],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='kings-orbit-save.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};$('importSave').onclick=()=>$('importInput').click();$('importInput').onchange=async e=>{try{const file=e.target.files[0];if(!file)return;g.save.import(await file.text());location.reload()}catch(err){this.toast('저장 파일을 읽지 못했습니다.',err.message)}};$('resetBtn').onclick=()=>this.confirmReset();}
- confirmReset(){this.open('<div class="eyebrow">RESET VOYAGE</div><h2>항해 기록을 지울까요?</h2><p class="text">전시된 머리와 행성의 파괴 기록이 사라집니다. 이 작업은 되돌릴 수 없습니다.</p><div class="panelActions"><button id="cancelReset" class="primary">취소</button><button id="doReset" class="secondary danger">기록 지우기</button></div>');$('cancelReset').onclick=()=>this.menu();$('doReset').onclick=()=>{this.game.save.reset();location.reload()}}
- help(){this.open(`<div class="eyebrow">FLIGHT MANUAL / 01</div><h2>가고 싶은 곳으로.</h2><div class="controlsTable"><div>W A S D</div><div>걷기 / 비행 · 마우스로 시선</div><div>화면 클릭</div><div>마우스 고정. 안 되면 우클릭 드래그.<br>방향키 좌우로도 회전할 수 있습니다.</div><div>E</div><div>조종석 · 전시 기록 · 파괴정 탑승</div><div>Space / C</div><div>상승 / 하강</div><div>Shift</div><div>빠르게 걷기 / 가속·충돌</div><div>T / X</div><div>우주 자동항해 / 추진 정지</div><div>좌클릭 길게</div><div>파괴정 절단 광선</div><div>Q</div><div>바라보는 대상 견인 / 던져 놓기</div><div>F</div><div>근접 충격파 · 재충전 3초</div><div>R</div><div>행성에서 언제든 모선으로 귀환</div><div>Esc / P</div><div>메뉴 / 일시정지</div></div><p class="text">처음에는 조종석에 앉아 <b>T</b>로 에덴에 접근하세요. 궤도에 도착하면 <b>E</b>로 일어나 뒤쪽 격납고에서 출격합니다.</p><p class="text">행성에서는 눈앞의 건물을 부수거나 밀어버리세요. 왕좌를 무력화한 뒤 왕의 머리를 바라보고 <b>Q</b>로 붙잡아 <b>S</b>로 뒤로 물러나면 회수할 수 있습니다. 왕을 잡지 않고 떠나도 됩니다.</p><div class="finePrint">터치: 왼쪽 스틱 이동 / 오른쪽 빈 화면 드래그로 시선 / 우측 액션 버튼.<br>기능을 막는 연료·목숨·제한시간은 없습니다. 우주에서는 엔진을 멈추면 고요해집니다.</div><div class="panelActions"><button id="closeHelp" class="primary">알겠습니다 ↗</button></div>`);$('closeHelp').onclick=()=>this.close();}
+ close(){if(this.game.cloudUI?.busy)return;this.game.paused=false;this.game.input.enabled=this.game.started;this.game.input.clear();$('panelWrap').classList.add('hidden');}
+ menu(){const g=this.game,s=g.settings;this.open(`<div class="eyebrow">NØMAD / SHIP SYSTEMS</div><h2>${g.started?'잠시 정박':'항해 설정'}</h2>${g.cloudUI?.menuRow()||''}<div class="panelRow"><label for="quality">화면 품질</label><select id="quality"><option value="low">저사양</option><option value="balanced">균형</option><option value="high">높음</option></select></div><div class="panelRow"><label for="volume">소리</label><input id="volume" type="range" min="0" max="1" step=".05" value="${s.volume}"></div><div class="panelRow"><label for="sensitivity">시선 감도</label><input id="sensitivity" type="range" min=".3" max="2" step=".05" value="${s.sensitivity}"></div><div class="panelRow"><label for="shake">충돌 화면 흔들림</label><input id="shake" type="range" min="0" max="1" step=".05" value="${s.shake}"></div><div class="panelRow"><label for="touchSetting">화면 터치 조작 표시</label><input id="touchSetting" type="checkbox" ${g.input.mobile?'checked':''}></div><div class="panelActions"><button class="primary" id="resume">${g.started?'항해 계속':'닫기'} ↗</button><button class="secondary" id="helpBtn">조작 안내</button></div><div class="panelActions slim"><button class="secondary" id="exportSave">저장 내보내기</button><button class="secondary" id="importSave">저장 불러오기</button><input id="importInput" type="file" accept=".json,application/json"></div><div class="panelActions slim"><button class="ghost danger" id="resetBtn">진행 기록 초기화</button></div><div class="finePrint">자동 저장: 왕의 머리 회수 · 행성 귀환 · 주기적 항해 저장<br>로컬 파일·시크릿 모드에서는 저장이 제한될 수 있습니다. 저장 파일을 따로 보관할 수 있습니다.<br>0.1.2 · 이름별 서버 저장 / 충돌 방지 / 기기 백업</div>`);$('quality').value=s.quality;$('quality').onchange=e=>{s.quality=e.target.value;g.engine.quality=s.quality;g.engine.resolutionScale=1;g.engine.resize();g.persist()};for(const id of['volume','sensitivity','shake'])$(id).oninput=e=>{s[id]=Number(e.target.value);g.audio.volume=s.volume;g.audio.applyVolume();g.input.sensitivity=s.sensitivity;g.persist()};$('touchSetting').onchange=e=>this.mobile(e.target.checked);$('resume').onclick=()=>this.close();$('helpBtn').onclick=()=>this.help();$('exportSave').onclick=()=>{g.persist();const blob=new Blob([g.save.export()],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='kings-orbit-save.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};$('importSave').onclick=()=>$('importInput').click();$('importInput').onchange=async e=>{try{const file=e.target.files[0];if(!file)return;g.save.import(await file.text());location.reload()}catch(err){this.toast('저장 파일을 읽지 못했습니다.',err.message)}};$('resetBtn').onclick=()=>this.confirmReset();g.cloudUI?.bindMenu();}
+ confirmReset(){if(this.game.cloud?.meta){this.game.cloudUI.confirmReset();return;}this.open('<div class="eyebrow">RESET VOYAGE</div><h2>항해 기록을 지울까요?</h2><p class="text">전시된 머리와 행성의 파괴 기록이 사라집니다. 이 작업은 되돌릴 수 없습니다.</p><div class="panelActions"><button id="cancelReset" class="primary">취소</button><button id="doReset" class="secondary danger">기록 지우기</button></div>');$('cancelReset').onclick=()=>this.menu();$('doReset').onclick=()=>{this.game.save.reset();location.reload()}}
+ help(){this.open(`<div class="eyebrow">FLIGHT MANUAL / 01</div><h2>가고 싶은 곳으로.</h2><div class="controlsTable"><div>W A S D</div><div>걷기 / 비행 · 마우스로 시선</div><div>화면 클릭</div><div>마우스 고정. 안 되면 우클릭 드래그.<br>방향키 좌우로도 회전할 수 있습니다.</div><div>E</div><div>조종석 · 전시 기록 · 파괴정 탑승</div><div>Space / C</div><div>상승 / 하강</div><div>Shift 유지</div><div>누르는 동안 빠르게 걷기 / 가속·충돌</div><div>T / X</div><div>우주 자동항해 / 추진 정지</div><div>좌클릭 길게</div><div>파괴정 절단 광선</div><div>Q</div><div>바라보는 대상 견인 / 던져 놓기</div><div>F</div><div>근접 충격파 · 재충전 3초</div><div>R</div><div>행성에서 언제든 모선으로 귀환</div><div>Esc / P</div><div>메뉴 / 일시정지</div></div><p class="text">처음에는 조종석에 앉아 <b>T</b>로 에덴에 접근하세요. 행성이 하늘과 구름으로 가득 보일 때까지 접근합니다. 상공에 정박하면 <b>E</b>로 일어나 뒤쪽 격납고에서 파괴정으로 갈아탑니다.</p><p class="text">행성에서는 눈앞의 건물을 부수거나 밀어버리세요. 왕좌를 무력화한 뒤 왕의 머리를 바라보고 <b>Q</b>로 붙잡아 <b>S</b>로 뒤로 물러나면 회수할 수 있습니다. 왕을 잡지 않고 떠나도 됩니다.</p><div class="finePrint">터치: 왼쪽 빈 화면 어디서든 누른 곳을 기준으로 이동 / 오른쪽 빈 화면 드래그로 시선.<br>오른쪽 가속 버튼은 누르는 동안만 작동합니다. 손을 떼면 가속 입력이 해제되며, 우주에서는 관성으로 잠시 더 흘러갑니다.<br>기능을 막는 연료·목숨·제한시간은 없습니다. 우주에서는 엔진을 멈추면 고요해집니다.</div><div class="panelActions"><button id="closeHelp" class="primary">알겠습니다 ↗</button></div>`);$('closeHelp').onclick=()=>this.close();}
  inspect(index){const t=this.game.save.data.trophies[index];this.open(`<div class="eyebrow">ARCHIVE / ${String(index+1).padStart(2,'0')}</div><h2>${t?'태양왕 아우렐':'비어 있는 자리'}</h2><p class="text">${t?'에덴의 일곱 번째 왕.<br>왕관은 여전히 머리에 붙어 있다.<br>돌아갈 왕좌는 남아 있지 않다.':'아직 아무것도 전시되어 있지 않습니다.<br>다음 행성의 자리는 남아 있습니다.'}</p>${t?`<div class="panelRow"><span>회수지</span><span>EDEN / 01</span></div><div class="panelRow"><span>회수 시각</span><span>${new Date(t.time).toLocaleString('ko-KR')}</span></div>`:''}<div class="panelActions"><button id="closeInspect" class="primary">구경 계속 ↗</button></div>`);$('closeInspect').onclick=()=>this.close();}
  fatal(err){$('fatalText').textContent=String(err?.message||err);$('fatal').classList.remove('hidden');$('loading').classList.add('hidden');}
 }
 K.UI=UI;
+})(window.KO ||= {});
+
+
+// FILE: src/ui/cloud-ui.js
+(function(K){
+'use strict';
+const $=id=>document.getElementById(id);
+const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+class CloudUI{
+ constructor(game){
+  this.game=game;this.cloud=game.cloud;this.busy=false;
+  $('titleCloud').onclick=()=>this.open();
+  this.cloud.onChange=()=>this.refresh();this.refresh();
+ }
+ summary(){const c=this.cloud;return c.meta?`${c.meta.name} · ${{checking:'서버 확인 중',local:'로컬 저장',offline:'기기 보관 중',auth:'다시 로그인 필요',pending:'동기화 대기',saving:'서버 저장 중',saved:'서버 저장됨',conflict:'기록 선택 필요'}[c.state]||c.state}`:'이 기기에 저장 중 · 이름을 등록하면 다른 기기에서 이어하기';}
+ refresh(){
+  for(const id of ['cloudTitleStatus','cloudMenuStatus','cloudStatus']){const e=$(id);if(e)e.textContent=this.summary();}
+  if($('cloudDetail'))$('cloudDetail').textContent=this.cloud.message;
+  $('titleCloud').textContent=this.cloud.meta?'항해자 · 서버 저장':'이름으로 저장 / 이어하기';
+ }
+ menuRow(){return `<div class="cloudMenu"><div><span class="eyebrow">VOYAGE SAVE</span><p id="cloudMenuStatus">${escape(this.summary())}</p></div><button class="secondary" id="cloudMenu">서버 저장</button></div>`;}
+ bindMenu(){$('cloudMenu').onclick=()=>this.open();}
+ async action(fn,done){
+  if(this.busy)return;this.busy=true;
+  const controls=Array.from($('panel').querySelectorAll('button,input'));controls.forEach(e=>e.disabled=true);
+  if($('cloudError'))$('cloudError').textContent='서버와 항해 기록을 확인하고 있습니다…';
+  try{await fn();this.busy=false;done?.();}
+  catch(e){this.busy=false;controls.forEach(x=>x.disabled=false);if(e.code==='CONFLICT'&&e.record){this.cloud.conflict=e.record;this.cloud.ready=false;this.cloud.status('conflict',e.message);this.openConflict();}else if($('cloudError'))$('cloudError').textContent=e.message||'연결을 확인하지 못했습니다. 기존 기록은 유지됩니다.';}
+  finally{this.busy=false;controls.forEach(e=>e.disabled=false);this.refresh();}
+ }
+ open(){
+  if(this.busy)return;
+  if(this.cloud.conflict){this.openConflict();return;}
+  if(!this.cloud.meta||this.cloud.state==='auth'){this.login(false);return;}
+  const c=this.cloud;
+  this.game.persist();
+  this.game.ui.open(`<div class="eyebrow">NØMAD / CLOUD ARCHIVE</div><h2>${escape(c.meta.name)}의 항해</h2><p class="text" id="cloudStatus"></p><p class="cloudDetail" id="cloudDetail"></p><div class="panelRow"><span>마지막 서버 확인</span><span>${c.meta.updatedAt?escape(new Date(c.meta.updatedAt).toLocaleString('ko-KR')):'미확인'}</span></div><p class="text">트로피·행성 기록·모선 위치를 저장합니다.<br>다른 기기에서 같은 이름과 저장 비밀번호로 이어갈 수 있습니다.</p><p class="cloudError" id="cloudError" role="status"></p><div class="panelActions"><button id="syncNow" class="primary">지금 저장 ↗</button><button id="cloudClose" class="secondary">돌아가기</button></div><div class="panelActions slim"><button id="changeAccount" class="ghost">계정 바꾸기</button><button id="cloudExport" class="ghost">기기 기록 내보내기</button></div><div class="finePrint">기본 60초 간격, 왕 회수·행성 귀환 때 동기화합니다. 실패하면 기기에 보관하고 재시도합니다.<br>브라우저를 바로 닫을 때는 전송을 보장할 수 없습니다. 다른 기기로 옮기기 전 ‘서버 저장됨’을 확인하세요.</div>`);
+  this.refresh();
+  $('syncNow').onclick=()=>this.action(async()=>{this.game.persist();if(!c.ready)await c.restore();if(c.conflict)throw new K.CloudSave.CloudError('CONFLICT','사용할 기록을 선택하세요.',c.conflict);await c.flush();},()=>{this.open();$('cloudError').textContent='서버 저장을 확인했습니다.';});
+  $('cloudClose').onclick=()=>this.game.ui.close();
+  $('cloudExport').onclick=()=>this.export();
+  $('changeAccount').onclick=()=>this.action(()=>c.logout(),()=>this.login(false));
+ }
+ login(register=false){
+  if(this.busy)return;
+  this.game.ui.open(`<div class="eyebrow">NØMAD / ${register?'NEW VOYAGER':'CONTINUE VOYAGE'}</div><h2>${register?'새 항해자 등록':'이름으로 이어하기'}</h2><p class="text">${register?'이름을 ID로 사용합니다. 기존 로컬 기록을 가져와 시작할 수 있습니다.':'다른 기기에 저장한 항해도 같은 이름으로 불러옵니다.'}</p><form id="cloudForm" class="cloudForm"><label for="voyagerName">이름 / ID</label><input id="voyagerName" name="username" type="text" maxlength="24" autocomplete="username" placeholder="예: 현규" required><label for="voyagerPassword">저장 비밀번호</label><input id="voyagerPassword" name="password" type="password" minlength="6" maxlength="64" autocomplete="${register?'new-password':'current-password'}" placeholder="6자 이상 · 게임 저장 전용" required>${register?'<label for="voyagerPassword2">비밀번호 확인</label><input id="voyagerPassword2" name="passwordConfirm" type="password" minlength="6" maxlength="64" autocomplete="new-password" required><label class="cloudCheck"><input id="carryProgress" type="checkbox" checked> 이 기기의 현재 진행을 가져오기</label>':''}<p class="cloudError" id="cloudError" role="status"></p><div class="panelActions"><button class="primary" type="submit">${register?'등록하고 기록 저장':'항해 불러오기'} ↗</button><button class="secondary" type="button" id="cloudCancel">돌아가기</button></div></form><div class="panelActions slim"><button class="ghost" id="switchCloudMode">${register?'이미 이름이 있다면 이어하기':'처음이면 새 항해자 등록'}</button></div><div class="finePrint">같은 이름은 한 항해자만 사용합니다. 대소문자·앞뒤 공백은 구분하지 않습니다.<br>다른 사이트의 비밀번호를 재사용하지 마세요. 이 게임은 이메일 복구를 제공하지 않습니다.<br>로그인하지 않아도 기존처럼 이 기기에 저장하며 플레이할 수 있습니다.</div>`);
+  $('cloudForm').onsubmit=e=>{e.preventDefault();const name=$('voyagerName').value,pw=$('voyagerPassword').value,carry=register&&$('carryProgress').checked;if(register&&pw!==$('voyagerPassword2').value){$('cloudError').textContent='두 비밀번호가 다릅니다.';return;}this.action(()=>this.cloud.connect(name,pw,register,carry),()=>this.open());};
+  $('cloudCancel').onclick=()=>this.game.ui.close();$('switchCloudMode').onclick=()=>this.login(!register);if(this.cloud.meta)$('voyagerName').value=this.cloud.meta.name;$('voyagerName').focus();
+ }
+ openConflict(){
+  if(this.busy)return;
+  const c=this.cloud,r=c.conflict;if(!r)return this.open();
+  this.game.persist();
+  this.game.ui.open(`<div class="eyebrow">SAVE CONFLICT / NOTHING OVERWRITTEN</div><h2>두 항해 기록이 있습니다.</h2><p class="text">다른 기기에서도 진행한 기록이 있어 자동 덮어쓰기를 멈췄습니다. 사용할 기록을 직접 선택하세요.</p><div class="panelRow"><span>이 기기</span><span>트로피 ${this.game.save.data.trophies.length} · 방문 ${this.game.save.data.visited.length}</span></div><div class="panelRow"><span>서버 기록 · 버전 ${r.rev}</span><span>트로피 ${r.save.trophies.length} · 방문 ${r.save.visited.length}</span></div><p class="cloudError" id="cloudError" role="status"></p><div class="panelActions"><button id="useServer" class="primary">서버 기록 사용</button><button id="useLocal" class="secondary danger">이 기기로 덮어쓰기</button></div><div class="panelActions slim"><button id="conflictExport" class="ghost">먼저 기기 기록 내보내기</button><button id="conflictClose" class="ghost">나중에 선택</button></div><p class="finePrint">기기 기록은 선택 직전 별도 로컬 백업에도 보관합니다. 브라우저 데이터 삭제에 대비하려면 먼저 파일로 내보내세요.</p>`);
+  $('useServer').onclick=()=>this.action(()=>c.resolve(false),()=>this.open());
+  $('useLocal').onclick=()=>{
+   this.game.ui.open('<div class="eyebrow">CONFIRM CLOUD REPLACEMENT</div><h2>서버 기록을 바꿀까요?</h2><p class="text">다른 기기의 서버 기록을 지금 이 기기의 진행으로 교체합니다. 서버의 직전 기록은 백업 칸에 보관됩니다.</p><p class="cloudError" id="cloudError" role="status"></p><div class="panelActions"><button class="primary" id="cancelReplace">취소</button><button class="secondary danger" id="confirmReplace">교체하기</button></div>');
+   $('cancelReplace').onclick=()=>this.openConflict();$('confirmReplace').onclick=()=>this.action(()=>c.resolve(true),()=>this.open());
+  };
+  $('conflictExport').onclick=()=>this.export();$('conflictClose').onclick=()=>this.game.ui.close();
+ }
+ confirmReset(){
+  this.game.ui.open('<div class="eyebrow">RESET CLOUD VOYAGE</div><h2>서버 항해를 초기화할까요?</h2><p class="text">현재 이름의 트로피·행성 기록·모선 위치를 초기화합니다. 이름과 비밀번호는 유지됩니다. 서버가 확인한 뒤에만 기기 기록도 바뀝니다.</p><p class="cloudError" id="cloudError" role="status"></p><div class="panelActions"><button class="primary" id="cancelCloudReset">취소</button><button class="secondary danger" id="doCloudReset">서버 기록 초기화</button></div>');
+  $('cancelCloudReset').onclick=()=>this.game.ui.menu();$('doCloudReset').onclick=()=>this.action(()=>this.cloud.resetProgress(),()=>this.open());
+ }
+ export(){this.game.persist();const url=URL.createObjectURL(new Blob([this.game.save.export()],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='kings-orbit-save.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),2000);}
+}
+K.CloudUI=CloudUI;
 })(window.KO ||= {});
 
 
@@ -285,18 +710,38 @@ K.Models={C,head,destroyerModel,cockpit,planetBody};
 'use strict';
 const{mesh,group,M}=K;
 class Space{
- constructor(game){this.game=game;this.root=new K.Node();this.position=game.save.data.space.p.slice();this.yaw=game.save.data.space.yaw;this.pitch=game.save.data.space.pitch;this.velocity=[0,0,0];this.auto=false;this.planetPosition=[130,55,-1580];this.radius=320;this.body=K.Models.planetBody(this.root,this.planetPosition,this.radius);this.moon=mesh(this.root,'sphere',[-740,530,-2700],[180,180,180],'#717779');this.asteroids=[];const rng=M.rand(293);for(let i=0;i<105;i++){let p=[(rng()-.5)*4700,(rng()-.5)*1900,(rng()-.5)*3700-1200];if(M.dist(p,this.planetPosition)<780)continue;let n=mesh(this.root,'lowSphere',p,[4+rng()*24,3+rng()*17,5+rng()*30],'#373d42');n.r=[rng()*6,rng()*6,rng()*6];this.asteroids.push(n)}this.cockpit=new K.Node();const C=K.Models.C;mesh(this.cockpit,'box',[0,-1.35,-1.6],[5,.6,2.2],C.dark);for(let s of[-1,1]){let n=mesh(this.cockpit,'box',[s*1.86,0,-1.38],[.15,3.3,.25],C.hull);n.r[2]=s*.23;mesh(this.cockpit,'box',[s*1.45,-1.02,-1.8],[1,.08,.6],C.panel);mesh(this.cockpit,'box',[s*1.45,-.971,-1.8],[.72,.012,.37],'#366573',{em:.2});mesh(this.cockpit,'box',[s*1.85,.25,-1.25],[.022,1.3,.027],C.edge)}mesh(this.cockpit,'box',[0,1.48,-1.3],[4.7,.12,.25],C.hull);mesh(this.cockpit,'box',[0,-.97,-1.52],[.55,.022,.13],C.amber,{em:.8});}
+ constructor(game){this.game=game;this.root=new K.Node();this.position=game.save.data.space.p.slice();this.yaw=game.save.data.space.yaw;this.pitch=game.save.data.space.pitch;this.velocity=[0,0,0];this.auto=false;this.planetPosition=[130,55,-1580];this.radius=320;this.holdAltitude=22;this.deployAltitude=34;this.minimumAltitude=14;this.wasInSky=false;this.body=K.Models.planetBody(this.root,this.planetPosition,this.radius);this.moon=mesh(this.root,'sphere',[-740,530,-2700],[180,180,180],'#717779');this.asteroids=[];const rng=M.rand(293);for(let i=0;i<105;i++){let p=[(rng()-.5)*4700,(rng()-.5)*1900,(rng()-.5)*3700-1200];if(M.dist(p,this.planetPosition)<780)continue;let n=mesh(this.root,'lowSphere',p,[4+rng()*24,3+rng()*17,5+rng()*30],'#373d42');n.r=[rng()*6,rng()*6,rng()*6];this.asteroids.push(n)}this.cockpit=new K.Node();const C=K.Models.C;mesh(this.cockpit,'box',[0,-1.35,-1.6],[5,.6,2.2],C.dark);for(let s of[-1,1]){let n=mesh(this.cockpit,'box',[s*1.86,0,-1.38],[.15,3.3,.25],C.hull);n.r[2]=s*.23;mesh(this.cockpit,'box',[s*1.45,-1.02,-1.8],[1,.08,.6],C.panel);mesh(this.cockpit,'box',[s*1.45,-.971,-1.8],[.72,.012,.37],'#366573',{em:.2});mesh(this.cockpit,'box',[s*1.85,.25,-1.25],[.022,1.3,.027],C.edge)}mesh(this.cockpit,'box',[0,1.48,-1.3],[4.7,.12,.25],C.hull);mesh(this.cockpit,'box',[0,-.97,-1.52],[.55,.022,.13],C.amber,{em:.8});}
  distance(){return Math.max(0,M.dist(this.position,this.planetPosition)-this.radius)}
+ atmosphere(){return 1-M.smooth(26,160,this.distance())}
+ fadeBody(body){const a=1-this.atmosphere();body.group.visible=a>.001;body.globe.alpha=a*a;body.ring.alpha=.72*a*a;body.atmosphere.alpha=.13*a;}
+ applyEnvironment(interior=false){const e=this.game.engine,b=this.atmosphere();e.atmosphere=b;e.skyBasis=interior?M.compose([0,0,0],[this.pitch,this.yaw,0]):null;e.skyOffset=[this.position[0]*.0008,0,this.position[2]*.0008];e.surface=0;e.fogD=0;e.ambient=interior?.37+b*.08:.32+b*.23;}
+
  update(dt,input,background=false){if(!background){const[dx,dy]=input.look();this.yaw-=dx;this.pitch=M.clamp(this.pitch-dy,-1.5,1.5);this.yaw+=(input.keys.has('ArrowLeft')?dt:0)-(input.keys.has('ArrowRight')?dt:0);if(input.take('KeyT'))this.toggleAuto();if(input.take('KeyE')){this.game.enterInterior('bridge');return;}if(input.take('KeyX')){this.velocity=[0,0,0];this.auto=false;this.game.ui.toast('추진 정지','그대로 표류합니다.')}}
  const a=background?{x:0,y:0,z:0,boost:false}:input.axes();if(!background&&(Math.abs(a.x)+Math.abs(a.y)+Math.abs(a.z)>.05))this.auto=false;
- if(this.auto){const aim=M.aim(this.position,this.planetPosition);this.yaw+=M.angle(this.yaw,aim.yaw)*(1-Math.exp(-1.7*dt));this.pitch=M.damp(this.pitch,aim.pitch,1.7,dt);const dist=this.distance();if(dist<420){this.velocity=this.velocity.map(v=>M.damp(v,0,2.2,dt));if(M.len(this.velocity)<2){this.auto=false;this.game.ui.toast('궤도 도착','격납고에서 파괴정에 탑승할 수 있습니다.')}}else{const speed=Math.min(210,(dist-310)*.65);const d=M.dir(this.yaw,this.pitch);this.velocity=this.velocity.map((v,i)=>M.damp(v,d[i]*speed,1.8,dt));}}
- else if(!background){let force=M.add(M.mul(M.dir(this.yaw,this.pitch),a.z),M.mul(M.right(this.yaw),a.x));force[1]+=a.y;if(M.len(force)>1)force=M.norm(force);const top=a.boost?330:125;if(M.len(force)>.01)this.velocity=this.velocity.map((v,i)=>M.damp(v,force[i]*top,1.8,dt));else this.velocity=this.velocity.map(v=>M.damp(v,0,.07,dt));}
- this.position=M.add(this.position,M.mul(this.velocity,dt));const d=M.sub(this.position,this.planetPosition);if(M.len(d)<this.radius+280){this.position=M.add(this.planetPosition,M.mul(M.norm(d),this.radius+280));this.velocity=this.velocity.map(v=>v*.2)}
- if(M.len(this.position)>40000){this.position=M.mul(M.norm(this.position),39900);this.velocity=M.mul(this.velocity,-.05);if(!background)this.game.ui.toast('항법 경계','이 빌드의 항해 구역 가장자리입니다. T로 에덴에 복귀할 수 있습니다.')}
- this.body.globe.r[1]+=dt*.006;
- if(!background){this.game.engine.camera={p:this.position.slice(),yaw:this.yaw,pitch:this.pitch,roll:0,fov:76+Math.min(M.len(this.velocity)/330,1)*4};this.game.ui.setArea('EDEN SYSTEM · 01',this.auto?'에덴으로 자동항해':'우주 항해');this.game.ui.prompt('조종석에서 일어나기',true);this.game.ui.setStatus(this.auto?'자동항해 중':'자유 항해',`${Math.round(M.len(this.velocity))} m/s`);this.game.currentInteract={action:()=>this.game.enterInterior('bridge')};}
+ if(this.auto){
+  const aim=M.aim(this.position,this.planetPosition);this.yaw+=M.angle(this.yaw,aim.yaw)*(1-Math.exp(-1.7*dt));this.pitch=M.damp(this.pitch,aim.pitch,1.7,dt);
+  const gap=this.distance()-this.holdAltitude;
+  const speed=Math.min(210,Math.max(0,gap*.95));
+  const d=M.norm(M.sub(this.planetPosition,this.position));
+  this.velocity=this.velocity.map((v,i)=>M.damp(v,d[i]*speed,3.2,dt));
+  if(gap<.7&&M.len(this.velocity)<1.1){this.velocity=[0,0,0];this.auto=false;this.game.ui.toast('에덴 상공에 정박했습니다.','일어나서 격납고로. 파괴정으로 갈아탈 수 있습니다.',6);}
  }
- toggleAuto(){this.auto=!this.auto;this.game.ui.toast(this.auto?'에덴으로 자동항해':'자동항해 해제',this.auto?'자리에서 일어나도 항해는 계속됩니다.':'');}
+ else if(!background){let force=M.add(M.mul(M.dir(this.yaw,this.pitch),a.z),M.mul(M.right(this.yaw),a.x));force[1]+=a.y;if(M.len(force)>1)force=M.norm(force);const top=a.boost?330:125;if(M.len(force)>.01)this.velocity=this.velocity.map((v,i)=>M.damp(v,force[i]*top,1.8,dt));else this.velocity=this.velocity.map(v=>M.damp(v,0,.07,dt));}
+ this.position=M.add(this.position,M.mul(this.velocity,dt));const d=M.sub(this.position,this.planetPosition);
+ if(M.len(d)<this.radius+this.minimumAltitude){
+  const normal=M.len(d)>.001?M.norm(d):[0,1,0];this.position=M.add(this.planetPosition,M.mul(normal,this.radius+this.minimumAltitude));
+  const inward=M.dot(this.velocity,normal);if(inward<0)this.velocity=M.sub(this.velocity,M.mul(normal,inward));
+ }
+ const inSky=this.distance()<=this.deployAltitude;
+ if(inSky&&!this.wasInSky&&!this.auto)this.game.ui.toast('행성의 창공에 들어왔습니다.','일어나서 격납고의 파괴정에 탑승하세요.',5);
+ this.wasInSky=inSky;
+ this.fadeBody(this.body);const outsideAlpha=1-this.atmosphere();this.moon.alpha=outsideAlpha*outsideAlpha;this.moon.visible=outsideAlpha>.001;for(const n of this.asteroids){n.alpha=outsideAlpha*outsideAlpha;n.visible=outsideAlpha>.001;}
+
+ if(M.len(this.position)>40000){this.position=M.mul(M.norm(this.position),39900);this.velocity=M.mul(this.velocity,-.05);if(!background)this.game.ui.toast('항법 경계','이 빌드의 항해 구역 가장자리입니다. T로 에덴에 복귀할 수 있습니다.')}
+ this.body.globe.r[1]+=dt*.006;if(!background)this.applyEnvironment(false);
+ if(!background){this.game.engine.camera={p:this.position.slice(),yaw:this.yaw,pitch:this.pitch,roll:0,fov:76+Math.min(M.len(this.velocity)/330,1)*4};this.game.ui.setArea('EDEN SYSTEM · 01',this.distance()<=this.deployAltitude?'에덴 · 구름 위의 창공':this.atmosphere()>.05?'에덴 · 대기권 접근':this.auto?'에덴으로 자동항해':'우주 항해');this.game.ui.prompt('조종석에서 일어나기',true,'일어나기');this.game.ui.setStatus(this.auto?'자동항해 중':inSky&&M.len(this.velocity)<1?'창공 정박':'자유 항해',`${Math.round(M.len(this.velocity))} m/s`);this.game.currentInteract={action:()=>this.game.enterInterior('bridge')};}
+ }
+ toggleAuto(){this.auto=!this.auto;this.game.ui.toast(this.auto?'에덴으로 자동항해':'자동항해 해제',this.auto?'구름층까지 계속 접근합니다. 자리에서 일어나도 항해는 이어집니다.':'');}
  save(){this.game.save.data.space={p:this.position.map(x=>Math.round(x*100)/100),yaw:this.yaw,pitch:this.pitch}}
 }
 K.Space=Space;
@@ -308,7 +753,7 @@ K.Space=Space;
 'use strict';
 const {mesh,group,M}=K,C=K.Models.C;
 class Interior{
- constructor(game){this.game=game;this.root=new K.Node();this.interactables=[];this.solids=[];this.trophies=[];this.outside=group(this.root);this.planet=K.Models.planetBody(this.outside,[130,45,-820],235);this.roomRoot=group(this.root);this.make();this.position=[0,1.85,-5];this.yaw=0;this.pitch=0;this.walk=0;this.zone='조종실';}
+ constructor(game){this.game=game;this.root=new K.Node();this.interactables=[];this.solids=[];this.trophies=[];this.outside=group(this.root);this.planet=K.Models.planetBody(this.outside,[130,45,-820],game.space.radius);this.roomRoot=group(this.root);this.make();this.position=[0,1.85,-5];this.yaw=0;this.pitch=0;this.walk=0;this.zone='조종실';}
  block(p,s,c=C.hull,props){return mesh(this.roomRoot,'box',p,s,c,props)}
  obstacle(min,max){this.solids.push({min,max})}
  light(p,s,col=C.light){return this.block(p,s,col,{em:1.2,type:1})}
@@ -324,20 +769,27 @@ class Interior{
  for(let z of[-8,8,14,25]){for(let s of[-1,1]){this.block([s*7.35,2.6,z],[.58,5.3,.6]);const rib=this.block([s*6.3,5.64,z],[2.8,.52,.6]);rib.r[2]=s*-.42;this.light([s*7,2.3,z+.34],[.055,3.7,.05],z>=14?C.amber:C.light);}this.block([0,6.18,z],[11.2,.43,.65]);}
  // Recessed bridge consoles and command chair.
  for(let s of[-1,1]){this.block([s*4.8,.72,-17.6],[4.8,1.42,2.3]);const dash=this.block([s*4.8,1.46,-17.55],[4.8,.13,2.5],C.panel);dash.r[0]=.1;for(let i=0;i<4;i++){const screen=this.block([s*4.8-1.55+i,1.6,-17.7],[.75,.018,.85],i===2?'#c3945f':'#2a5d66',{em:.3});screen.r[0]=.1;this.light([s*4.8-1.7+i,1.64,-17.4],[.06,.02,.2]);}this.obstacle([s*4.8-2.5,-1,-18.85],[s*4.8+2.5,2.2,-16.35]);}
- const chair=group(r,[0,0,-16.3]);mesh(chair,'cylinder',[0,.3,0],[1.3,.6,1.3],C.panel);mesh(chair,'box',[0,.82,0],[1.5,.4,1.8],C.dark);mesh(chair,'box',[0,1.65,.65],[1.6,1.8,.5],C.panel).r[0]=.08;mesh(chair,'box',[0,1.72,.35],[1.3,1.45,.12],'#364046');for(let s of[-1,1]){mesh(chair,'box',[s*.9,1.2,0],[.28,.25,1.6],C.panel);mesh(chair,'box',[s*.9,1.34,-.48],[.16,.035,.18],C.light,{em:.7})}this.obstacle([-1.05,-1,-17.5],[1.05,3,-15.55]);this.interactables.push({id:'pilot',p:[0,1.8,-15],radius:3.2,label:'조종석에 앉기',action:()=>this.game.enterSpace()});
+ const chair=group(r,[0,0,-16.3]);mesh(chair,'cylinder',[0,.3,0],[1.3,.6,1.3],C.panel);mesh(chair,'box',[0,.82,0],[1.5,.4,1.8],C.dark);mesh(chair,'box',[0,1.65,.65],[1.6,1.8,.5],C.panel).r[0]=.08;mesh(chair,'box',[0,1.72,.35],[1.3,1.45,.12],'#364046');for(let s of[-1,1]){mesh(chair,'box',[s*.9,1.2,0],[.28,.25,1.6],C.panel);mesh(chair,'box',[s*.9,1.34,-.48],[.16,.035,.18],C.light,{em:.7})}this.obstacle([-1.05,-1,-17.5],[1.05,3,-15.55]);this.interactables.push({id:'pilot',p:[0,1.8,-15],radius:3.2,label:'조종석에 앉기',verb:'앉기',action:()=>this.game.enterSpace()});
  // Gallery: six separated trophy cradles, a genuine walk-around volume.
- for(let s of[-1,1])for(let i=0;i<3;i++){let z=-3.5+i*5.2,x=s*7.6;const g=group(r,[x,0,z]);mesh(g,'cylinder',[0,.15,0],[2.4,.3,2.4],C.dark);mesh(g,'cylinder',[0,.5,0],[1.8,.5,1.8],C.panel);mesh(g,'cylinder',[0,.78,0],[2.1,.07,2.1],C.gold);mesh(g,'torus',[0,3.6,0],[1.45,1.45,1.45],C.gold);mesh(g,'cylinder',[0,3.78,0],[2.25,.22,2.25],C.dark);mesh(g,'disc',[0,.824,0],[1.8,.015,1.8],'#286478',{alpha:.35,em:.6});for(let a=0;a<3;a++){let angle=a/3*Math.PI*2;mesh(g,'cylinder',[Math.sin(angle)*1.05,2.2,Math.cos(angle)*1.05],[.055,2.8,.055],C.edge)}this.light([x,4.25,z],[1.1,.04,.55],C.amber);const h=K.Models.head(g,[0,2.03,0],.84);h.r[1]=s<0?-Math.PI/2:Math.PI/2;h.visible=false;const index=(s<0?0:3)+i;this.trophies[index]=h;this.obstacle([x-1.3,-1,z-1.3],[x+1.3,4,z+1.3]);this.interactables.push({id:'trophy'+index,p:[x,2,z],radius:3.2,label:'전시 기록',action:()=>this.game.inspectTrophy(index)});}
+ for(let s of[-1,1])for(let i=0;i<3;i++){let z=-3.5+i*5.2,x=s*7.6;const g=group(r,[x,0,z]);mesh(g,'cylinder',[0,.15,0],[2.4,.3,2.4],C.dark);mesh(g,'cylinder',[0,.5,0],[1.8,.5,1.8],C.panel);mesh(g,'cylinder',[0,.78,0],[2.1,.07,2.1],C.gold);mesh(g,'torus',[0,3.6,0],[1.45,1.45,1.45],C.gold);mesh(g,'cylinder',[0,3.78,0],[2.25,.22,2.25],C.dark);mesh(g,'disc',[0,.824,0],[1.8,.015,1.8],'#286478',{alpha:.35,em:.6});for(let a=0;a<3;a++){let angle=a/3*Math.PI*2;mesh(g,'cylinder',[Math.sin(angle)*1.05,2.2,Math.cos(angle)*1.05],[.055,2.8,.055],C.edge)}this.light([x,4.25,z],[1.1,.04,.55],C.amber);const h=K.Models.head(g,[0,2.03,0],.84);h.r[1]=s<0?-Math.PI/2:Math.PI/2;h.visible=false;const index=(s<0?0:3)+i;this.trophies[index]=h;this.obstacle([x-1.3,-1,z-1.3],[x+1.3,4,z+1.3]);this.interactables.push({id:'trophy'+index,p:[x,2,z],radius:3.2,label:'전시 기록',verb:'기록 보기',action:()=>this.game.inspectTrophy(index)});}
  // Hangar floor, docking machinery and flyable two-armed skiff.
  this.block([0,.04,20.6],[11,.08,10.7],C.panel);for(let s of[-1,1]){this.light([s*5.1,.096,20.6],[.055,.04,9.9],C.amber);for(let z=16.4;z<25;z+=1.8){const stripe=this.block([s*5.6,.1,z],[.6,.02,.4],C.gold);stripe.r[1]=.6}}
- this.skiff=K.Models.destroyerModel(r,[0,.65,21],1);this.skiff.r[1]=Math.PI;this.obstacle([-3.5,-1,17],[3.5,4,25.8]);this.interactables.push({id:'launch',p:[0,1.7,16.3],radius:3.7,label:'파괴정 탑승 · 출격',action:()=>this.game.launch()});
+ this.skiff=K.Models.destroyerModel(r,[0,.65,21],1);this.skiff.r[1]=Math.PI;this.obstacle([-3.5,-1,17],[3.5,4,25.8]);this.interactables.push({id:'launch',p:[0,1.7,16.3],radius:3.7,label:'파괴정으로 갈아타기',verb:'탑승하기',action:()=>this.game.launch()});
  this.block([0,3.2,27.5],[20,6.4,.5]);for(let x=-8;x<9;x+=2)this.block([x,3.2,27.16],[.025,5.8,.05],C.edge);this.light([0,6.3,27.1],[14,.06,.05],C.amber);
  for(let s of[-1,1]){this.block([s*8.4,.85,19],[1.5,1.7,2.2],C.panel);this.light([s*8.4,1.8,19],[.7,.04,1],C.amber);}
  this.updateTrophies();
  }
  updateTrophies(){this.trophies.forEach((n,i)=>n.visible=!!this.game.save.data.trophies[i]);}
  walkable(p){if(p[0]<-9.1||p[0]>9.1||p[2]<-22.4||p[2]>26.3)return false;for(const o of this.solids)if(p[0]>o.min[0]-.25&&p[0]<o.max[0]+.25&&p[2]>o.min[2]-.25&&p[2]<o.max[2]+.25)return false;return true}
- update(dt,input){const [dx,dy]=input.look();this.yaw-=dx;this.pitch=M.clamp(this.pitch-dy,-1.25,1.25);const a=input.axes();this.yaw-=(input.keys.has('ArrowRight')?1:0)*dt;this.yaw+=(input.keys.has('ArrowLeft')?1:0)*dt;const f=M.dir(this.yaw),r=M.right(this.yaw);let v=M.add(M.mul(f,a.z),M.mul(r,a.x));if(M.len(v)>1)v=M.norm(v);const speed=a.boost?8.5:5.4;let next=M.add(this.position,M.mul(v,dt*speed));if(this.walkable([next[0],1.85,this.position[2]]))this.position[0]=next[0];if(this.walkable([this.position[0],1.85,next[2]]))this.position[2]=next[2];this.walk+=M.len(v)*dt*7;const bob=Math.sin(this.walk)*.024*this.game.settings.shake;this.game.engine.camera={p:[this.position[0],1.85+bob,this.position[2]],yaw:this.yaw,pitch:this.pitch,roll:0,fov:74};this.zone=this.position[2]<-8?'조종실':this.position[2]>12?'격납고':'트로피실';this.game.ui.setArea('MOTHERSHIP · NØMAD',this.zone);let nearest=null,best=Infinity;for(const t of this.interactables){let dist=M.dist(this.position,t.p);const aim=M.dot(M.norm(M.sub(t.p,this.position)),M.dir(this.yaw,this.pitch));if(dist<t.radius&&aim>-.1&&dist<best){nearest=t;best=dist}}this.game.currentInteract=nearest;let hint=nearest?.label||'';if(nearest?.id==='launch'&&!this.game.nearPlanet())hint='행성에 접근한 뒤 출격할 수 있습니다';this.game.ui.prompt(hint,!!nearest);if(input.take('KeyE')&&nearest)nearest.action();this.syncOutside();}
- syncOutside(){const s=this.game.space;const planetPos=M.sub(s.planetPosition,s.position);const distance=M.len(planetPos);const displayDist=M.clamp(distance,680,2300);const direction=M.norm(planetPos);this.planet.group.p=M.mul(direction,displayDist);this.planet.group.p[1]+=25;const size=Math.min(1,displayDist/Math.max(distance,1));this.planet.group.s=[size,size,size];this.outside.r=[-s.pitch,-s.yaw,0];}
+ update(dt,input){const [dx,dy]=input.look();this.yaw-=dx;this.pitch=M.clamp(this.pitch-dy,-1.25,1.25);const a=input.axes();this.yaw-=(input.keys.has('ArrowRight')?1:0)*dt;this.yaw+=(input.keys.has('ArrowLeft')?1:0)*dt;const f=M.dir(this.yaw),r=M.right(this.yaw);let v=M.add(M.mul(f,a.z),M.mul(r,a.x));if(M.len(v)>1)v=M.norm(v);const speed=a.boost?8.5:5.4;let next=M.add(this.position,M.mul(v,dt*speed));if(this.walkable([next[0],1.85,this.position[2]]))this.position[0]=next[0];if(this.walkable([this.position[0],1.85,next[2]]))this.position[2]=next[2];this.walk+=M.len(v)*dt*7;const bob=Math.sin(this.walk)*.024*this.game.settings.shake;this.game.engine.camera={p:[this.position[0],1.85+bob,this.position[2]],yaw:this.yaw,pitch:this.pitch,roll:0,fov:74};this.zone=this.position[2]<-8?'조종실':this.position[2]>12?'격납고':'트로피실';this.game.ui.setArea('MOTHERSHIP · NØMAD',this.zone);let nearest=null,best=Infinity;for(const t of this.interactables){let dist=M.dist(this.position,t.p);const aim=M.dot(M.norm(M.sub(t.p,this.position)),M.dir(this.yaw,this.pitch));if(dist<t.radius&&aim>-.1&&dist<best){nearest=t;best=dist}}this.game.currentInteract=nearest;let hint=nearest?.label||'';const ready=!!nearest&&(nearest.id!=='launch'||this.game.nearPlanet());if(nearest?.id==='launch'&&!ready)hint='행성의 구름층까지 접근한 뒤 탑승할 수 있습니다';this.game.ui.prompt(hint,ready,nearest?.verb||'');if(input.take('KeyE')&&nearest)nearest.action();this.syncOutside();}
+ syncOutside(){
+  const s=this.game.space;
+  // The window and cockpit now share one planet radius, distance, and exterior orientation.
+  this.planet.group.p=M.sub(s.planetPosition,s.position);this.planet.group.s=[1,1,1];
+  this.planet.globe.r=s.body.globe.r.slice();
+  this.outside.localMatrix=M.view([0,0,0],s.yaw,s.pitch,0);
+  s.fadeBody(this.planet);s.applyEnvironment(true);
+ }
  spawn(where){if(where==='hangar'){this.position=[0,1.85,13.3];this.yaw=0;this.pitch=0;}else if(where==='gallery'){this.position=[-3.8,1.85,-3.5];this.yaw=Math.PI/2;this.pitch=.02;}else{this.position=[0,1.85,-13.5];this.yaw=0;this.pitch=0;}this.updateTrophies();}
  dispose(){this.root.children.length=0;this.solids.length=0;this.interactables.length=0}
 }
@@ -351,7 +803,7 @@ K.Interior=Interior;
 const M=K.M;
 class Destroyer{
  constructor(game,planet){this.game=game;this.planet=planet;this.p=[0,12,175];this.yaw=0;this.pitch=-.055;this.velocity=[0,0,0];this.rig=K.Models.cockpit();this.shake=0;this.kick=0;this.bank=0;this.bob=0;this.firing=false;this.pulseCooldown=0;this.hitCooldown=0;this.grab=null;this.grabStart=0;this.tension=0;this.carrying=!!game.save.data.trophies.length;this.rig.carry.visible=false;}
- update(dt,input){const [dx,dy]=input.look();this.yaw-=dx;this.pitch=M.clamp(this.pitch-dy,-1.35,1.35);this.yaw+=(input.keys.has('ArrowLeft')?dt:0)-(input.keys.has('ArrowRight')?dt:0);const a=input.axes(),f=M.dir(this.yaw,this.pitch),right=M.right(this.yaw);let target=M.add(M.mul(f,a.z),M.mul(right,a.x));target[1]+=a.y;if(M.len(target)>1)target=M.norm(target);const top=a.boost?76:31;this.velocity=this.velocity.map((v,i)=>M.damp(v,target[i]*top,2.5,dt));this.p=M.add(this.p,M.mul(this.velocity,dt));let ground=this.planet.height(this.p[0],this.p[2]);if(this.p[1]<ground+3.6){if(this.velocity[1]<-12){this.game.audio.impact(.8);this.shake=.25;this.planet.pulseAt([this.p[0],ground,this.p[2]],16,65);}this.p[1]=ground+3.6;this.velocity[1]=Math.max(0,this.velocity[1]*-.18)}if(this.p[1]>420){this.p[1]=420;this.velocity[1]=Math.min(0,this.velocity[1]);}if(Math.hypot(this.p[0],this.p[2])>1390){const a=Math.atan2(this.p[0],this.p[2]);this.p[0]=Math.sin(a)*1380;this.p[2]=Math.cos(a)*1380;this.velocity=M.mul(this.velocity,-.2);this.game.ui.toast('대륙 가장자리','R로 궤도의 모선에 귀환할 수 있습니다.');}
+ update(dt,input){const [dx,dy]=input.look();this.yaw-=dx;this.pitch=M.clamp(this.pitch-dy,-1.35,1.35);this.yaw+=(input.keys.has('ArrowLeft')?dt:0)-(input.keys.has('ArrowRight')?dt:0);const a=input.axes(),f=M.dir(this.yaw,this.pitch),right=M.right(this.yaw);let target=M.add(M.mul(f,a.z),M.mul(right,a.x));target[1]+=a.y;if(M.len(target)>1)target=M.norm(target);const top=a.boost?76:31;this.velocity=this.velocity.map((v,i)=>M.damp(v,target[i]*top,2.5,dt));this.p=M.add(this.p,M.mul(this.velocity,dt));let ground=this.planet.height(this.p[0],this.p[2]);if(this.p[1]<ground+3.6){if(this.velocity[1]<-12){this.game.audio.impact(.8);this.shake=.25;this.planet.pulseAt([this.p[0],ground,this.p[2]],16,65);}this.p[1]=ground+3.6;this.velocity[1]=Math.max(0,this.velocity[1]*-.18)}if(this.p[1]>420){this.p[1]=420;this.velocity[1]=Math.min(0,this.velocity[1]);}if(Math.hypot(this.p[0],this.p[2])>1390){const a=Math.atan2(this.p[0],this.p[2]);this.p[0]=Math.sin(a)*1380;this.p[2]=Math.cos(a)*1380;this.velocity=M.mul(this.velocity,-.2);this.game.ui.toast('대륙 가장자리','R로 상공의 모선에 귀환할 수 있습니다.');}
  this.hitCooldown=Math.max(0,this.hitCooldown-dt);this.pulseCooldown=Math.max(0,this.pulseCooldown-dt);this.shake=M.damp(this.shake,0,7,dt);this.kick=M.damp(this.kick,0,12,dt);this.bank=M.damp(this.bank,-a.x*.035,5,dt);this.bob+=dt;
  this.planet.collide(this,dt);
  if(input.take('KeyR')){this.game.returnHome();return;}
@@ -468,16 +920,16 @@ K.Planets.eden=Eden;
 'use strict';
 const M=K.M;
 class Game{
- constructor(){this.started=false;this.paused=false;this.busy=false;this.mode='interior';this.time=0;this.last=performance.now();this.saveElapsed=0;this.descent=0;this.planet=null;this.currentInteract=null;this.save=new K.SaveManager();this.settings=this.save.data.settings;this.engine=new K.Engine(document.getElementById('world'));this.engine.quality=this.settings.quality;this.engine.resize();this.input=new K.Input(this.engine.canvas);this.input.sensitivity=this.settings.sensitivity;this.audio=new K.AudioSystem();this.audio.volume=this.settings.volume;this.space=new K.Space(this);this.interior=new K.Interior(this);this.ui=new K.UI(this);this.input.onPause=()=>{if(this.busy)return;if(this.paused)this.ui.close();else this.ui.menu()};this.input.onBlur=()=>{if(this.started&&!this.paused&&!this.busy)this.ui.menu()};this.engine.canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();this.paused=true;this.audio.stop();this.ui.fatal(new Error('그래픽 연결이 중단되었습니다. 다른 탭을 닫은 뒤 다시 시도해 주세요. 저장된 트로피는 유지됩니다.'))});window.addEventListener('resize',()=>this.engine.resize());window.addEventListener('pagehide',()=>this.persist());window.addEventListener('beforeunload',()=>this.persist());this.debugMode=new URLSearchParams(location.search).has('debug');this.frameTimes=[];this.fps=0;this.qualityTimer=0;this.setEnvironment();if(this.save.data.visited.length||this.save.data.trophies.length)document.getElementById('startBtn').innerHTML='항해 이어가기 <span>↗</span>';if(this.debugMode)this.setupDebug();this.ui.loading(true);requestAnimationFrame(t=>this.frame(t));}
+ constructor(){this.started=false;this.paused=false;this.busy=false;this.mode='interior';this.time=0;this.last=performance.now();this.saveElapsed=0;this.descent=0;this.planet=null;this.currentInteract=null;this.save=new K.SaveManager();this.settings=this.save.data.settings;this.engine=new K.Engine(document.getElementById('world'));this.engine.quality=this.settings.quality;this.engine.resize();this.input=new K.Input(this.engine.canvas);this.input.sensitivity=this.settings.sensitivity;this.audio=new K.AudioSystem();this.audio.volume=this.settings.volume;this.space=new K.Space(this);this.interior=new K.Interior(this);this.ui=new K.UI(this);this.cloud=new K.CloudSave(this);this.cloudUI=new K.CloudUI(this);this.input.onPause=()=>{if(this.busy)return;if(this.paused)this.ui.close();else this.ui.menu()};this.input.onBlur=()=>{if(this.started&&!this.paused&&!this.busy)this.ui.menu()};this.engine.canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();this.paused=true;this.audio.stop();this.ui.fatal(new Error('그래픽 연결이 중단되었습니다. 다른 탭을 닫은 뒤 다시 시도해 주세요. 저장된 트로피는 유지됩니다.'))});window.addEventListener('resize',()=>this.engine.resize());window.addEventListener('pagehide',()=>this.persist());window.addEventListener('beforeunload',()=>this.persist());this.debugMode=new URLSearchParams(location.search).has('debug');this.frameTimes=[];this.fps=0;this.qualityTimer=0;this.setEnvironment();if(this.save.data.visited.length||this.save.data.trophies.length)document.getElementById('startBtn').innerHTML='항해 이어가기 <span>↗</span>';if(this.debugMode)this.setupDebug();this.ui.loading(true);requestAnimationFrame(t=>this.frame(t));}
  start(){if(this.started)return;this.started=true;this.paused=false;this.input.enabled=true;this.input.clear();this.audio.start();this.ui.start();this.interior.position=[0,1.85,-5];this.interior.yaw=0;this.interior.pitch=0;this.ui.toast('NØMAD에 돌아왔습니다.','앞쪽 조종석으로 걸어가 E · 마우스 고정이 안 되면 우클릭 드래그',7);this.input.requestLock();if(!this.save.available)setTimeout(()=>this.ui.toast('자동 저장을 사용할 수 없습니다.','메뉴의 저장 내보내기를 사용하세요.',6),7000);}
- nearPlanet(){return this.space.distance()<530}
+ nearPlanet(){return this.space.distance()<=this.space.deployAltitude}
  enterSpace(){if(this.busy)return;this.mode='space';this.ui.mode('space');this.input.clear();this.setEnvironment();this.audio.metal();this.ui.toast('조종 계통 연결','T · 에덴으로 자동항해　/　W A S D · 직접 조종',4);}
  enterInterior(where='bridge'){if(this.busy)return;this.space.save();this.mode='interior';this.interior.spawn(where);this.ui.mode('interior');this.input.clear();this.setEnvironment();this.audio.stop();}
  inspectTrophy(index){this.ui.inspect(index)}
- setEnvironment(){const e=this.engine;if(this.mode==='planet'){e.surface=1;e.fog=[.61,.75,.67];e.fogD=.0016;e.ambient=.65;e.sun=[-.7,.85,.32];}else{e.surface=0;e.fog=[.003,.008,.014];e.fogD=0;e.ambient=this.mode==='space'?.32:.37;e.sun=[-.55,.6,.65];}e.impact=0;}
- async launch(force=false){if(this.busy)return;if(!force&&!this.nearPlanet()){this.ui.toast('모선이 아직 행성에서 멉니다.','조종실에서 T로 에덴에 접근하세요.',4);return;}this.busy=true;this.input.clear();this.input.enabled=false;this.audio.stop();try{await this.ui.transition('EDEN / 01','파괴정 출격 · 대기권 진입',async()=>{const Planet=await K.loadPlanet('eden');this.planet=new Planet(this);this.mode='planet';this.ui.mode('planet');this.setEnvironment();this.descent=3.6;},true);this.ui.toast('태양왕의 정원','좌클릭 광선 · Q 견인 · F 충격파 · R 언제든 귀환',7);}catch(e){this.ui.fatal(e);}finally{this.busy=false;this.input.clear();this.input.enabled=true;}}
- async returnHome(){if(this.busy||this.mode!=='planet')return;this.busy=true;this.input.enabled=false;this.input.clear();this.audio.stop();const wasNew=this.planet.newCapture;try{await this.ui.transition('NØMAD','대기권 이탈 · 모선 귀환',()=>{this.planet.snapshot();this.planet.dispose();this.planet=null;this.mode='interior';this.descent=0;this.interior.spawn('hangar');this.ui.mode('interior');this.setEnvironment();this.persist();});this.ui.toast(wasNew?'전시실에 새 머리가 도착했습니다.':'다시, 고요. ',wasNew?'복도를 따라 앞으로. 첫 번째 왼쪽 진열대에 있습니다.':'원할 때 다시 내려갈 수 있습니다.',7);}catch(e){this.ui.fatal(e);}finally{this.busy=false;this.input.clear();this.input.enabled=true;}}
- persist(){this.space?.save();if(this.planet)this.planet.snapshot();this.save.data.settings=this.settings;this.save.write()}
+ setEnvironment(){const e=this.engine;e.atmosphere=0;e.skyBasis=null;e.skyOffset=[0,0,0];if(this.mode==='planet'){e.surface=1;e.fog=[.61,.75,.67];e.fogD=.0016;e.ambient=.65;e.sun=[-.7,.85,.32];}else{e.surface=0;e.fog=[.003,.008,.014];e.fogD=0;e.ambient=this.mode==='space'?.32:.37;e.sun=[-.55,.6,.65];}e.impact=0;}
+ async launch(force=false){if(this.busy)return;if(!force&&!this.nearPlanet()){this.ui.toast('모선이 아직 행성에서 멉니다.','조종실에서 에덴의 구름층까지 비행하세요. T로 자동항해도 가능합니다.',4);return;}this.busy=true;this.input.clear();this.input.enabled=false;this.audio.stop();try{await this.ui.transition('EDEN / 01','구름 위의 모선에서 출격 · 지표로 강하',async()=>{const Planet=await K.loadPlanet('eden');this.planet=new Planet(this);this.mode='planet';this.ui.mode('planet');this.setEnvironment();this.descent=3.6;},true);this.ui.toast('태양왕의 정원','좌클릭 광선 · Q 견인 · F 충격파 · R 언제든 귀환',7);}catch(e){this.ui.fatal(e);}finally{this.busy=false;this.input.clear();this.input.enabled=true;}}
+ async returnHome(){if(this.busy||this.mode!=='planet')return;this.busy=true;this.input.enabled=false;this.input.clear();this.audio.stop();const wasNew=this.planet.newCapture;try{await this.ui.transition('NØMAD','에덴 상공 · 모선 귀환',()=>{this.planet.snapshot();this.planet.dispose();this.planet=null;this.mode='interior';this.descent=0;this.interior.spawn('hangar');this.ui.mode('interior');this.setEnvironment();this.persist("checkpoint");});this.ui.toast(wasNew?'전시실에 새 머리가 도착했습니다.':'다시, 고요. ',wasNew?'복도를 따라 앞으로. 첫 번째 왼쪽 진열대에 있습니다.':'원할 때 다시 내려갈 수 있습니다.',7);}catch(e){this.ui.fatal(e);}finally{this.busy=false;this.input.clear();this.input.enabled=true;}}
+ persist(reason="auto"){this.space?.save();if(this.planet)this.planet.snapshot();this.save.data.settings=this.settings;this.save.write(reason)}
  frame(now){const raw=Math.max(0,(now-this.last)/1000);this.last=now;let dt=Math.min(raw,.04);this.time+=dt;try{
  if(!this.paused){if(!this.started){this.interior.syncOutside();this.engine.camera={p:[-.8,2.6,-11.5],yaw:-.19+Math.sin(this.time*.1)*.035,pitch:.035,roll:0,fov:78};}
  else if(this.mode==='interior'){this.space.update(dt,this.input,true);if(!this.busy)this.interior.update(dt,this.input);this.ui.setStatus(this.space.auto?'자동항해 중 · 선내 보행':'선내 보행','NØMAD');}
@@ -488,7 +940,7 @@ class Game{
  const root=this.mode==='planet'&&this.planet?this.planet.root:this.mode==='space'?this.space.root:this.interior.root;const overlay=this.mode==='planet'&&this.planet?this.planet.vehicle.rig.root:this.mode==='space'?this.space.cockpit:null;this.engine.render(root,this.time,overlay);this.ui.update();if(this.started&&!this.paused)this.labels();this.input.end();this.saveElapsed+=dt;if(this.saveElapsed>12){this.saveElapsed=0;this.persist();}this.frameTimes.push(raw);if(this.frameTimes.length>60)this.frameTimes.shift();this.fps=1/(this.frameTimes.reduce((a,b)=>a+b,0)/this.frameTimes.length||.016);this.qualityTimer+=raw;if(this.qualityTimer>4&&!this.paused&&!this.busy){this.qualityTimer=0;if(this.settings.quality==='balanced'&&this.fps<26&&this.engine.resolutionScale>.62){this.engine.resolutionScale=Math.max(.62,this.engine.resolutionScale-.12);this.engine.resize();}}if(this.debugMode)this.debugOverlay();
  }catch(e){console.error(e);this.paused=true;this.audio.stop();this.ui.fatal(e);return;}requestAnimationFrame(t=>this.frame(t));}
  labels(){const root=document.getElementById('worldLabels');if(this.mode!=='interior'){if(root.childElementCount)root.innerHTML='';return;}let items=[{id:'bridge',p:[0,4.6,-13],en:'01 / BRIDGE',ko:'조종실'},{id:'gallery',p:[-7.6,4.3,-3.5],en:'02 / ARCHIVE',ko:'트로피실'},{id:'hangar',p:[0,4.9,15],en:'03 / HANGAR',ko:'격납고'}];if(root.childElementCount!==3){root.innerHTML=items.map(i=>`<div class="worldLabel" id="lbl-${i.id}">${i.en}<span>${i.ko}</span></div>`).join('')}for(const i of items){const p=M.project(i.p,this.engine.vp,innerWidth,innerHeight);const el=document.getElementById('lbl-'+i.id);const dist=M.dist(this.engine.camera.p,i.p);el.style.display=p.front&&dist<34&&p.x>50&&p.x<innerWidth-50&&p.y>85&&p.y<innerHeight-100?'':'none';el.style.left=p.x+'px';el.style.top=p.y+'px';el.style.opacity=M.clamp(1-dist/45,.15,.75)}}
- setupDebug(){const g=this;window.__KO__={game:g,snapshot:()=>({mode:g.mode,started:g.started,paused:g.paused,busy:g.busy,position:g.mode==='planet'?g.planet?.vehicle.p:g.mode==='space'?g.space.position:g.interior.position,nearPlanet:g.nearPlanet(),distance:g.space.distance(),trophies:g.save.data.trophies.length,buildings:g.planet?.buildings.filter(x=>x.alive).length,destroyed:g.planet?.destroyed.size,creatures:g.planet?.creatures.filter(x=>x.alive).length,ruler:g.planet?{hp:g.planet.ruler.hp,captured:g.planet.ruler.captured,grabbing:g.planet.vehicle.grab?.kind,tension:g.planet.vehicle.tension}:null,geometries:Object.keys(g.engine.geometries).length,drawCalls:g.engine.drawCalls,triangles:g.engine.triangles,fps:Math.round(g.fps)}),goto:async mode=>{if(!g.started)g.start();document.exitPointerLock?.();if(mode==='planet'){await g.launch(true);g.descent=0;g.planet.vehicle.p=[0,12,175];}else if(mode==='space')g.enterSpace();else g.enterInterior('bridge')},aim:p=>{let v=g.mode==='planet'?g.planet.vehicle:g.mode==='space'?g.space:g.interior;const a=M.aim(v.p||v.position,p);v.yaw=a.yaw;v.pitch=a.pitch;},downloadSave:()=>g.save.export()};document.getElementById('debug').classList.remove('hidden');}
+ setupDebug(){const g=this;window.__KO__={game:g,snapshot:()=>({mode:g.mode,started:g.started,paused:g.paused,busy:g.busy,position:g.mode==='planet'?g.planet?.vehicle.p:g.mode==='space'?g.space.position:g.interior.position,nearPlanet:g.nearPlanet(),distance:g.space.distance(),atmosphere:g.space.atmosphere(),autopilot:g.space.auto,trophies:g.save.data.trophies.length,buildings:g.planet?.buildings.filter(x=>x.alive).length,destroyed:g.planet?.destroyed.size,creatures:g.planet?.creatures.filter(x=>x.alive).length,ruler:g.planet?{hp:g.planet.ruler.hp,captured:g.planet.ruler.captured,grabbing:g.planet.vehicle.grab?.kind,tension:g.planet.vehicle.tension}:null,geometries:Object.keys(g.engine.geometries).length,drawCalls:g.engine.drawCalls,triangles:g.engine.triangles,fps:Math.round(g.fps)}),goto:async mode=>{if(!g.started)g.start();document.exitPointerLock?.();if(mode==='planet'){await g.launch(true);g.descent=0;g.planet.vehicle.p=[0,12,175];}else if(mode==='space')g.enterSpace();else g.enterInterior('bridge')},aim:p=>{let v=g.mode==='planet'?g.planet.vehicle:g.mode==='space'?g.space:g.interior;const a=M.aim(v.p||v.position,p);v.yaw=a.yaw;v.pitch=a.pitch;},downloadSave:()=>g.save.export()};document.getElementById('debug').classList.remove('hidden');}
  debugOverlay(){const s=window.__KO__.snapshot();document.getElementById('debug').textContent=`${s.mode} / ${s.fps} FPS\n${s.drawCalls} draws / ${Math.round(s.triangles/1000)}k tris\n${s.geometries} geometry buffers\nP ${s.position?.map(x=>x.toFixed(1)).join(', ')}\n${s.destroyed??0} buildings / ${s.trophies} trophies`;}
 }
 K.Game=Game;
