@@ -450,6 +450,14 @@ const TYPES=[
  {id:'crystal',name:'결정 세계',color:'#8eacb4',air:'#aabcf2',shader:17}
 ];
 const NAMES=['에덴','카론','네레우스','오르페','녹스','세레스','이오라','벨라','칼릭스','네브라','사하르','모르가','티르','이리스','엘라라','카르스트','헤스페르','타르시스','안테아','세피르','라자르','오르투스','미르','나이아','키론','알시온','메리디안','오닉스','아스테르','펜리르','세라프','하이페리온','네모라','제니스','카이로스','움브라','솔라리스','레비아','시렌','타이탄','베스퍼','카시아','마이라','라크리마','벨로스','아마란스','델피','사일렌','에레보','루멘','아르카','칼데라','모노리스','파로스','세노','볼라','오르카','나디르','테라스','제피라','릴리스','아우라','에테르','헤일로'];
+/* 진짜 이름과 스캔 자료. 공유 rng 를 쓰면 512개 행성의 좌표가 전부 밀린다. id 해시로만 만든다. */
+const SCAN_ATMO={ocean:'질소·수증기 · 호흡 가능',dune:'이산화탄소 · 규산 미립자 부유',ice:'질소 희박 · 지표 -140℃',lava:'이산화황 · 지표 470℃',toxic:'메탄 · 포자 밀도 높음',gas:'수소·헬륨 · 고체 지표 없음',obsidian:'아르곤 · 대기압 낮음',crystal:'질소·아르곤 · 정전 활동'};
+const SCAN_GROUND={ocean:'전역 해양 · 군도 산재',dune:'사구대와 말라붙은 염호',ice:'빙상 · 균열 협곡',lava:'용암류와 현무암 평원',toxic:'포자림 · 습지',gas:'구름 띠 · 상륙 불가',obsidian:'유리질 대지 · 흑요암 첨탑',crystal:'결정 기둥 지대'};
+const SYL_A=['아','이','우','에','오','나','리','무','세','토','카','하','샤','란','도','비','메','쿠','제','타'];
+const SYL_B=['르','란','민','사','도','케','나','티','올','샤','무','레','간','시','포','두','야','린','타','헤'];
+const SYL_C=['','','','아','움','엔','이르','아스','운','에','일','오','우스','안','임'];
+function hash32(str){let h=2166136261>>>0;for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,16777619)>>>0;}return h>>>0;}
+function trueNameFor(id){const h=hash32(id+'/name');return SYL_A[h%20]+SYL_B[(h>>>5)%20]+SYL_C[(h>>>11)%15];}
 function catalogue(){
  const rng=M.rand(0x4b4f0013), systems=[], planets=[], byId={};
  for(let s=0;s<SYSTEM_COUNT;s++){
@@ -463,7 +471,7 @@ function catalogue(){
    const radius=index===0?320:Math.round((kind===5?650:180)+rng()*(kind===5?700:500));
    const orbit=7800+j*7000+rng()*1000, a=j*2.39996+s*.77;
    const p=index===0?[130,55,-1580]:M.add(centre,[Math.cos(a)*orbit,(rng()-.5)*orbit*.17,Math.sin(a)*orbit]);
-   const def={id,index,system:sys.id,systemIndex:s,name:index===0?'에덴':NAMES[s]+' '+String(j+1).padStart(2,'0'),position:p,radius,kind,type:type.id,typeName:type.name,color:type.color,air:type.air,shader:type.shader,seed:Math.round(rng()*9000)/97,rings:index===0||kind===5||rng()<.27,tilt:[.14+rng()*.75,rng()*3,(rng()-.5)*1.2],rulerId:index===0?'eden-ruler':id+'-ruler',maxHits:5};
+   const def={id,index,system:sys.id,systemIndex:s,name:index===0?'에덴':NAMES[s]+' '+String(j+1).padStart(2,'0'),position:p,radius,kind,type:type.id,typeName:type.name,color:type.color,air:type.air,shader:type.shader,seed:Math.round(rng()*9000)/97,rings:index===0||kind===5||rng()<.27,tilt:[.14+rng()*.75,rng()*3,(rng()-.5)*1.2],rulerId:index===0?'eden-ruler':id+'-ruler',maxHits:5,trueName:index===0?'아우렐라':trueNameFor(id),atmo:SCAN_ATMO[type.id],ground:SCAN_GROUND[type.id]};
    sys.planets.push(def);planets.push(def);byId[id]=def;
   }
   systems.push(sys);
@@ -485,8 +493,8 @@ class Universe{
    if(typeof t!=='string')continue;
    if(t.startsWith('focus-')){const id=t.slice(6);if(this.catalog.byId[id])this.selectedId=id;continue;}
    if(t==='nav-orbit'){this.navMode='orbit';continue;}
-   const m=/^([a-z0-9_-]+)-h([0-5])(-v)?$/.exec(t);
-   if(m&&this.catalog.byId[m[1]])this.states.set(m[1],{hits:Number(m[2]),seen:!!m[3]});
+   const m=/^([a-z0-9_-]+)-h([0-5])(-v)?(?:-s([1-5]))?$/.exec(t);
+   if(m&&this.catalog.byId[m[1]])this.states.set(m[1],{hits:Number(m[2]),seen:!!m[3],scan:Number(m[4]||0)});
   }
   this.revision++;
  }
@@ -500,16 +508,32 @@ class Universe{
  hasTrophy(id){const def=this.get(id);return !!def&&this.save.data.trophies.some(t=>t.planet===id||t.id===def.rulerId);}
  surfaceReady(id){return !!K.SurfaceFiles?.[id]||typeof K.Planets?.[id]==='function';}
  select(id,navMode){if(!this.get(id))return false;this.selectedId=id;if(navMode)this.navMode=navMode==='sky'?'sky':'orbit';this.flush();return true;}
- markSeen(id){if(this.seen(id))return;this.states.set(id,{hits:this.hits(id),seen:true});this.flush();}
- hit(id){if(!this.get(id)||this.destroyed(id))return false;this.states.set(id,{hits:Math.min(5,this.hits(id)+1),seen:true});this.flush();this.save.write('checkpoint');return true;}
+ markSeen(id){if(this.seen(id))return;this.states.set(id,{hits:this.hits(id),seen:true,scan:this.scan(id)});this.flush();}
+ scan(id){return this.states.get(id)?.scan||0;}
+ named(id){return this.scan(id)>=5;}
+ displayName(id){const def=this.get(id);return def?(this.named(id)?def.trueName:def.name):'';}
+ advanceScan(id){if(!this.get(id))return 0;const n=Math.min(5,this.scan(id)+1);this.states.set(id,{hits:this.hits(id),seen:true,scan:n});this.flush();this.save.write('checkpoint');return n;}
+ scanLines(id){
+  const def=this.get(id);if(!def)return[];
+  const gone=this.destroyed(id),h=hash32(id+'/pop'),n=v=>v.toLocaleString('ko-KR');
+  const cities=def.kind===5?0:1+h%9,people=cities?(400+((h>>>7)%600))*cities*1000:0;
+  return[
+   `반경 ${n(def.radius)} km · ${def.typeName}`,
+   gone?'대기 소실 · 잔해 온도 하강 중':'대기 — '+def.atmo,
+   gone?'지표 파열 · 궤도에 잔해 띠':'지표 — '+def.ground,
+   cities?(gone?`도시 ${n(cities)}곳 · 생존 신호 없음`:`도시 ${n(cities)}곳 · 인구 추정 ${n(people)}`):'정주 흔적 없음',
+   cities?(gone?`그들은 스스로를 ${def.trueName}(이)라 불렀다`:`그들은 스스로를 ${def.trueName}(이)라 부른다`):`항법 기록상의 이름 — ${def.trueName}`
+  ];
+ }
+ hit(id){if(!this.get(id)||this.destroyed(id))return false;this.states.set(id,{hits:Math.min(5,this.hits(id)+1),seen:true,scan:this.scan(id)});this.flush();this.save.write('checkpoint');return true;}
  flush(){
   // Adapter contract: one reserved record; old server round-trips its string IDs unchanged.
   // Only state deltas are saved. 512 planet definitions do not go into the spreadsheet.
   const destroyed=['focus-'+this.selectedId,'nav-'+this.navMode];
-  [...this.states].sort(([a],[b])=>a.localeCompare(b)).forEach(([id,s])=>{if(s.hits||s.seen)destroyed.push(id+'-h'+s.hits+(s.seen?'-v':''));});
+  [...this.states].sort(([a],[b])=>a.localeCompare(b)).forEach(([id,s])=>{if(s.hits||s.seen||s.scan)destroyed.push(id+'-h'+s.hits+(s.seen?'-v':'')+(s.scan?'-s'+s.scan:''));});
   this.save.data.planetStates[LEDGER]={destroyed,visited:false};this.revision++;
  }
- label(id){if(this.destroyed(id))return this.hasTrophy(id)?'행성 소멸 · 왕관 보관 중':'행성 소멸 · 왕 회수 불가';return this.surfaceReady(id)?'상륙 가능':'궤도 탐사 · 표면 미개방';}
+ label(id){const sc=this.scan(id)<5?` · 스캔 ${this.scan(id)}/5`:' · 이름 확인됨';if(this.destroyed(id))return(this.hasTrophy(id)?'행성 소멸 · 왕관 보관 중':'행성 소멸 · 왕 회수 불가')+sc;return(this.surfaceReady(id)?'상륙 가능':'궤도 탐사 · 표면 미개방')+sc;}
  countDestroyed(){let n=0;for(const s of this.states.values())if(s.hits>=5)n++;return n;}
 }
 Universe.LEDGER=LEDGER;K.Universe=Universe;
@@ -920,16 +944,16 @@ K.UI.prototype.navigation=function(){
  const detail=()=>{
   const def=u.get(selection),hits=u.hits(selection),gone=u.destroyed(selection);if(!def)return;
   const subtitle=gone?(u.hasTrophy(selection)?'전시한 머리는 남아 있습니다.':'왕의 회수 기회가 사라졌습니다.'):(u.surfaceReady(selection)?(def.surfaceDescription||'구름층에서 파괴정으로 갈아탈 수 있습니다.'):'지금은 궤도 탐사와 모선 포격만 가능합니다.');
-  $('atlasDetail').innerHTML=`<div><strong>${esc(def.name)}</strong><span>${esc(def.id)} · ${esc(def.typeName)} · ${K.formatDistance(s.distance(def))}</span></div><p class="${gone?'lostText':''}">${esc(subtitle)}</p><div class="fractureDots" aria-label="${hits}회 명중">${[0,1,2,3,4].map(n=>`<i class="${n<hits?'on':''}"></i>`).join('')}</div>`;
+  $('atlasDetail').innerHTML=`<div><strong>${esc(u.displayName(selection))}</strong><span>${esc(def.id)} · ${esc(def.typeName)} · ${K.formatDistance(s.distance(def))}</span></div><p class="${gone?'lostText':''}">${esc(subtitle)}</p>${u.named(selection)?`<p class="text">관측 명명 — ${esc(def.name)}</p>`:''}${u.scan(selection)?`<p class="text">${u.scanLines(selection).slice(0,u.scan(selection)).map(esc).join('<br>')}</p>`:''}<div class="fractureDots" aria-label="${hits}회 명중">${[0,1,2,3,4].map(n=>`<i class="${n<hits?'on':''}"></i>`).join('')}</div>`;
   $('panel').querySelectorAll('[data-surface]').forEach(b=>b.classList.toggle('active',b.dataset.surface===selection));
   $('atlasOrbit').textContent=gone?'잔해 지대로 항해 ↗':'포격 궤도로 항해 ↗';
   $('atlasSky').classList.toggle('hidden',gone);
  };
  const list=()=>{
   const query=$('atlasSearch').value.trim().toLowerCase();
-  let defs=query?u.planets.filter(p=>(p.name+' '+p.id+' '+p.typeName).toLowerCase().includes(query)).slice(0,40):sys.planets;
+  let defs=query?u.planets.filter(p=>(p.name+' '+p.id+' '+p.typeName+' '+(u.named(p.id)?p.trueName:'')).toLowerCase().includes(query)).slice(0,40):sys.planets;
   $('systemName').textContent=query?'검색 결과':sys.name+' 항성계';
-  $('planetList').innerHTML=defs.length?defs.map(p=>`<button class="planetCard ${p.id===selection?'selected':''} ${u.destroyed(p.id)?'annihilated':''}" data-planet="${p.id}"><span class="planetSwatch kind-${p.kind}" style="--planet:${p.color}"></span><span><b>${esc(p.name)}</b><small>${esc(u.label(p.id))}</small></span>${u.destroyed(p.id)?'<em>×</em>':''}</button>`).join(''):'<p class="text">해당 이름의 행성이 없습니다.</p>';
+  $('planetList').innerHTML=defs.length?defs.map(p=>`<button class="planetCard ${p.id===selection?'selected':''} ${u.destroyed(p.id)?'annihilated':''}" data-planet="${p.id}"><span class="planetSwatch kind-${p.kind}" style="--planet:${p.color}"></span><span><b>${esc(u.displayName(p.id))}</b><small>${esc(u.label(p.id))}</small></span>${u.destroyed(p.id)?'<em>×</em>':''}</button>`).join(''):'<p class="text">해당 이름의 행성이 없습니다.</p>';
   $('planetList').querySelectorAll('[data-planet]').forEach(b=>b.onclick=()=>{selection=b.dataset.planet;sys=u.systems[u.get(selection).systemIndex];list();detail();draw();});
   detail();draw();
  };
@@ -1122,7 +1146,7 @@ class Space{
   this.velocity=[0,0,0];this.auto=false;this.warp=false;this.warpAmount=0;
   this.holdAltitude=22;this.deployAltitude=34;this.minimumAltitude=14;this.wasInSky=false;
   this.visuals=new Map();this.refreshTimer=0;this.nearestDef=this.target;this.nearestAltitude=Infinity;
-  this.starNodes=[];this.asteroids=[];this.obstacleToast=-100;this.navObstacle=null;
+  this.starNodes=[];this.asteroids=[];this.obstacleToast=-100;this.navObstacle=null;this.scanHold=0;this.scanOn=null;
   for(const sys of this.universe.systems){
    const node=group(this.worldRoot),star=mesh(node,'sphere',[0,0,0],[1,1,1],sys.starColor,{type:1,em:1.6});
    const glow=mesh(node,'sphere',[0,0,0],[1,1,1],sys.starColor,{type:4,alpha:.15});this.starNodes.push({sys,node,star,glow});
@@ -1276,6 +1300,17 @@ class Space{
    this.warp=false;if(collision.id!==this.target.id)this.auto=false;
   }
  }
+ scanTick(dt,background){
+  const u=this.universe,def=this.nearestDef;
+  if(background||!def||this.warp||this.auto||u.scan(def.id)>=5||this.nearestAltitude>def.radius*6+900||M.len(this.velocity)>45){this.scanHold=0;this.scanOn=null;return;}
+  if(this.scanOn!==def.id){this.scanOn=def.id;this.scanHold=0;}
+  this.scanHold+=dt;
+  if(this.scanHold<6.5)return;
+  this.scanHold=0;
+  const n=u.advanceScan(def.id),line=u.scanLines(def.id)[n-1];
+  this.game.ui.toast((n>=5?'정밀 스캔 완료 · ':'정밀 스캔 '+n+'/5 · ')+u.displayName(def.id),line,5);
+ }
+ scanLabel(){return this.scanOn&&this.scanOn===this.nearestDef?.id?' · 정밀 스캔 '+Math.min(99,Math.floor(this.scanHold/6.5*100))+'%':'';}
  update(dt,input,background=false){
   this.refreshTimer-=dt;
   if(this.refreshTimer<=0){this.findNearest();this.refreshVisuals();this.refreshTimer=.2;}
@@ -1311,7 +1346,7 @@ class Space{
    this.universe.select(this.nearestDef.id,'sky');
    this.game.ui.toast(this.nearestDef.name+' · 구름 위의 창공',this.universe.surfaceReady(this.nearestDef.id)?'일어나서 격납고의 파괴정에 탑승하세요.':'표면은 아직 미개방입니다. 궤도 탐사와 모선 포격은 가능합니다.',5);
   }
-  this.wasInSky=inSky;
+  this.wasInSky=inSky;this.scanTick(dt,background);
   this.warpAmount=M.damp(this.warpAmount,M.clamp((M.len(this.velocity)-2000)/90000,0,1),2,dt);
   this.weapons.update(dt,input,!background);this.syncVisuals(dt);
   if(!background){
@@ -1322,7 +1357,7 @@ class Space{
    this.game.ui.setArea(sys.name.toUpperCase()+' · '+sys.id.toUpperCase(),inSky?this.nearestDef.name+' · 창공':this.auto?this.target.name+'으로 항해':this.warp?'도약 항해':'우주 항해');
    this.game.ui.prompt('조종석에서 일어나기',true,'일어나기');
    const speed=M.len(this.velocity),text=speed>=1000?(speed/1000).toFixed(1)+' km/s':Math.round(speed)+' m/s';
-   this.game.ui.setStatus(this.auto?'자동항해 중':this.warp?'도약 항해':inSky&&speed<1?'창공 정박':'자유 항해',text);
+   this.game.ui.setStatus((this.auto?'자동항해 중':this.warp?'도약 항해':inSky&&speed<1?'창공 정박':'자유 항해')+this.scanLabel(),text);
    this.game.currentInteract={action:()=>this.game.enterInterior('bridge')};
   }
  }
