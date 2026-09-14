@@ -487,12 +487,14 @@ for(const [id,meta] of Object.entries(K.SurfaceMeta||{})){
 class Universe{
  constructor(save){this.save=save;this.catalog=K.UniverseCatalog;this.revision=0;this.restore();}
  restore(){
-  this.states=new Map();this.selectedId='eden';this.navMode='sky';
+  this.states=new Map();this.selectedId='eden';this.navMode='sky';this.cargo=0;this.lost=0;
   const tokens=this.save.data.planetStates[LEDGER]?.destroyed||[];
   for(const t of tokens){
    if(typeof t!=='string')continue;
    if(t.startsWith('focus-')){const id=t.slice(6);if(this.catalog.byId[id])this.selectedId=id;continue;}
    if(t==='nav-orbit'){this.navMode='orbit';continue;}
+   if(t.startsWith('cargo-')){this.cargo=Math.min(20,Number(t.slice(6))||0);continue;}
+   if(t.startsWith('lost-')){this.lost=Math.max(0,Number(t.slice(5))||0);continue;}
    const m=/^([a-z0-9_-]+)-h([0-5])(-v)?(?:-s([1-5]))?$/.exec(t);
    if(m&&this.catalog.byId[m[1]])this.states.set(m[1],{hits:Number(m[2]),seen:!!m[3],scan:Number(m[4]||0)});
   }
@@ -510,6 +512,10 @@ class Universe{
  select(id,navMode){if(!this.get(id))return false;this.selectedId=id;if(navMode)this.navMode=navMode==='sky'?'sky':'orbit';this.flush();return true;}
  markSeen(id){if(this.seen(id))return;this.states.set(id,{hits:this.hits(id),seen:true,scan:this.scan(id)});this.flush();}
  scan(id){return this.states.get(id)?.scan||0;}
+ cargoFull(){return this.cargo>=20;}
+ loadSurvivor(){if(this.cargo>=20)return false;this.cargo++;this.flush();this.save.write('checkpoint');return true;}
+ countLost(n=1){this.lost+=n;this.flush();}
+ ruinLevel(id){return this.hits(id);}
  named(id){return this.scan(id)>=5;}
  displayName(id){const def=this.get(id);return def?(this.named(id)?def.trueName:def.name):'';}
  advanceScan(id){if(!this.get(id))return 0;const n=Math.min(5,this.scan(id)+1);this.states.set(id,{hits:this.hits(id),seen:true,scan:n});this.flush();this.save.write('checkpoint');return n;}
@@ -529,7 +535,7 @@ class Universe{
  flush(){
   // Adapter contract: one reserved record; old server round-trips its string IDs unchanged.
   // Only state deltas are saved. 512 planet definitions do not go into the spreadsheet.
-  const destroyed=['focus-'+this.selectedId,'nav-'+this.navMode];
+  const destroyed=['focus-'+this.selectedId,'nav-'+this.navMode,'cargo-'+this.cargo,'lost-'+this.lost];
   [...this.states].sort(([a],[b])=>a.localeCompare(b)).forEach(([id,s])=>{if(s.hits||s.seen||s.scan)destroyed.push(id+'-h'+s.hits+(s.seen?'-v':'')+(s.scan?'-s'+s.scan:''));});
   this.save.data.planetStates[LEDGER]={destroyed,visited:false};this.revision++;
  }
@@ -1371,7 +1377,7 @@ class Space{
    this.game.ui.setArea(sys.name.toUpperCase()+' · '+sys.id.toUpperCase(),inSky?this.nearestDef.name+' · 창공':this.auto?this.target.name+'으로 항해':this.warp?'도약 항해':'우주 항해');
    this.game.ui.prompt('조종석에서 일어나기',true,'일어나기');
    const speed=M.len(this.velocity),text=speed>=1000?(speed/1000).toFixed(1)+' km/s':Math.round(speed)+' m/s';
-   this.game.ui.setStatus((this.auto?'자동항해 중':this.warp?'도약 항해':inSky&&speed<1?'창공 정박':'자유 항해')+this.scanLabel(),text);
+   this.game.ui.setStatus((this.auto?'자동항해 중':this.warp?'도약 항해':inSky&&speed<1?'창공 정박':'자유 항해')+this.scanLabel()+(this.universe.cargo?' · 화물칸 '+this.universe.cargo+'명':''),text);
    this.game.currentInteract={action:()=>this.game.enterInterior('bridge')};
   }
  }
@@ -1456,13 +1462,28 @@ class Destroyer{
  else this.planet.stopFire();
  if(input.take('KeyQ'))this.toggleGrab(aim);
  if(this.grab)this.updateGrab(dt,f);
+ this.liftSurvivor(dt);
  if(input.take('KeyF')){if(this.pulseCooldown<=0){this.pulseCooldown=3;this.shake=.6;this.game.audio.pulse();this.planet.pulseAt(this.p,42,120);this.planet.wave(this.p);this.kick=.23;}else this.game.ui.toast('충격파 재충전',`${Math.ceil(this.pulseCooldown)}초`,1);}
- let context='',progress=-1;if(this.grab){if(this.grab.kind==='ruler'){context='연결 고정 · 뒤로 물러나 당기기';progress=this.tension/1.8;}else context='Q · 던져 놓기';}else if(aim){if(aim.entity.kind==='ruler')context=aim.entity.hp<=0?(this.planet.rulerName+' · Q로 머리 견인'):(this.planet.rulerName+' · 왕좌를 무력화하세요');else if(aim.distance<75)context=aim.entity.kind==='creature'?'Q · 생명체 견인':'Q · 붙잡아 당기기';}
+ let context='',progress=-1;if(this.grab){if(this.grab.kind==='ruler'){context='연결 고정 · 뒤로 물러나 당기기';progress=this.tension/1.8;}else context='Q · 던져 놓기';}else if(aim){if(aim.entity.kind==='ruler')context=aim.entity.hp<=0?(this.planet.rulerName+' · Q로 머리 견인'):(this.planet.rulerName+' · 왕좌를 무력화하세요');else if(aim.distance<75)context=aim.entity.kind==='creature'?(aim.entity.beg?'Q · 생존자 견인':'Q · 생명체 견인'):'Q · 붙잡아 당기기';}
+ if(this.grab?.kind==='creature'&&this.grab.beg)context=this.game.universe.cargoFull()?'화물칸 가득 참 · Q로 내려놓기':'240m 위로 올라가면 모선이 끌어올립니다';
  this.game.ui.context(context,!!aim,progress);this.game.ui.prompt('',false);
  let speed=M.len(this.velocity);this.game.ui.setArea(this.planet.areaLabel,this.planet.ruler.captured?this.planet.afterLabel:this.planet.regionName);this.game.ui.setStatus(this.grab?'중력 견인 중':this.firing?'절단 광선':'파괴정 · TALON',`${Math.round(speed)} m/s`);
  const shake=this.shake*this.game.settings.shake;const t=this.bob;this.game.engine.camera={p:M.add(this.p,[Math.sin(t*67)*shake*.21,Math.sin(t*51)*shake*.19,0]),yaw:this.yaw+Math.sin(t*38)*shake*.006,pitch:this.pitch+Math.sin(t*47)*shake*.006+this.kick*.01,roll:this.bank+Math.sin(t*36)*shake*.008,fov:78+Math.min(speed/76,1)*5};
  this.rig.root.s=innerWidth<innerHeight?[.69,.85,1]:[1,1,1];this.rig.arms.forEach((arm,i)=>{arm.r[0]=this.grab?-.08:this.firing?Math.sin(t*40)*.012:0;arm.r[1]=this.grab?(i===0?-.13:.13):0;arm.p[2]=M.damp(arm.p[2],-1.9+this.kick*.35,10,dt)});this.rig.carry.visible=this.carrying&&this.planet.ruler.captured&&this.planet.newCapture;
  this.game.engine.impact=shake;
+ }
+ liftSurvivor(dt){
+  const e=this.grab,u=this.game.universe;
+  this.liftHint=Math.max(0,(this.liftHint||0)-dt);
+  if(!e||e.kind!=='creature'||!e.alive||!e.beg)return;
+  const alt=this.p[1]-this.planet.height(this.p[0],this.p[2]);
+  if(alt<240)return;
+  if(u.cargoFull()){if(this.liftHint<=0){this.liftHint=6;this.game.ui.toast('화물칸이 가득 찼습니다','20명이 한계입니다. 더는 태울 수 없습니다.',4);}return;}
+  u.loadSurvivor();
+  e.alive=false;e.node.visible=false;
+  this.grab=null;this.tension=0;this.planet.stopTether();
+  this.game.audio.success();
+  this.game.ui.toast('모선이 끌어올렸습니다 · '+u.cargo+'/20',u.cargo>=20?'화물칸이 찼습니다. 남은 사람들은 여기 남습니다.':'견인한 채로 240m 위까지 올라오면 됩니다.',5);
  }
  toggleGrab(aim){if(this.grab){this.release();return;}if(!aim||aim.distance>85){this.game.ui.toast('견인할 대상이 없습니다.','조준점을 맞추고 가까이 접근하세요.',2);return;}const e=aim.entity;if(e.kind==='ruler'&&e.hp>0){this.game.ui.toast('왕좌가 버티고 있습니다.','광선이나 충돌로 구속 장치를 먼저 부수세요.',3);return;}this.grab=e;this.grabStart=M.dist(this.p,e.p);this.tension=0;this.planet.attach(e,this);this.game.audio.metal();if(e.kind==='ruler')this.game.ui.toast('왕관 고정','S로 뒤로 물러나거나 방향을 틀어 잡아당기세요.',5);}
  updateGrab(dt,f){const e=this.grab;if(!e.alive&&e.kind!=='ruler'&&e.kind!=='loose'){this.release();return;}
@@ -1496,6 +1517,9 @@ class Surface {
   this.state=game.save.data.planetStates[this.id]||{destroyed:[]};
   this.destroyed=new Set(Array.isArray(this.state.destroyed)?this.state.destroyed:[]);
   this.rng=M.rand(config.seed); this.geometryName=this.id+'-terrain';
+  this.ruin=game.universe.ruinLevel(this.id);
+  this.ruinFrac=[0,.45,.65,.82,.95][Math.min(4,this.ruin)];
+  this.lifeMake=null; this.crushed=0;
   this.ownedGeometries=new Set(); this.fxRoot=group(this.root);
  }
  initialize() {
@@ -1528,7 +1552,9 @@ class Surface {
    alive:true,fall:0,dir:[0,0,1],style,glows:[],phase:this.rng()*6.28};
   this.buildings.push(b); return b;
  }
+ idRoll(id,salt){let h=41;const t=id+salt;for(let i=0;i<t.length;i++)h=(Math.imul(h,31)+t.charCodeAt(i))>>>0;return (h%1000)/1000;}
  finishBuilding(b) {
+  if(this.ruinFrac>0&&!this.destroyed.has(b.id)&&this.idRoll(b.id,'/ruin')<this.ruinFrac)this.destroyed.add(b.id);
   if(this.destroyed.has(b.id)){b.alive=false;b.node.visible=false;this.rubble(b,5);}
   return b;
  }
@@ -1538,9 +1564,11 @@ class Surface {
   this.loose.push(e);return e;
  }
  creature(p,make,scale=1) {
-  const node=group(this.root,p);node.s=[scale,scale,scale];make(node);
-  const e={id:'life-'+this.creatures.length,kind:'creature',node,p:p.slice(),velocity:[0,0,0],alive:true,
-   radius:1.8*scale,panic:0,seed:this.rng()*20,thrown:false,hover:this.config.hover||1.4};
+  this.lifeMake=make;
+  const index=this.creatures.length,dead=this.ruinFrac>0&&this.idRoll('life-'+index,'/alive')>.26;
+  const node=group(this.root,p);node.s=[scale,scale,scale];make(node);node.visible=!dead;
+  const e={id:'life-'+index,kind:'creature',node,p:p.slice(),velocity:[0,0,0],alive:!dead,
+   radius:1.8*scale,panic:0,seed:this.rng()*20,thrown:false,hover:this.config.hover||1.4,beg:this.ruinFrac>0};
   this.creatures.push(e);return e;
  }
  setupRuler(base,body,head,halo,localHeadY=18,hp=380,radius=9) {
@@ -1652,7 +1680,8 @@ class Surface {
     break;
    }
   }
-  for(const e of this.creatures)if(e.alive&&M.dist(e.p,ship.p)<5&&speed>9)this.kill(e,M.norm(ship.velocity));
+  for(const e of this.creatures)if(e.alive&&M.dist(e.p,ship.p)<5&&speed>9){const was=e.beg;this.kill(e,M.norm(ship.velocity));
+   if(was){this.crushed++;this.game.universe.countLost();this.game.ui.toast('생존자를 치었습니다',this.crushed>1?this.crushed+'명째입니다.':'달려오던 사람이었습니다.',3);}}
   if(this.ruler.alive&&M.dist(ship.p,this.ruler.p)<this.ruler.radius+2&&speed>15){this.damage(this.ruler,speed*3.5,M.norm(ship.velocity),'ram');ship.hitCooldown=.5;ship.velocity=M.mul(ship.velocity,-.15);ship.shake=1;this.game.audio.impact(2);}
  }
  captureRuler() {
@@ -1685,9 +1714,11 @@ class Surface {
    if(b.fall>1.35){b.node.visible=false;b.fall=3;this.emit(M.add(b.p,[0,3,0]),10,this.config.rubble,21,2);this.rubble(b);}
   }
   for(const e of this.creatures){if(!e.alive||this.vehicle.grab===e)continue;if(e.thrown){this.updateThrown(e,dt);continue;}
-   if(M.dist(e.p,player)<65&&(M.len(this.vehicle.velocity)>5||this.vehicle.firing))e.panic=5;e.panic=Math.max(0,e.panic-dt);
-   const a=Math.sin(this.time*.17+e.seed)*3,dir=e.panic?M.norm([e.p[0]-player[0],0,e.p[2]-player[2]]):[Math.sin(a),0,Math.cos(a)];
-   const speed=e.panic?(this.config.runSpeed||9):1.2;e.p[0]+=dir[0]*speed*dt;e.p[2]+=dir[2]*speed*dt;
+   const gap=M.dist(e.p,player);
+   if(e.beg?gap<150:(gap<65&&(M.len(this.vehicle.velocity)>5||this.vehicle.firing)))e.panic=5;e.panic=Math.max(0,e.panic-dt);
+   const a=Math.sin(this.time*.17+e.seed)*3,away=M.norm([e.p[0]-player[0],0,e.p[2]-player[2]]);
+   const dir=e.panic?(e.beg?M.mul(away,-1):away):[Math.sin(a),0,Math.cos(a)];
+   const speed=e.panic?(e.beg?(gap<11?0:7.5):(this.config.runSpeed||9)):1.2;e.p[0]+=dir[0]*speed*dt;e.p[2]+=dir[2]*speed*dt;
    if(Math.hypot(e.p[0],e.p[2])>610){e.p[0]*=.995;e.p[2]*=.995;}
    e.p[1]=this.height(e.p[0],e.p[2])+e.hover+Math.abs(Math.sin(this.time*(e.panic?16:3)+e.seed))*(e.panic?.5:.18);
    e.node.p=e.p.slice();e.node.r[1]=Math.atan2(dir[0],dir[2]);e.node.r[2]=Math.sin(this.time*13+e.seed)*(e.panic?.1:.015);
@@ -1723,13 +1754,14 @@ K.Surface=Surface;
 const{M,mesh,group}=K;
 const GREEN='#477763',IVORY='#cdd8bb',GOLD='#bca05b',DARK='#394e46';
 class Eden{
- constructor(game){this.id='eden';this.rulerName='태양왕 아우렐';this.areaLabel='EDEN / 01 · SURFACE';this.regionName='태양왕의 정원';this.afterLabel='왕이 없는 대지';this.game=game;this.root=new K.Node();this.buildings=[];this.creatures=[];this.loose=[];this.fragments=[];this.waves=[];this.beams=[];this.tethers=[];this.time=0;this.lastFireFX=0;this.shotTime=0;this.newCapture=false;this.stats={buildings:0};this.state=game.save.data.planetStates.eden||{destroyed:[]};this.destroyed=new Set(Array.isArray(this.state.destroyed)?this.state.destroyed:[]);this.rng=M.rand(20260817);this.geometryName='eden-terrain';this.makeTerrain();this.makeCity();this.makeRuler();this.makeCreatures();this.makeScenery();this.vehicle=new K.Destroyer(game,this);this.createFX();}
+ constructor(game){this.id='eden';this.rulerName='태양왕 아우렐';this.areaLabel='EDEN / 01 · SURFACE';this.regionName='태양왕의 정원';this.afterLabel='왕이 없는 대지';this.game=game;this.root=new K.Node();this.buildings=[];this.creatures=[];this.loose=[];this.fragments=[];this.waves=[];this.beams=[];this.tethers=[];this.time=0;this.lastFireFX=0;this.shotTime=0;this.newCapture=false;this.stats={buildings:0};this.state=game.save.data.planetStates.eden||{destroyed:[]};this.destroyed=new Set(Array.isArray(this.state.destroyed)?this.state.destroyed:[]);this.rng=M.rand(20260817);this.ruin=game.universe.ruinLevel('eden');this.ruinFrac=[0,.45,.65,.82,.95][Math.min(4,this.ruin)];this.crushed=0;this.geometryName='eden-terrain';this.makeTerrain();this.makeCity();this.makeRuler();this.makeCreatures();this.makeScenery();this.vehicle=new K.Destroyer(game,this);this.createFX();}
  height(x,z){let r=Math.hypot(x,z),blend=M.smooth(290,620,r);const ridge=Math.pow(Math.abs(Math.sin(x*.0041+1.3)*Math.cos(z*.0034)+.45*Math.sin(x*.012+z*.005)),2)*165;return ((Math.sin(x*.007)*Math.cos(z*.005)*36)+(Math.sin(x*.018+z*.005)*12)+ridge)*blend;}
  makeTerrain(){let p=[],n=[],idx=[],size=3200,steps=112;for(let z=0;z<=steps;z++)for(let x=0;x<=steps;x++){let wx=(x/steps-.5)*size,wz=(z/steps-.5)*size,y=this.height(wx,wz);p.push(wx,y,wz);const eps=1;let nx=this.height(wx-eps,wz)-this.height(wx+eps,wz),nz=this.height(wx,wz-eps)-this.height(wx,wz+eps);n.push(...M.norm([nx,2,nz]));}for(let z=0;z<steps;z++)for(let x=0;x<steps;x++){let a=z*(steps+1)+x,b=a+steps+1;idx.push(a,b,a+1,b,b+1,a+1)}this.game.engine.addGeometry(this.geometryName,{p,n,idx});mesh(this.root,this.geometryName,[0,0,0],[1,1,1],GREEN,{type:5});mesh(this.root,'disc',[-460,-.3,-130],[430,.2,1600],'#427879',{alpha:.84});const rng=this.rng;for(let i=0;i<3;i++){let a=-.7+i*.23;const p=[Math.sin(a)*1200,340+i*110,-900-i*190];mesh(this.root,'sphere',p,[210-i*30,210-i*30,210-i*30],i===0?'#b6b7a4':'#799d98');}const ring=mesh(this.root,'ring',[-980,590,-1750],[740,740,740],'#d6c496',{alpha:.4,type:3});ring.r=[.7,0,.6];}
  building(id,p,w,h,kind='home'){const node=group(this.root,p),gold=kind==='spire';let b={id,kind:'building',p:p.slice(),w,h,radius:w*.7,node,hp:gold?220:105,maxHp:gold?220:105,alive:true,fall:0,dir:[0,0,1],style:kind};
  if(kind==='home'){mesh(node,'cylinder',[0,h*.43,0],[w,h*.86,w],IVORY);mesh(node,'dome',[0,h*.83,0],[w*1.09,h*.48,w*1.09],GOLD);mesh(node,'cylinder',[0,.5,0],[w*1.24,1,w*1.24],DARK);mesh(node,'cylinder',[0,h*.26,0],[w*1.015,.36,w*1.015],'#8aaf9b');for(let i=0;i<5;i++){let a=i/5*Math.PI*2;const win=mesh(node,'box',[Math.sin(a)*(w*.505),h*.55,Math.cos(a)*(w*.505)],[w*.2,h*.25,.12],'#36645f',{em:.15});win.r[1]=a;}}
  else if(kind==='spire'){mesh(node,'hex',[0,h*.45,0],[w*.68,h*.9,w*.68],IVORY);mesh(node,'hex',[0,1,0],[w*1.5,2,w*1.5],DARK);mesh(node,'cone',[0,h*.98,0],[w*.83,h*.25,w*.83],GOLD);for(let i=0;i<6;i++){let a=i/6*Math.PI*2;mesh(node,'box',[Math.sin(a)*w*.35,h*.5,Math.cos(a)*w*.35],[.2,h*.75,.2],'#acd8b9',{em:.4});}let halo=mesh(node,'torus',[0,h*.8,0],[w*.95,w*.95,w*.95],GOLD);halo.r[0]=.25;mesh(node,'sphere',[0,h*1.11,0],[1.5,1.5,1.5],'#f2e5a4',{em:.8});}
  else{mesh(node,'box',[0,h*.4,0],[w,h*.8,w*.78],IVORY);mesh(node,'box',[0,h*.82,0],[w*1.1,.7,w*.85],GOLD);for(let i=-1;i<=1;i++)mesh(node,'box',[i*w*.28,h*.42,-w*.405],[w*.13,h*.52,.15],'#3b6e63');mesh(node,'dome',[0,h*.87,0],[w*.56,h*.6,w*.56],GOLD);}
+ if(this.ruinFrac>0&&!this.destroyed.has(id)){let h=41;const t=id+'/ruin';for(let i=0;i<t.length;i++)h=(Math.imul(h,31)+t.charCodeAt(i))>>>0;if((h%1000)/1000<this.ruinFrac)this.destroyed.add(id);}
  if(this.destroyed.has(id)){node.visible=false;b.alive=false;this.rubble(b,5);}this.buildings.push(b);return b;
  }
  makeCity(){const rng=this.rng;mesh(this.root,'cylinder',[0,.04,-100],[115,.3,115],'#678679');for(let i=0;i<64;i++){let a=i/64*Math.PI*2;let r=57;const n=mesh(this.root,'box',[Math.sin(a)*r,.27,Math.cos(a)*r-100],[3,.2,2],GOLD);n.r[1]=a;}
@@ -1743,7 +1775,8 @@ class Eden{
  makeRuler(){const captured=this.game.save.data.trophies.some(t=>t.id==='eden-ruler'),base=group(this.root,[0,0,-100]);mesh(base,'cylinder',[0,2,0],[28,4,28],DARK);mesh(base,'cylinder',[0,4.2,0],[23,.5,23],GOLD);for(let i=0;i<4;i++){let a=i/4*Math.PI*2;mesh(base,'box',[Math.sin(a)*11,7,Math.cos(a)*11],[2,6,2],IVORY)}const halo=mesh(base,'torus',[0,22,6],[22,22,22],GOLD);halo.r[0]=Math.PI/2;for(let i=0;i<16;i++){let a=i/16*Math.PI*2;const n=mesh(base,'cone',[Math.sin(a)*17,22+Math.cos(a)*17,6],[1.5,6,1.5],GOLD);n.r=[0,0,-a]}
  const body=group(base);mesh(body,'sphere',[0,11.5,0],[10,15,7],'#456f68');mesh(body,'cone',[0,9,.2],[18,13,11],GOLD);mesh(body,'sphere',[0,14.5,-2.7],[7,8,2],'#94bca5');for(const s of[-1,1]){const arm=mesh(body,'cylinder',[s*6.3,11,-1],[2,10,2],'#6d9a85');arm.r[2]=s*.26;mesh(body,'sphere',[s*7.2,7,-1.5],[3.8,3,3.8],'#85ad97');mesh(body,'box',[s*3.2,5.2,-4],[3.5,2.8,6],GOLD);}const crown=K.Models.head(base,[0,18,0],4.5);crown.r[1]=Math.PI; // face the approach (+Z)
  this.ruler={kind:'ruler',id:'eden-ruler',node:base,p:[0,20,-100],radius:10,hp:captured?0:370,maxHp:370,alive:!captured,captured,body,head:crown,halo};crown.visible=!captured;if(captured)body.r[2]=.19;}
- makeCreatures(){const rng=this.rng;for(let i=0;i<66;i++){const angle=rng()*Math.PI*2,rad=30+rng()*195,x=Math.sin(angle)*rad,z=Math.cos(angle)*rad-30;const node=group(this.root,[x,1.4,z]);let scale=.65+rng()*.5;node.s=[scale,scale,scale];mesh(node,'sphere',[0,.8,0],[1.6,2.3,1.15],i%3?'#aec396':'#7daa9a');mesh(node,'sphere',[0,2.1,0],[1.9,1.55,1.55],'#c4d2a7');for(let s of[-1,1]){mesh(node,'sphere',[s*.43,2.2,.69],[.43,.56,.16],'#183f3f');let leg=mesh(node,'cylinder',[s*.43,-.68,0],[.26,1.5,.26],DARK);let ear=mesh(node,'cone',[s*.82,2.75,0],[.48,1.4,.42],'#b9c78f');ear.r[2]=-s*.4;}const e={kind:'creature',id:'c'+i,node,p:[x,1.4,z],home:[x,z],velocity:[0,0,0],alive:true,radius:1.8,panic:0,seed:rng()*20,thrown:false};this.creatures.push(e);}}
+ makeCreatures(){const rng=this.rng;for(let i=0;i<66;i++){const angle=rng()*Math.PI*2,rad=30+rng()*195,x=Math.sin(angle)*rad,z=Math.cos(angle)*rad-30;const node=group(this.root,[x,1.4,z]);let scale=.65+rng()*.5;node.s=[scale,scale,scale];mesh(node,'sphere',[0,.8,0],[1.6,2.3,1.15],i%3?'#aec396':'#7daa9a');mesh(node,'sphere',[0,2.1,0],[1.9,1.55,1.55],'#c4d2a7');for(let s of[-1,1]){mesh(node,'sphere',[s*.43,2.2,.69],[.43,.56,.16],'#183f3f');let leg=mesh(node,'cylinder',[s*.43,-.68,0],[.26,1.5,.26],DARK);let ear=mesh(node,'cone',[s*.82,2.75,0],[.48,1.4,.42],'#b9c78f');ear.r[2]=-s*.4;}const alive=this.ruinFrac===0||rng()<.26;node.visible=alive;
+  const e={kind:'creature',id:'c'+i,node,p:[x,1.4,z],home:[x,z],velocity:[0,0,0],alive,radius:1.8,panic:0,seed:rng()*20,thrown:false,beg:this.ruinFrac>0};this.creatures.push(e);}}
  makeScenery(){const rng=this.rng;for(let i=0;i<130;i++){let a=rng()*Math.PI*2,r=245+rng()*300,x=Math.sin(a)*r,z=Math.cos(a)*r,h=10+rng()*28;const node=group(this.root,[x,this.height(x,z),z]);mesh(node,'cylinder',[0,h*.5,0],[1.1,h,1.1],'#405b52');const cap=mesh(node,'dome',[0,h,0],[11+rng()*16,8,11+rng()*16],'#829e83');cap.r[2]=(rng()-.5)*.25;mesh(node,'dome',[1,h*.73,0],[10,4,10],'#557e72');}
  // Distant suspended monoliths invite a detour without fake landable planets.
  for(let i=0;i<8;i++){let a=i*.8+1,x=Math.sin(a)*570,z=Math.cos(a)*570;let g=group(this.root,[x,85+i%3*17,z]);mesh(g,'hex',[0,0,0],[22,60,22],'#5c8478');mesh(g,'cone',[0,-38,0],[22,25,22],'#4b6e66').r[2]=Math.PI;mesh(g,'torus',[0,0,0],[24,24,24],GOLD);}
@@ -1772,10 +1805,10 @@ class Eden{
  for(const e of[...this.creatures,...this.loose])if(e.alive){const d=M.dist(e.p,p);if(d<radius){e.velocity=M.add(M.mul(M.norm(M.sub(e.p,p)),40*(1-d/radius)),[0,20,0]);e.thrown=true;e.panic=8;}}
  if(this.ruler.alive&&M.dist(p,this.ruler.p)<radius+10)this.damage(this.ruler,force,M.norm(M.sub(this.ruler.p,p)),'pulse');this.emit(p,24,'#a9c5ab',36,1.2,false);}
  collide(ship,dt){const speed=M.len(ship.velocity);if(ship.hitCooldown>0)return;for(const b of this.buildings)if(b.alive){const dx=Math.abs(ship.p[0]-b.p[0]),dz=Math.abs(ship.p[2]-b.p[2]);if(dx<b.w*.54+2.7&&dz<b.w*.54+2.7&&ship.p[1]<b.p[1]+b.h*1.04+1.8&&ship.p[1]>b.p[1]){const dir=M.norm(ship.velocity);if(speed>6){this.damage(b,60+speed*3.1,dir,'ram');ship.velocity=M.mul(ship.velocity,b.alive?.25:.73);ship.hitCooldown=.3;ship.shake=.7;this.game.audio.impact(1.2);this.emit(ship.p,12,IVORY,18,1.5);}else{let away=M.norm([ship.p[0]-b.p[0],0,ship.p[2]-b.p[2]]);ship.p=M.add(ship.p,M.mul(away,dt*9))}break}}
- for(const e of this.creatures)if(e.alive&&M.dist(e.p,ship.p)<5&&speed>9)this.kill(e,M.norm(ship.velocity));if(this.ruler.alive&&M.dist(ship.p,this.ruler.p)<12&&speed>15){this.damage(this.ruler,speed*3.5,M.norm(ship.velocity),'ram');ship.hitCooldown=.5;ship.velocity=M.mul(ship.velocity,-.15);ship.shake=1;this.game.audio.impact(2);}}
+ for(const e of this.creatures)if(e.alive&&M.dist(e.p,ship.p)<5&&speed>9){const was=e.beg;this.kill(e,M.norm(ship.velocity));if(was){this.crushed++;this.game.universe.countLost();this.game.ui.toast('생존자를 치었습니다',this.crushed>1?this.crushed+'명째입니다.':'달려오던 사람이었습니다.',3);}}if(this.ruler.alive&&M.dist(ship.p,this.ruler.p)<12&&speed>15){this.damage(this.ruler,speed*3.5,M.norm(ship.velocity),'ram');ship.hitCooldown=.5;ship.velocity=M.mul(ship.velocity,-.15);ship.shake=1;this.game.audio.impact(2);}}
  captureRuler(){if(this.game.universe?.destroyed('eden'))return;if(this.ruler.captured)return;this.ruler.captured=true;this.ruler.alive=false;this.ruler.head.visible=false;this.newCapture=true;this.stopTether();this.game.save.addTrophy({id:'eden-ruler',planet:'eden',name:'태양왕 아우렐',time:new Date().toISOString()});this.snapshot();this.game.persist();this.emit([0,18,-100],25,'#c8dab0',24,2);this.game.interior.updateTrophies();}
  update(dt,input){this.time+=dt;this.vehicle.update(dt,input);if(this.game.mode!=='planet')return;const player=this.vehicle.p;for(const b of this.buildings)if(b.fall>0&&b.fall<2){b.fall+=dt;const t=b.fall/1.5;b.node.r[2]=Math.min(t*t*1.2,1.5)*(b.dir[0]>=0?-1:1);b.node.r[0]=Math.min(t*t*.65,.85)*(b.dir[2]>=0?1:-1);if(b.fall>1.4){b.node.visible=false;b.fall=3;this.emit(M.add(b.p,[b.dir[0]*b.h*.4,2,b.dir[2]*b.h*.4]),16,IVORY,25,3);this.rubble(b);this.game.audio.impact(.65);}}
- for(const e of this.creatures){if(!e.alive||this.vehicle.grab===e)continue;if(e.thrown){this.updateThrown(e,dt);continue;}const d=M.dist(e.p,player);if(d<65&&(M.len(this.vehicle.velocity)>5||this.vehicle.firing))e.panic=5;e.panic=Math.max(0,e.panic-dt);let dir;if(e.panic>0){dir=M.norm([e.p[0]-player[0]+Math.sin(e.seed)*5,0,e.p[2]-player[2]+Math.cos(e.seed)*5]);}else{const a=Math.sin(this.time*.17+e.seed)*3;dir=[Math.sin(a),0,Math.cos(a)];}const speed=e.panic?9:1.2;e.p[0]+=dir[0]*speed*dt;e.p[2]+=dir[2]*speed*dt;if(Math.hypot(e.p[0],e.p[2])>570){e.p[0]*=.97;e.p[2]*=.97}e.p[1]=this.height(e.p[0],e.p[2])+1.4+Math.abs(Math.sin(this.time*(e.panic?17:4)+e.seed))*(e.panic?.65:.18);e.node.p=e.p.slice();e.node.r[1]=Math.atan2(dir[0],dir[2]);e.node.r[2]=Math.sin(this.time*15+e.seed)*(e.panic?.13:.015);}
+ for(const e of this.creatures){if(!e.alive||this.vehicle.grab===e)continue;if(e.thrown){this.updateThrown(e,dt);continue;}const d=M.dist(e.p,player);if(e.beg?d<150:(d<65&&(M.len(this.vehicle.velocity)>5||this.vehicle.firing)))e.panic=5;e.panic=Math.max(0,e.panic-dt);let dir;if(e.panic>0){dir=M.norm([e.p[0]-player[0]+Math.sin(e.seed)*5,0,e.p[2]-player[2]+Math.cos(e.seed)*5]);if(e.beg)dir=M.mul(dir,-1);}else{const a=Math.sin(this.time*.17+e.seed)*3;dir=[Math.sin(a),0,Math.cos(a)];}const speed=e.panic?(e.beg?(d<11?0:7.5):9):1.2;e.p[0]+=dir[0]*speed*dt;e.p[2]+=dir[2]*speed*dt;if(Math.hypot(e.p[0],e.p[2])>570){e.p[0]*=.97;e.p[2]*=.97}e.p[1]=this.height(e.p[0],e.p[2])+1.4+Math.abs(Math.sin(this.time*(e.panic?17:4)+e.seed))*(e.panic?.65:.18);e.node.p=e.p.slice();e.node.r[1]=Math.atan2(dir[0],dir[2]);e.node.r[2]=Math.sin(this.time*15+e.seed)*(e.panic?.13:.015);}
  for(const e of this.loose)if(e.alive&&e.thrown&&this.vehicle.grab!==e)this.updateThrown(e,dt);
  for(let i=this.fragments.length-1;i>=0;i--){const f=this.fragments[i];f.life-=dt;if(f.life<=0){this.fxRoot.remove(f.node);this.fragments.splice(i,1);continue;}if(f.gravity)f.v[1]-=24*dt;f.p=M.add(f.p,M.mul(f.v,dt));const floor=this.height(f.p[0],f.p[2])+.4;if(f.p[1]<floor){f.p[1]=floor;f.v[1]=Math.abs(f.v[1])*.3;f.v[0]*=.65;f.v[2]*=.65;}f.node.p=f.p;for(let k=0;k<3;k++)f.node.r[k]+=f.spin[k]*dt;f.node.alpha=Math.min(1,f.life/.65);}
  for(let i=this.waves.length-1;i>=0;i--){const w=this.waves[i];w.t+=dt;let s=1+w.t*100;w.node.s=[s,s,s];w.node.alpha=Math.max(0,.6-w.t);if(w.t>.6){this.fxRoot.remove(w.node);this.waves.splice(i,1)}}
