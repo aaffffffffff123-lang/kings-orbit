@@ -511,7 +511,7 @@ class Universe{
  destroyed(id){return this.hits(id)>=5;}
  seen(id){return !!this.states.get(id)?.seen;}
  hasTrophy(id){const def=this.get(id);return !!def&&this.save.data.trophies.some(t=>t.planet===id||t.id===def.rulerId);}
- surfaceReady(id){return !!K.SurfaceFiles?.[id]||typeof K.Planets?.[id]==='function';}
+ surfaceReady(id){return this.get(id)?.kind!==5;}
  select(id,navMode){if(!this.get(id))return false;this.selectedId=id;if(navMode)this.navMode=navMode==='sky'?'sky':'orbit';this.flush();return true;}
  markSeen(id){if(this.seen(id))return;this.states.set(id,{hits:this.hits(id),seen:true,scan:this.scan(id),relic:this.relicTaken(id)});this.flush();}
  scan(id){return this.states.get(id)?.scan||0;}
@@ -574,10 +574,64 @@ class Universe{
   [...this.states].sort(([a],[b])=>a.localeCompare(b)).forEach(([id,s])=>{if(s.hits||s.seen||s.scan||s.relic||s.told)destroyed.push(id+'-h'+s.hits+(s.seen?'-v':'')+(s.scan?'-s'+s.scan:'')+(s.relic===2?'-r2':s.relic?'-r':'')+(s.told?'-t':''));});
   this.save.data.planetStates[LEDGER]={destroyed,visited:false};this.revision++;
  }
- label(id){const sc=this.scan(id)<5?` · 스캔 ${this.scan(id)}/5`:' · 이름 확인됨';if(this.destroyed(id))return(this.hasTrophy(id)?'행성 소멸 · 왕관 보관 중':'행성 소멸 · 왕 회수 불가')+sc;return(this.surfaceReady(id)?'상륙 가능':'궤도 탐사 · 표면 미개방')+sc;}
+ label(id){const sc=this.scan(id)<5?` · 스캔 ${this.scan(id)}/5`:' · 이름 확인됨';if(this.destroyed(id))return(this.hasTrophy(id)?'행성 소멸 · 왕관 보관 중':'행성 소멸 · 왕 회수 불가')+sc;return(this.surfaceReady(id)?'상륙 가능':'고체 지표 없음')+sc;}
  countDestroyed(){let n=0;for(const s of this.states.values())if(s.hits>=5)n++;return n;}
 }
 Universe.LEDGER=LEDGER;K.Universe=Universe;
+})(window.KO ||= {});
+
+
+// FILE: src/planets/barren.js
+/* 빈 세계. 대부분의 행성은 아무도 살지 않았다. 지형만 있고 도시도 주민도 왕도 없다. */
+(function(K){
+'use strict';
+const {M,mesh,group}=K;
+const ENVS={
+ ocean:{fog:[.42,.55,.58],fogD:.0016,ambient:.66,sun:[-.5,.8,.3],skyTop:[.09,.15,.22],skyHorizon:[.44,.58,.62],skyCloud:[.6,.68,.7],skyStyle:0},
+ dune:{fog:[.66,.55,.41],fogD:.0019,ambient:.72,sun:[-.42,.86,.2],skyTop:[.16,.15,.17],skyHorizon:[.72,.56,.38],skyCloud:[.6,.5,.4],skyStyle:1},
+ ice:{fog:[.63,.72,.78],fogD:.0014,ambient:.7,sun:[-.6,.62,.38],skyTop:[.12,.18,.26],skyHorizon:[.6,.72,.8],skyCloud:[.72,.79,.84],skyStyle:0},
+ lava:{fog:[.3,.18,.15],fogD:.0018,ambient:.58,sun:[-.45,.7,-.2],skyTop:[.07,.06,.09],skyHorizon:[.5,.26,.17],skyCloud:[.34,.22,.2],skyStyle:2},
+ toxic:{fog:[.4,.46,.3],fogD:.0021,ambient:.6,sun:[-.35,.78,.32],skyTop:[.11,.15,.1],skyHorizon:[.5,.56,.34],skyCloud:[.44,.5,.34],skyStyle:1},
+ obsidian:{fog:[.2,.18,.27],fogD:.0015,ambient:.5,sun:[-.62,.6,.3],skyTop:[.05,.05,.1],skyHorizon:[.26,.22,.38],skyCloud:[.2,.18,.3],skyStyle:2},
+ crystal:{fog:[.48,.55,.62],fogD:.0013,ambient:.68,sun:[-.55,.74,.34],skyTop:[.1,.13,.22],skyHorizon:[.52,.6,.74],skyCloud:[.6,.66,.8],skyStyle:0}
+};
+/* 타입마다 땅이 원래 그렇게 생겼다. 구경거리를 심지 않는다. */
+const SHAPE={
+ ocean:(x,z,a,b)=>9*Math.sin(x*.004+a)*Math.cos(z*.0037+b)+5*Math.sin((x+z)*.011+a),
+ dune:(x,z,a,b)=>46*Math.pow(Math.abs(Math.sin(x*.0032+Math.sin(z*.0016+b)*1.7+a)),1.4)+7*Math.sin(z*.02+a),
+ ice:(x,z,a,b)=>14*Math.sin(x*.0029+a)*Math.cos(z*.0031+b)-34*Math.pow(Math.max(0,1-Math.abs(Math.sin(x*.0051+b)*Math.cos(z*.0044+a))*4.5),2),
+ lava:(x,z,a,b)=>20*Math.sin(x*.0035+a)*Math.cos(z*.0041+b)-46*Math.pow(Math.max(0,1-Math.abs(Math.sin((x*.9+z*.4)*.0047+a))*6),3),
+ toxic:(x,z,a,b)=>26*Math.sin(x*.0026+a)*Math.cos(z*.0023+b)+11*Math.sin(x*.0093+b)*Math.sin(z*.0088+a),
+ obsidian:(x,z,a,b)=>Math.floor((28*Math.sin(x*.0027+a)*Math.cos(z*.0033+b))/13)*13,
+ crystal:(x,z,a,b)=>Math.abs(38*Math.sin(x*.0031+a)*Math.cos(z*.0029+b))-12
+};
+class Barren extends K.Surface{
+ constructor(game,def){
+  const t=def.type,env=ENVS[t]||ENVS.ocean;
+  super(game,def,{seed:Math.round(def.seed*97)||1,rulerName:'없음',areaLabel:(def.name||def.id).toUpperCase()+' / SURFACE',
+   regionName:'지표',afterLabel:'지표',rubble:def.color,accent:def.color,spark:def.air,lifeColor:def.color,environment:env});
+  this.barren=true;
+  this.shape=SHAPE[t]||SHAPE.ocean;
+  this.phaseA=(def.seed%6.283);this.phaseB=((def.seed*1.618)%6.283);
+  this.amp=.75+((def.index%7)/7)*.8;
+  this.initialize();
+ }
+ height(x,z){
+  const m=M.smooth(240,900,Math.hypot(x,z));
+  return m*this.amp*this.shape(x,z,this.phaseA,this.phaseB);
+ }
+ makeTerrain(){this.terrain(this.definition.color);}
+ makeCity(){}
+ makeCreatures(){}
+ makeScenery(){}
+ makeRuler(){
+  const base=group(this.root,[0,-4000,0]);base.visible=false;
+  const body=group(base),head=group(base),halo=group(base);
+  this.setupRuler(base,body,head,halo,0,1,3);
+  this.ruler.alive=false;this.ruler.captured=true;this.ruler.hp=0;
+ }
+}
+K.Barren=Barren;
 })(window.KO ||= {});
 
 
@@ -592,7 +646,12 @@ K.PlanetRegistry=Object.fromEntries(K.UniverseCatalog.planets.map(p=>[p.id,{...p
 K.loadPlanet=async function(id){
  if(K.Planets[id])return K.Planets[id];
  const entry=K.SurfaceFiles[id];
- if(!entry)throw new Error('이 행성의 표면은 아직 개방되지 않았습니다. 궤도 탐사와 모선 포격은 가능합니다.');
+ if(!entry){
+  const def=K.UniverseCatalog.byId[id];
+  if(!def)throw new Error('알 수 없는 행성입니다: '+id);
+  if(def.kind===5)throw new Error('고체 지표가 없습니다. 내려설 곳이 없습니다.');
+  return K.Planets[id]=K.Barren;
+ }
  if(K.BUNDLED)throw new Error('행성 파일이 실행본에 포함되지 않았습니다. 같은 버전의 index.html로 교체하세요.');
  await new Promise((resolve,reject)=>{
   const s=document.createElement('script');s.src=entry;
@@ -1615,7 +1674,7 @@ class Interior{
   this.aftLimit=this.labLimit;
  }
  walkable(p){if(p[2]>26.3){if(p[2]>this.aftLimit)return false;if(Math.abs(p[0])>(p[2]>=this.labStart?8.7:6.1))return false;}if(p[0]<-9.1||p[0]>9.1||p[2]<-22.4||p[2]>this.aftLimit)return false;for(const o of this.solids)if(p[0]>o.min[0]-.25&&p[0]<o.max[0]+.25&&p[2]>o.min[2]-.25&&p[2]<o.max[2]+.25)return false;return true}
- update(dt,input){const [dx,dy]=input.look();this.yaw-=dx;this.pitch=M.clamp(this.pitch-dy,-1.25,1.25);const a=input.axes();this.yaw-=(input.keys.has('ArrowRight')?1:0)*dt;this.yaw+=(input.keys.has('ArrowLeft')?1:0)*dt;const f=M.dir(this.yaw),r=M.right(this.yaw);let v=M.add(M.mul(f,a.z),M.mul(r,a.x));if(M.len(v)>1)v=M.norm(v);const speed=a.boost?8.5:5.4;let next=M.add(this.position,M.mul(v,dt*speed));if(this.walkable([next[0],1.85,this.position[2]]))this.position[0]=next[0];if(this.walkable([this.position[0],1.85,next[2]]))this.position[2]=next[2];this.walk+=M.len(v)*dt*7;const bob=Math.sin(this.walk)*.024*this.game.settings.shake;this.game.engine.camera={p:[this.position[0],1.85+bob,this.position[2]],yaw:this.yaw,pitch:this.pitch,roll:0,fov:74};this.zone=this.position[2]<-8?'조종실':this.position[2]>=this.labStart?'실험실':this.position[2]>28?'전시 복도 · '+this.slots().length+'점':this.position[2]>12?'격납고':'중앙 통로';this.game.ui.setArea('MOTHERSHIP · NØMAD',this.zone);if(input.take('KeyM')){this.game.ui.navigation();return;}let nearest=null,best=Infinity;for(const t of this.interactables){let dist=M.dist(this.position,t.p);const aim=M.dot(M.norm(M.sub(t.p,this.position)),M.dir(this.yaw,this.pitch));if(dist<t.radius&&aim>-.1&&dist<best){nearest=t;best=dist}}this.game.currentInteract=nearest;let hint=nearest?.label||'';const ready=!!nearest&&(nearest.id!=='launch'||this.game.nearPlanet());if(nearest?.id==='launch'&&!ready)hint=this.game.universe.destroyed(this.game.space.target.id)?'목표 행성이 소멸했습니다 · 성도에서 다른 행성을 선택하세요':!this.game.universe.surfaceReady(this.game.space.target.id)?'이 행성은 표면 미개방 · 궤도 탐사와 포격 가능':'행성의 구름층까지 접근한 뒤 탑승할 수 있습니다';this.game.ui.prompt(hint,ready,nearest?.verb||'');if(input.take('KeyE')&&nearest)nearest.action();this.syncOutside();}
+ update(dt,input){const [dx,dy]=input.look();this.yaw-=dx;this.pitch=M.clamp(this.pitch-dy,-1.25,1.25);const a=input.axes();this.yaw-=(input.keys.has('ArrowRight')?1:0)*dt;this.yaw+=(input.keys.has('ArrowLeft')?1:0)*dt;const f=M.dir(this.yaw),r=M.right(this.yaw);let v=M.add(M.mul(f,a.z),M.mul(r,a.x));if(M.len(v)>1)v=M.norm(v);const speed=a.boost?8.5:5.4;let next=M.add(this.position,M.mul(v,dt*speed));if(this.walkable([next[0],1.85,this.position[2]]))this.position[0]=next[0];if(this.walkable([this.position[0],1.85,next[2]]))this.position[2]=next[2];this.walk+=M.len(v)*dt*7;const bob=Math.sin(this.walk)*.024*this.game.settings.shake;this.game.engine.camera={p:[this.position[0],1.85+bob,this.position[2]],yaw:this.yaw,pitch:this.pitch,roll:0,fov:74};this.zone=this.position[2]<-8?'조종실':this.position[2]>=this.labStart?'실험실':this.position[2]>28?'전시 복도 · '+this.slots().length+'점':this.position[2]>12?'격납고':'중앙 통로';this.game.ui.setArea('MOTHERSHIP · NØMAD',this.zone);if(input.take('KeyM')){this.game.ui.navigation();return;}let nearest=null,best=Infinity;for(const t of this.interactables){let dist=M.dist(this.position,t.p);const aim=M.dot(M.norm(M.sub(t.p,this.position)),M.dir(this.yaw,this.pitch));if(dist<t.radius&&aim>-.1&&dist<best){nearest=t;best=dist}}this.game.currentInteract=nearest;let hint=nearest?.label||'';const ready=!!nearest&&(nearest.id!=='launch'||this.game.nearPlanet());if(nearest?.id==='launch'&&!ready)hint=this.game.universe.destroyed(this.game.space.target.id)?'목표 행성이 소멸했습니다 · 성도에서 다른 행성을 선택하세요':!this.game.universe.surfaceReady(this.game.space.target.id)?'고체 지표가 없습니다 · 궤도 탐사와 포격만 가능':'행성의 구름층까지 접근한 뒤 탑승할 수 있습니다';this.game.ui.prompt(hint,ready,nearest?.verb||'');if(input.take('KeyE')&&nearest)nearest.action();this.syncOutside();}
  syncOutside(){
   const s=this.game.space;
   // The same streamed exterior is visible through every window, at the ship's orientation.
@@ -2376,17 +2435,17 @@ class Game{
  async launch(force=false){
   if(this.busy)return;const def=this.space.target,id=def.id;
   if(this.universe.destroyed(id)){this.ui.toast('이미 소멸한 행성입니다.','상륙하거나 왕을 회수할 수 없습니다.');return;}
-  if(!this.universe.surfaceReady(id)){this.ui.toast(def.name+' · 표면 미개방','지금은 궤도 탐사와 모선 포격이 가능합니다. 이 행성의 표면은 별도 파일로 추가됩니다.');return;}
+  if(!this.universe.surfaceReady(id)){this.ui.toast(def.name+' · 고체 지표 없음','내려설 곳이 없습니다. 궤도 탐사와 모선 포격은 가능합니다.');return;}
   if(this.space.weapons.inFlight(id)){this.ui.toast('포격 중에는 출격할 수 없습니다.','발사한 미사일이 모두 도착한 뒤 다시 탑승하세요.');return;}
   if(!force&&!this.nearPlanet()){this.ui.toast('모선이 아직 행성에서 멉니다.','성도에서 창공까지 접근을 선택하거나 모선으로 구름층까지 비행하세요.',4);return;}
   this.busy=true;this.space.auto=false;this.space.warp=false;this.space.velocity=[0,0,0];this.input.clear();this.input.enabled=false;this.audio.stop();
   try{
    await this.ui.transition(def.name.toUpperCase()+' / '+id.toUpperCase(),'구름 위의 모선에서 출격 · 지표로 강하',async()=>{
     const Planet=await K.loadPlanet(id);this.activePlanetId=id;this.planet=new Planet(this,def);K.releaseSurvivors(this);this.mode='planet';this.ui.mode('planet');this.setEnvironment();this.descent=3.6;
-   },true);this.ui.toast(def.name+' · 강하 완료','좌클릭 광선 · Q 견인 · F 충격파 · R 언제든 귀환',7);
+   },true);if(!this.planet?.barren)this.ui.toast(def.name+' · 강하 완료','좌클릭 광선 · Q 견인 · F 충격파 · R 언제든 귀환',7);
   }catch(e){this.ui.fatal(e);}finally{this.busy=false;this.input.clear();this.input.enabled=true;}
  }
- async returnHome(){if(this.busy||this.mode!=='planet')return;this.busy=true;this.input.enabled=false;this.input.clear();this.audio.stop();const wasNew=this.planet.newCapture;try{await this.ui.transition('NØMAD',this.space.target.name+' 상공 · 모선 귀환',()=>{this.planet.snapshot();this.planet.dispose();this.planet=null;this.mode='interior';this.descent=0;this.interior.spawn('hangar');this.ui.mode('interior');this.setEnvironment();this.persist("checkpoint");});this.ui.toast(wasNew?'전시실에 새 머리가 도착했습니다.':'다시, 고요. ',wasNew?'복도를 따라 트로피실로. 새로 채워진 진열대를 확인하세요.':'원할 때 다시 내려갈 수 있습니다.',7);}catch(e){this.ui.fatal(e);}finally{this.busy=false;this.input.clear();this.input.enabled=true;}}
+ async returnHome(){if(this.busy||this.mode!=='planet')return;this.busy=true;this.input.enabled=false;this.input.clear();this.audio.stop();const wasNew=this.planet.newCapture,wasBarren=this.planet.barren;try{await this.ui.transition('NØMAD',this.space.target.name+' 상공 · 모선 귀환',()=>{this.planet.snapshot();this.planet.dispose();this.planet=null;this.mode='interior';this.descent=0;this.interior.spawn('hangar');this.ui.mode('interior');this.setEnvironment();this.persist("checkpoint");});if(!wasBarren)this.ui.toast(wasNew?'전시 복도에 새 머리가 도착했습니다.':'다시, 고요. ',wasNew?'복도를 따라가면 새로 채워진 자리가 있습니다.':'원할 때 다시 내려갈 수 있습니다.',7);}catch(e){this.ui.fatal(e);}finally{this.busy=false;this.input.clear();this.input.enabled=true;}}
  persist(reason="auto"){this.space?.save();if(this.planet)this.planet.snapshot();this.save.data.settings=this.settings;this.save.write(reason)}
  frame(now){const raw=Math.max(0,(now-this.last)/1000);this.last=now;let dt=Math.min(raw,.04);this.time+=dt;try{
  if(!this.paused){if(!this.started){this.interior.syncOutside();this.engine.camera={p:[-.8,2.6,-11.5],yaw:-.19+Math.sin(this.time*.1)*.035,pitch:.035,roll:0,fov:78};}
