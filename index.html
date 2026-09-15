@@ -487,16 +487,19 @@ for(const [id,meta] of Object.entries(K.SurfaceMeta||{})){
 class Universe{
  constructor(save){this.save=save;this.catalog=K.UniverseCatalog;this.revision=0;this.restore();}
  restore(){
-  this.states=new Map();this.selectedId='eden';this.navMode='sky';this.cargo=0;this.lost=0;
+  this.states=new Map();this.selectedId='eden';this.navMode='sky';this.hold=[];this.lost=0;this.freeing=false;this.freed=0;
   const tokens=this.save.data.planetStates[LEDGER]?.destroyed||[];
   for(const t of tokens){
    if(typeof t!=='string')continue;
    if(t.startsWith('focus-')){const id=t.slice(6);if(this.catalog.byId[id])this.selectedId=id;continue;}
    if(t==='nav-orbit'){this.navMode='orbit';continue;}
-   if(t.startsWith('cargo-')){this.cargo=Math.min(20,Number(t.slice(6))||0);continue;}
+   if(t.startsWith('hold-')){this.hold=t.slice(5).split('.').filter(Boolean).slice(0,20);continue;}
+   if(t==='freeing'){this.freeing=true;continue;}
+   if(t.startsWith('freed-')){this.freed=Math.max(0,Number(t.slice(6))||0);continue;}
+   if(t.startsWith('cargo-')){const n=Math.min(20,Number(t.slice(6))||0);for(let i=0;i<n;i++)this.hold.push('');continue;}
    if(t.startsWith('lost-')){this.lost=Math.max(0,Number(t.slice(5))||0);continue;}
-   const m=/^([a-z0-9_-]+)-h([0-5])(-v)?(?:-s([1-5]))?(-r)?$/.exec(t);
-   if(m&&this.catalog.byId[m[1]])this.states.set(m[1],{hits:Number(m[2]),seen:!!m[3],scan:Number(m[4]||0),relic:!!m[5]});
+   const m=/^([a-z0-9_-]+)-h([0-5])(-v)?(?:-s([1-5]))?(-r2?)?(-t)?$/.exec(t);
+   if(m&&this.catalog.byId[m[1]])this.states.set(m[1],{hits:Number(m[2]),seen:!!m[3],scan:Number(m[4]||0),relic:m[5]==='-r2'?2:m[5]?1:0,told:!!m[6]});
   }
   this.revision++;
  }
@@ -512,17 +515,44 @@ class Universe{
  select(id,navMode){if(!this.get(id))return false;this.selectedId=id;if(navMode)this.navMode=navMode==='sky'?'sky':'orbit';this.flush();return true;}
  markSeen(id){if(this.seen(id))return;this.states.set(id,{hits:this.hits(id),seen:true,scan:this.scan(id),relic:this.relicTaken(id)});this.flush();}
  scan(id){return this.states.get(id)?.scan||0;}
- cargoFull(){return this.cargo>=20;}
- loadSurvivor(){if(this.cargo>=20)return false;this.cargo++;this.flush();this.save.write('checkpoint');return true;}
+ get cargo(){return this.hold.length;}
+ setFreeing(on){this.freeing=!!on&&this.hold.length>0;this.flush();this.save.write('checkpoint');return this.freeing;}
+ takeHold(){const out=this.hold.slice();this.hold=[];this.freeing=false;this.freed+=out.length;this.flush();this.save.write('checkpoint');return out;}
+ cargoFull(){return this.hold.length>=20;}
+ loadSurvivor(from=''){if(this.hold.length>=20)return false;this.hold.push(from||'');this.flush();this.save.write('checkpoint');return true;}
+ patch(id,extra){const st=this.states.get(id)||{};this.states.set(id,Object.assign({hits:st.hits||0,seen:!!st.seen,scan:st.scan||0,relic:st.relic||0,told:!!st.told},extra));}
+ told(id){return !!this.states.get(id)?.told;}
+ tellNames(fromId,count){
+  const src=this.get(fromId),out=[];
+  const rank=p=>(src?(p.systemIndex===src.systemIndex?0:1)*4096+Math.abs(p.index-src.index):p.index);
+  for(const p of this.planets.slice().sort((a,b)=>rank(a)-rank(b))){
+   if(out.length>=count)break;
+   if(p.id===fromId||this.named(p.id))continue;
+   this.patch(p.id,{told:true});out.push(p);
+  }
+  this.flush();this.save.write('checkpoint');return out;
+ }
+ experiment(depth){
+  if(!this.hold.length)return null;
+  const from=this.hold.shift();
+  const count=depth===0?1:depth===1?3:5;
+  const opened=this.tellNames(from,count);
+  const died=depth===2;
+  if(died)this.lost++; else this.hold.push(from);
+  this.flush();this.save.write('checkpoint');
+  return{from,opened,died,count};
+ }
+ dissected(id){return this.states.get(id)?.relic===2;}
+ dissectRelic(id){if(!this.relicTaken(id)||this.dissected(id))return false;this.patch(id,{relic:2});this.flush();this.save.write('checkpoint');return true;}
  countLost(n=1){this.lost+=n;this.flush();}
  ruinLevel(id){return this.hits(id);}
- named(id){return this.scan(id)>=5;}
+ named(id){return this.scan(id)>=5||!!this.states.get(id)?.told;}
  displayName(id){const def=this.get(id);return def?(this.named(id)?def.trueName:def.name):'';}
  advanceScan(id){if(!this.get(id))return 0;const n=Math.min(5,this.scan(id)+1);this.states.set(id,{hits:this.hits(id),seen:true,scan:n,relic:this.relicTaken(id)});this.flush();this.save.write('checkpoint');return n;}
  relicForm(id){return hash32(id+'/relic')%8;}
  relicTaken(id){return !!this.states.get(id)?.relic;}
  relicAvailable(id){return this.destroyed(id)&&!this.hasTrophy(id)&&!this.relicTaken(id)&&this.scan(id)>=5;}
- takeRelic(id){if(!this.relicAvailable(id))return false;this.states.set(id,{hits:this.hits(id),seen:true,scan:this.scan(id),relic:true});this.flush();this.save.write('checkpoint');return true;}
+ takeRelic(id){if(!this.relicAvailable(id))return false;this.patch(id,{relic:1});this.flush();this.save.write('checkpoint');return true;}
  relicList(){const out=[];for(const[id,st]of this.states)if(st.relic&&this.get(id))out.push({id,form:this.relicForm(id)});out.sort((a,b)=>this.get(a.id).index-this.get(b.id).index);return out;}
  scanLines(id){
   const def=this.get(id);if(!def)return[];
@@ -540,8 +570,8 @@ class Universe{
  flush(){
   // Adapter contract: one reserved record; old server round-trips its string IDs unchanged.
   // Only state deltas are saved. 512 planet definitions do not go into the spreadsheet.
-  const destroyed=['focus-'+this.selectedId,'nav-'+this.navMode,'cargo-'+this.cargo,'lost-'+this.lost];
-  [...this.states].sort(([a],[b])=>a.localeCompare(b)).forEach(([id,s])=>{if(s.hits||s.seen||s.scan||s.relic)destroyed.push(id+'-h'+s.hits+(s.seen?'-v':'')+(s.scan?'-s'+s.scan:'')+(s.relic?'-r':''));});
+  const destroyed=['focus-'+this.selectedId,'nav-'+this.navMode,'hold-'+this.hold.join('.'),'lost-'+this.lost,'freed-'+this.freed].concat(this.freeing?['freeing']:[]);
+  [...this.states].sort(([a],[b])=>a.localeCompare(b)).forEach(([id,s])=>{if(s.hits||s.seen||s.scan||s.relic||s.told)destroyed.push(id+'-h'+s.hits+(s.seen?'-v':'')+(s.scan?'-s'+s.scan:'')+(s.relic===2?'-r2':s.relic?'-r':'')+(s.told?'-t':''));});
   this.save.data.planetStates[LEDGER]={destroyed,visited:false};this.revision++;
  }
  label(id){const sc=this.scan(id)<5?` · 스캔 ${this.scan(id)}/5`:' · 이름 확인됨';if(this.destroyed(id))return(this.hasTrophy(id)?'행성 소멸 · 왕관 보관 중':'행성 소멸 · 왕 회수 불가')+sc;return(this.surfaceReady(id)?'상륙 가능':'궤도 탐사 · 표면 미개방')+sc;}
@@ -849,8 +879,33 @@ class UI{
  menu(){const g=this.game,s=g.settings;this.open(`<div class="eyebrow">NØMAD / SHIP SYSTEMS</div><h2>${g.started?'잠시 정박':'항해 설정'}</h2>${g.cloudUI?.menuRow()||''}<div class="panelRow"><label for="quality">화면 품질</label><select id="quality"><option value="low">저사양</option><option value="balanced">균형</option><option value="high">높음</option></select></div><div class="panelRow"><label for="volume">소리</label><input id="volume" type="range" min="0" max="1" step=".05" value="${s.volume}"></div><div class="panelRow"><label for="sensitivity">시선 감도</label><input id="sensitivity" type="range" min=".3" max="2" step=".05" value="${s.sensitivity}"></div><div class="panelRow"><label for="shake">충돌 화면 흔들림</label><input id="shake" type="range" min="0" max="1" step=".05" value="${s.shake}"></div><div class="panelRow"><label for="touchSetting">화면 터치 조작 표시</label><input id="touchSetting" type="checkbox" ${g.input.mobile?'checked':''}></div><div class="panelActions"><button class="primary" id="resume">${g.started?'항해 계속':'닫기'} ↗</button><button class="secondary" id="helpBtn">조작 안내</button></div><div class="panelActions slim"><button class="secondary" id="exportSave">저장 내보내기</button><button class="secondary" id="importSave">저장 불러오기</button><input id="importInput" type="file" accept=".json,application/json"></div><div class="panelActions slim"><button class="ghost danger" id="resetBtn">진행 기록 초기화</button></div><div class="finePrint">자동 저장: 왕의 머리 회수 · 행성 귀환 · 주기적 항해 저장<br>로컬 파일·시크릿 모드에서는 저장이 제한될 수 있습니다. 저장 파일을 따로 보관할 수 있습니다.<br>FIRST CONTACTS 0.1.4 · 상륙 가능한 행성 4개 / 512개 세계</div>`);$('quality').value=s.quality;$('quality').onchange=e=>{s.quality=e.target.value;g.engine.quality=s.quality;g.engine.resolutionScale=1;g.engine.resize();g.persist()};for(const id of['volume','sensitivity','shake'])$(id).oninput=e=>{s[id]=Number(e.target.value);g.audio.volume=s.volume;g.audio.applyVolume();g.input.sensitivity=s.sensitivity;g.persist()};$('touchSetting').onchange=e=>this.mobile(e.target.checked);$('resume').onclick=()=>this.close();$('helpBtn').onclick=()=>this.help();$('exportSave').onclick=()=>{g.persist();const blob=new Blob([g.save.export()],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='first-contacts-save.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};$('importSave').onclick=()=>$('importInput').click();$('importInput').onchange=async e=>{try{const file=e.target.files[0];if(!file)return;g.save.import(await file.text());location.reload()}catch(err){this.toast('저장 파일을 읽지 못했습니다.',err.message)}};$('resetBtn').onclick=()=>this.confirmReset();g.cloudUI?.bindMenu();}
  confirmReset(){if(this.game.cloud?.meta){this.game.cloudUI.confirmReset();return;}this.open('<div class="eyebrow">RESET VOYAGE</div><h2>항해 기록을 지울까요?</h2><p class="text">전시된 머리와 행성의 파괴 기록이 사라집니다. 이 작업은 되돌릴 수 없습니다.</p><div class="panelActions"><button id="cancelReset" class="primary">취소</button><button id="doReset" class="secondary danger">기록 지우기</button></div>');$('cancelReset').onclick=()=>this.menu();$('doReset').onclick=()=>{this.game.save.reset();location.reload()}}
  help(){this.open(`<div class="eyebrow">FLIGHT MANUAL / 01</div><h2>가고 싶은 곳으로.</h2><div class="controlsTable"><div>W A S D</div><div>걷기 / 비행 · 마우스로 시선</div><div>화면 클릭</div><div>마우스 고정. 안 되면 우클릭 드래그.<br>방향키 좌우로도 회전할 수 있습니다.</div><div>E</div><div>조종석 · 전시 기록 · 파괴정 탑승</div><div>Space / C</div><div>상승 / 하강</div><div>Shift 유지</div><div>누르는 동안 빠르게 걷기 / 가속·충돌</div><div>M / T / J / X</div><div>성도 / 자동항해 / 도약 / 추진 정지</div><div>좌클릭 길게</div><div>모선: 미사일 장전·발사 / 파괴정: 절단 광선</div><div>Q</div><div>모선: 바라보는 행성 선택 / 파괴정: 견인·놓기</div><div>F</div><div>근접 충격파 · 재충전 3초</div><div>R</div><div>행성에서 언제든 모선으로 귀환</div><div>Esc / P</div><div>메뉴 / 일시정지</div></div><p class="text">처음에는 조종석에 앉아 <b>T</b>로 에덴에 접근하세요. 행성이 하늘과 구름으로 가득 보일 때까지 접근합니다. 상공에 정박하면 <b>E</b>로 일어나 뒤쪽 격납고에서 파괴정으로 갈아탑니다.</p><p class="text">행성에서는 눈앞의 건물을 부수거나 밀어버리세요. 왕좌를 무력화한 뒤 왕의 머리를 바라보고 <b>Q</b>로 붙잡아 <b>S</b>로 뒤로 물러나면 회수할 수 있습니다. 왕을 잡지 않고 떠나도 됩니다.</p><p class="text">모선의 <b>M · 성도</b>에서 64개 항성계의 512개 행성을 찾아갈 수 있습니다. <b>포격 궤도로 항해</b>한 뒤 행성을 바라보고 미사일 버튼을 길게 누르세요. <b>5회 명중하면 행성이 소멸</b>하며, 아직 얻지 않은 왕의 머리는 회수할 수 없습니다. 이미 전시한 머리는 남습니다. 에덴 · NACRE · CINDER · MYCEL 네 행성에 상륙할 수 있습니다. 성도의 상단 바로가기로 선택하세요.</p><div class="finePrint">터치: 왼쪽 빈 화면 어디서든 누른 곳을 기준으로 이동 / 오른쪽 빈 화면 드래그로 시선.<br>오른쪽 가속 버튼은 누르는 동안만 작동합니다. 손을 떼면 가속 입력이 해제되며, 우주에서는 관성으로 잠시 더 흘러갑니다.<br>기능을 막는 연료·목숨·제한시간은 없습니다. 우주에서는 엔진을 멈추면 고요해집니다.</div><div class="panelActions"><button id="closeHelp" class="primary">알겠습니다 ↗</button></div>`);$('closeHelp').onclick=()=>this.close();}
+ openHold(){const u=this.game.universe,esc=K.escapeHTML;
+  const rows=u.hold.map(id=>esc(id?u.displayName(id):'출신 불명')).map(n=>`<div class="panelRow"><span>${n}</span><span>생존</span></div>`).join('');
+  const heads=this.game.save.data.trophies.length;
+  this.open(`<div class="eyebrow">CARGO HOLD</div><h2>${u.cargo}/20</h2><p class="text">${u.cargo?(heads?'모두 전시 복도 쪽을 보고 서 있습니다.':'모두 실험대 쪽을 보고 서 있습니다.'):'비어 있습니다.'}${u.lost?'<br>지금까지 '+u.lost+'명이 돌아가지 못했습니다.':''}${u.freed?'<br>'+u.freed+'명을 내려놓았습니다.':''}</p>${rows}<div class="panelActions">${u.cargo?`<button id="freeHold">${u.freeing?'내려보내기 취소':'다음 착륙지에서 내려보내기'}</button>`:''}<button id="closeHold" class="primary">닫기 ↗</button></div>`);
+  if(u.cargo)$('freeHold').onclick=()=>{const on=u.setFreeing(!u.freeing);this.close();this.toast(on?'다음 착륙지에서 내려보냅니다':'내려보내기를 취소했습니다',on?'어느 행성이든 상관없이, 먼저 닿는 곳에 내려놓습니다.':'화물칸에 그대로 둡니다.',5);};
+  $('closeHold').onclick=()=>this.close();}
+ openLab(){
+  const u=this.game.universe,esc=K.escapeHTML;
+  if(!u.cargo){this.toast('화물칸이 비어 있습니다','폐허에서 생존자를 견인해 오면 실험할 수 있습니다.',4);return;}
+  const from=u.hold[0];
+  this.open(`<div class="eyebrow">LABORATORY</div><h2>${esc(from?u.displayName(from):'출신 불명')}에서 온 개체</h2><p class="text">깊이 들어갈수록 더 많은 이웃의 이름을 말합니다.<br>어디까지 갈지는 이쪽이 정합니다.</p>
+   <div class="panelActions" style="flex-direction:column;align-items:stretch;gap:8px">
+   <button id="labA">표층 · 1곳 · 돌아감</button>
+   <button id="labB">심층 · 3곳 · 돌아가지만 성치 않음</button>
+   <button id="labC">끝까지 · 5곳 · 돌아가지 못함</button>
+   <button id="labX" class="primary">그만두기</button></div>`);
+  const run=d=>{const r=u.experiment(d);this.close();if(!r)return;
+   const names=r.opened.map(p=>p.trueName).join(' · ')||'새로 밝혀진 것은 없습니다';
+   this.game.audio.success();
+   this.toast(r.died?'개체는 돌아가지 못했습니다':'개체를 화물칸으로 돌려보냈습니다',
+    (r.opened.length?names+' — 성도에 이름이 올랐습니다.':names)+(r.died?'':r.opened.length&&d===1?'<br>화물칸의 나머지가 물러섰습니다.':''),7);
+   this.game.interior.updateTrophies();};
+  $('labA').onclick=()=>run(0);$('labB').onclick=()=>run(1);$('labC').onclick=()=>run(2);
+  $('labX').onclick=()=>this.close();}
  inspectRelic(id){const u=this.game.universe,def=u.get(id),esc=K.escapeHTML,form=u.relicForm(id);
-  this.open(`<div class="eyebrow">ARCHIVE / RECOVERED</div><h2>${esc(K.RelicName[form])}</h2><p class="text">분류 불명. 생체로 추정.<br>${esc(K.RelicNote[form])}</p><div class="panelRow"><span>회수지</span><span>${esc(u.displayName(id))}</span></div><div class="panelRow"><span>관측 명명</span><span>${esc(def?.name||id)}</span></div><div class="panelRow"><span>행성 상태</span><span>소멸 · 왕 미회수</span></div><div class="panelActions"><button id="closeInspect" class="primary">구경 계속 ↗</button></div>`);
+  this.open(`<div class="eyebrow">ARCHIVE / RECOVERED</div><h2>${esc(K.RelicName[form])}</h2><p class="text">분류 불명. 생체로 추정.<br>${esc(K.RelicNote[form])}</p><div class="panelRow"><span>회수지</span><span>${esc(u.displayName(id))}</span></div><div class="panelRow"><span>관측 명명</span><span>${esc(def?.name||id)}</span></div><div class="panelRow"><span>행성 상태</span><span>소멸 · 왕 미회수</span></div>${u.dissected(id)?`<p class="text">해부 기록 — ${esc(K.RelicTrue[form])}</p>`:''}<div class="panelActions">${u.dissected(id)?'':'<button id="cutRelic">실험실에서 해부하기</button>'}<button id="closeInspect" class="primary">구경 계속 ↗</button></div>`);
+  if(!u.dissected(id))$('cutRelic').onclick=()=>{u.dissectRelic(id);this.close();this.game.audio.success();this.toast(K.RelicName[form]+' · 해부 완료',K.RelicTrue[form],7);};
   $('closeInspect').onclick=()=>this.close();}
  inspect(index){const t=this.game.save.data.trophies[index],esc=K.escapeHTML,planet=t?this.game.universe.get(t.planet):null;this.open(`<div class="eyebrow">ARCHIVE / ${String(index+1).padStart(2,'0')}</div><h2>${t?esc(t.name):'비어 있는 자리'}</h2><p class="text">${t?esc(K.SurfaceMeta?.[t.planet]?.trophyNote||'그 세계의 왕은 이제 NØMAD와 함께 떠돈다.'):'아직 아무것도 전시되어 있지 않습니다.<br>다음 행성의 자리는 남아 있습니다.'}</p>${t?`<div class="panelRow"><span>회수지</span><span>${esc(planet?.name||t.planet)}</span></div><div class="panelRow"><span>행성 상태</span><span>${this.game.universe.destroyed(t.planet)?'소멸 · 전시품 보존':'존재'}</span></div><div class="panelRow"><span>회수 시각</span><span>${new Date(t.time).toLocaleString('ko-KR')}</span></div>`:''}<div class="panelActions"><button id="closeInspect" class="primary">구경 계속 ↗</button></div>`);$('closeInspect').onclick=()=>this.close();}
  fatal(err){$('fatalText').textContent=String(err?.message||err);$('fatal').classList.remove('hidden');$('loading').classList.add('hidden');}
@@ -1011,8 +1066,32 @@ function relicModel(root,form,seedNum=0){
  else{const n=mesh(g,'sphere',[0,.9,0],[1.1,1.35,1.1],col,{alpha:.78});n.r[0]=.1;mesh(g,'sphere',[0,.9,0],[.72,.95,.72],'#39433d');mesh(g,'cylinder',[0,1.72,0],[.28,.5,.28],dark);}
  return g;
 }
-K.RelicName=RELIC_NAME;K.RelicNote=RELIC_NOTE;
-K.Models={C,head,destroyerModel,cockpit,planetBody,relicModel};
+const RELIC_TRUE=['판 하나하나가 독립된 감각기였다. 겹칠수록 어두워진다.','양끝이 같은 기관이다. 어느 쪽이 입인지 묻는 것은 의미가 없다.','결절 안에 미세한 공동이 있다. 소리를 냈던 것으로 보인다.','섬유 하나하나가 따로 살아 있었다. 다발은 군집이었다.','눌린 자국은 안쪽에서 생겼다. 무언가 안에서 자랐다.','겹마다 다른 조직이다. 스물두 번 다시 만들어진 몸이다.','한 쌍이 아니었다. 원래 이것 하나뿐이었다.','비어 있는 것이 기능이었다. 무엇을 담았는지는 알 수 없다.'];
+function subjectModel(root,seed=0){
+ const g=group(root,[0,0,0]),tone=['#8d9fa6','#a09a8c','#95a39a','#a89aa0'][seed%4],dark='#3a423f';
+ mesh(g,'cylinder',[0,.58,0],[.33,1.16,.27],tone);
+ mesh(g,'lowSphere',[0,1.3,0],[.29,.35,.27],tone);
+ mesh(g,'box',[0,1.3,.2],[.34,.06,.12],dark);
+ for(const sd of[-1,1]){const a=mesh(g,'cylinder',[sd*.3,.78,.04],[.095,.8,.095],tone);a.r[2]=-sd*.19;a.r[0]=-.12;}
+ mesh(g,'cylinder',[0,.06,0],[.42,.12,.42],dark);
+ return g;
+}
+K.RelicName=RELIC_NAME;K.RelicNote=RELIC_NOTE;K.RelicTrue=RELIC_TRUE;
+K.Models={C,head,destroyerModel,cockpit,planetBody,relicModel,subjectModel};
+K.releaseSurvivors=function(game){
+ const u=game.universe,planet=game.planet;
+ if(!u.freeing||!u.hold.length||!planet||typeof planet.height!=='function')return;
+ const ids=u.takeHold();
+ ids.forEach((from,i)=>{
+  const a=i/ids.length*Math.PI*2,r=11+(i%4)*3.5;
+  const x=Math.sin(a)*r,z=Math.cos(a)*r,y=planet.height(x,z);
+  const node=group(planet.root,[x,y,z]);
+  subjectModel(node,i);node.r[1]=Math.atan2(-x,-z);
+  planet.creatures.push({id:'freed-'+i,kind:'creature',node,p:[x,y+1.4,z],home:[x,z],velocity:[0,0,0],
+   alive:true,radius:1.8,panic:0,seed:i*3.71,thrown:false,hover:1.4,beg:false,freed:true});
+ });
+ game.ui.toast(ids.length+'명을 내려놓았습니다',(planet.id===ids[0]?'고향입니다.':'이곳은 그들의 고향이 아닙니다.')+' 화물칸이 비었습니다.',7);
+};
 })(window.KO ||= {});
 
 
@@ -1461,6 +1540,35 @@ class Interior{
  for(let s of[-1,1]){this.block([s*8.4,.85,19],[1.5,1.7,2.2],C.panel);this.light([s*8.4,1.8,19],[.7,.04,1],C.amber);}
  this.updateTrophies();
  }
+ buildLab(g,zDoor){
+  const z0=zDoor+1,depth=26,zc=z0+depth/2,u=this.game.universe;
+  this.labStart=zDoor+1.2;this.labLimit=z0+depth-1.4;
+  mesh(g,'box',[0,-.3,zc],[19,.6,depth],C.dark);mesh(g,'box',[0,7.4,zc],[19,.5,depth],C.dark);
+  for(const sd of[-1,1])mesh(g,'box',[sd*9.2,3.4,zc],[.5,7,depth],C.hull);
+  mesh(g,'box',[0,3.4,z0+depth-.3],[19,7,.5],C.hull);
+  mesh(g,'box',[0,7.05,zc],[7,.06,depth-4],C.light,{em:1.15,type:1});
+  // 실험대
+  const tz=z0+7.5,t=group(g,[0,0,tz]);
+  mesh(t,'box',[0,.45,0],[2.6,.9,1.1],C.panel);mesh(t,'box',[0,.95,0],[3,.14,1.45],'#c9ccc6',{em:.12});
+  mesh(t,'cylinder',[0,1.02,0],[1.1,.02,1.1],'#7fd4d0',{alpha:.3,em:.8});
+  for(const sd of[-1,1]){const arm=mesh(t,'cylinder',[sd*1.35,2.15,0],[.12,2.3,.12],C.edge);mesh(t,'box',[sd*.75,3.2,0],[1.5,.22,.7],C.panel);mesh(t,'box',[sd*.62,3.03,0],[.9,.06,.4],C.light,{em:1.4,type:1});}
+  mesh(g,'box',[0,4.4,tz],[3.4,.05,1.2],C.light,{em:1.25,type:1});
+  this.solids.push({min:[-1.9,-1,tz-1.2],max:[1.9,4,tz+1.2],gallery:true});
+  this.interactables.push({id:'lab',p:[0,1.7,tz],radius:3.4,label:u.cargo?'실험대':'실험대 · 화물칸이 비어 있습니다',verb:'실험대에 눕히기',action:()=>this.game.ui.openLab()});
+  // 화물칸 — 실린 사람들은 실험대를 보고 서 있다
+  const hz=z0+18.5;
+  mesh(g,'box',[0,.02,hz],[15,.04,9],C.panel);
+  for(const sd of[-1,1])mesh(g,'box',[sd*7.4,.1,hz],[.06,.05,8.6],C.amber,{em:1.1,type:1});
+  const heads=this.game.save.data.trophies.length;
+  u.hold.forEach((from,i)=>{
+   const col=i%5,row=Math.floor(i/5);
+   const fig=heads
+    ? group(g,[-3.5+col*1.75,0,hz-4.1+row*1.15])
+    : group(g,[-4.4+col*2.2,0,hz-2.6+row*2.1]);
+   K.Models.subjectModel(fig,i);fig.r[1]=Math.PI;fig.s=[1.15,1.15,1.15];
+  });
+  this.interactables.push({id:'hold',p:[0,1.7,hz-5.6],radius:3.8,label:'화물칸 · '+u.cargo+'/20'+(u.freeing?' · 내려보내기 예약됨':''),verb:'살펴보기',action:()=>this.game.ui.openHold()});
+ }
  slots(){
   const g=this.game,out=[];
   g.save.data.trophies.forEach((t,i)=>out.push({type:'head',t,index:i}));
@@ -1468,19 +1576,22 @@ class Interior{
   return out;
  }
  updateTrophies(){
-  const slots=this.slots(),key=slots.map(x=>x.type==='head'?'h'+x.t.id:'r'+x.id).join('|');
+  const slots=this.slots(),key=slots.map(x=>x.type==='head'?'h'+x.t.id:'r'+x.id).join('|')+'#'+this.game.universe.hold.join('.')+'#'+(this.game.universe.freeing?1:0);
   if(key===this.galleryKey)return;
   this.galleryKey=key;
   if(this.galleryRoot)this.roomRoot.remove(this.galleryRoot);
   this.solids=this.solids.filter(o=>!o.gallery);
   this.interactables=this.interactables.filter(o=>!String(o.id).startsWith('slot'));
   const g=group(this.roomRoot,[0,0,0]);this.galleryRoot=g;this.trophies=[];
-  const rows=Math.ceil(slots.length/2),len=rows*6+6;
-  if(!slots.length){this.aftLimit=26.3;return;}
+  const rows=Math.max(1,Math.ceil(slots.length/2)),len=rows*6+6;
   const z0=29.5,zc=z0+len/2-3;
   mesh(g,'box',[0,-.3,zc],[14,.6,len],C.dark);mesh(g,'box',[0,7,zc],[14,.5,len],C.dark);
   for(const sd of[-1,1]){mesh(g,'box',[sd*6.7,3.2,zc],[.5,6.4,len],C.hull);}
-  mesh(g,'box',[0,3.2,z0+len-3],[14,6.4,.5],C.hull);
+  const zDoor=z0+len-3;
+  for(const sd of[-1,1])mesh(g,'box',[sd*5,3.2,zDoor],[4,6.4,.5],C.hull);
+  mesh(g,'box',[0,5.6,zDoor],[6,1.6,.5],C.hull);
+  mesh(g,'box',[0,4.7,zDoor-.32],[3.2,.1,.1],C.light,{em:1.3,type:1});
+  this.buildLab(g,zDoor);
   for(let i=0;i<rows;i++){const z=z0+i*6;mesh(g,'box',[0,.008,z],[12,.025,.027],C.panel);
    for(const sd of[-1,1])mesh(g,'box',[sd*6.42,3.2,z],[.055,3.6,.05],C.amber,{em:1.2,type:1});}
   slots.forEach((slot,i)=>{
@@ -1501,10 +1612,10 @@ class Interior{
    this.interactables.push({id:'slot'+i,p:[x,2,z],radius:3.1,label:relic?'회수물 기록':'전시 기록',verb:'기록 보기',
     action:relic?(()=>this.game.ui.inspectRelic(slot.id)):(()=>this.game.inspectTrophy(slot.index))});
   });
-  this.aftLimit=z0+len-4;
+  this.aftLimit=this.labLimit;
  }
- walkable(p){if(p[2]>26.3&&(p[2]>this.aftLimit||Math.abs(p[0])>6.1))return false;if(p[0]<-9.1||p[0]>9.1||p[2]<-22.4||p[2]>this.aftLimit)return false;for(const o of this.solids)if(p[0]>o.min[0]-.25&&p[0]<o.max[0]+.25&&p[2]>o.min[2]-.25&&p[2]<o.max[2]+.25)return false;return true}
- update(dt,input){const [dx,dy]=input.look();this.yaw-=dx;this.pitch=M.clamp(this.pitch-dy,-1.25,1.25);const a=input.axes();this.yaw-=(input.keys.has('ArrowRight')?1:0)*dt;this.yaw+=(input.keys.has('ArrowLeft')?1:0)*dt;const f=M.dir(this.yaw),r=M.right(this.yaw);let v=M.add(M.mul(f,a.z),M.mul(r,a.x));if(M.len(v)>1)v=M.norm(v);const speed=a.boost?8.5:5.4;let next=M.add(this.position,M.mul(v,dt*speed));if(this.walkable([next[0],1.85,this.position[2]]))this.position[0]=next[0];if(this.walkable([this.position[0],1.85,next[2]]))this.position[2]=next[2];this.walk+=M.len(v)*dt*7;const bob=Math.sin(this.walk)*.024*this.game.settings.shake;this.game.engine.camera={p:[this.position[0],1.85+bob,this.position[2]],yaw:this.yaw,pitch:this.pitch,roll:0,fov:74};this.zone=this.position[2]<-8?'조종실':this.position[2]>28?'전시 복도 · '+this.slots().length+'점':this.position[2]>12?'격납고':'중앙 통로';this.game.ui.setArea('MOTHERSHIP · NØMAD',this.zone);if(input.take('KeyM')){this.game.ui.navigation();return;}let nearest=null,best=Infinity;for(const t of this.interactables){let dist=M.dist(this.position,t.p);const aim=M.dot(M.norm(M.sub(t.p,this.position)),M.dir(this.yaw,this.pitch));if(dist<t.radius&&aim>-.1&&dist<best){nearest=t;best=dist}}this.game.currentInteract=nearest;let hint=nearest?.label||'';const ready=!!nearest&&(nearest.id!=='launch'||this.game.nearPlanet());if(nearest?.id==='launch'&&!ready)hint=this.game.universe.destroyed(this.game.space.target.id)?'목표 행성이 소멸했습니다 · 성도에서 다른 행성을 선택하세요':!this.game.universe.surfaceReady(this.game.space.target.id)?'이 행성은 표면 미개방 · 궤도 탐사와 포격 가능':'행성의 구름층까지 접근한 뒤 탑승할 수 있습니다';this.game.ui.prompt(hint,ready,nearest?.verb||'');if(input.take('KeyE')&&nearest)nearest.action();this.syncOutside();}
+ walkable(p){if(p[2]>26.3){if(p[2]>this.aftLimit)return false;if(Math.abs(p[0])>(p[2]>=this.labStart?8.7:6.1))return false;}if(p[0]<-9.1||p[0]>9.1||p[2]<-22.4||p[2]>this.aftLimit)return false;for(const o of this.solids)if(p[0]>o.min[0]-.25&&p[0]<o.max[0]+.25&&p[2]>o.min[2]-.25&&p[2]<o.max[2]+.25)return false;return true}
+ update(dt,input){const [dx,dy]=input.look();this.yaw-=dx;this.pitch=M.clamp(this.pitch-dy,-1.25,1.25);const a=input.axes();this.yaw-=(input.keys.has('ArrowRight')?1:0)*dt;this.yaw+=(input.keys.has('ArrowLeft')?1:0)*dt;const f=M.dir(this.yaw),r=M.right(this.yaw);let v=M.add(M.mul(f,a.z),M.mul(r,a.x));if(M.len(v)>1)v=M.norm(v);const speed=a.boost?8.5:5.4;let next=M.add(this.position,M.mul(v,dt*speed));if(this.walkable([next[0],1.85,this.position[2]]))this.position[0]=next[0];if(this.walkable([this.position[0],1.85,next[2]]))this.position[2]=next[2];this.walk+=M.len(v)*dt*7;const bob=Math.sin(this.walk)*.024*this.game.settings.shake;this.game.engine.camera={p:[this.position[0],1.85+bob,this.position[2]],yaw:this.yaw,pitch:this.pitch,roll:0,fov:74};this.zone=this.position[2]<-8?'조종실':this.position[2]>=this.labStart?'실험실':this.position[2]>28?'전시 복도 · '+this.slots().length+'점':this.position[2]>12?'격납고':'중앙 통로';this.game.ui.setArea('MOTHERSHIP · NØMAD',this.zone);if(input.take('KeyM')){this.game.ui.navigation();return;}let nearest=null,best=Infinity;for(const t of this.interactables){let dist=M.dist(this.position,t.p);const aim=M.dot(M.norm(M.sub(t.p,this.position)),M.dir(this.yaw,this.pitch));if(dist<t.radius&&aim>-.1&&dist<best){nearest=t;best=dist}}this.game.currentInteract=nearest;let hint=nearest?.label||'';const ready=!!nearest&&(nearest.id!=='launch'||this.game.nearPlanet());if(nearest?.id==='launch'&&!ready)hint=this.game.universe.destroyed(this.game.space.target.id)?'목표 행성이 소멸했습니다 · 성도에서 다른 행성을 선택하세요':!this.game.universe.surfaceReady(this.game.space.target.id)?'이 행성은 표면 미개방 · 궤도 탐사와 포격 가능':'행성의 구름층까지 접근한 뒤 탑승할 수 있습니다';this.game.ui.prompt(hint,ready,nearest?.verb||'');if(input.take('KeyE')&&nearest)nearest.action();this.syncOutside();}
  syncOutside(){
   const s=this.game.space;
   // The same streamed exterior is visible through every window, at the ship's orientation.
@@ -1552,7 +1663,7 @@ class Destroyer{
   const alt=this.p[1]-this.planet.height(this.p[0],this.p[2]);
   if(alt<240)return;
   if(u.cargoFull()){if(this.liftHint<=0){this.liftHint=6;this.game.ui.toast('화물칸이 가득 찼습니다','20명이 한계입니다. 더는 태울 수 없습니다.',4);}return;}
-  u.loadSurvivor();
+  u.loadSurvivor(this.planet.id);
   e.alive=false;e.node.visible=false;
   this.grab=null;this.tension=0;this.planet.stopTether();
   this.game.audio.success();
@@ -2271,7 +2382,7 @@ class Game{
   this.busy=true;this.space.auto=false;this.space.warp=false;this.space.velocity=[0,0,0];this.input.clear();this.input.enabled=false;this.audio.stop();
   try{
    await this.ui.transition(def.name.toUpperCase()+' / '+id.toUpperCase(),'구름 위의 모선에서 출격 · 지표로 강하',async()=>{
-    const Planet=await K.loadPlanet(id);this.activePlanetId=id;this.planet=new Planet(this,def);this.mode='planet';this.ui.mode('planet');this.setEnvironment();this.descent=3.6;
+    const Planet=await K.loadPlanet(id);this.activePlanetId=id;this.planet=new Planet(this,def);K.releaseSurvivors(this);this.mode='planet';this.ui.mode('planet');this.setEnvironment();this.descent=3.6;
    },true);this.ui.toast(def.name+' · 강하 완료','좌클릭 광선 · Q 견인 · F 충격파 · R 언제든 귀환',7);
   }catch(e){this.ui.fatal(e);}finally{this.busy=false;this.input.clear();this.input.enabled=true;}
  }
