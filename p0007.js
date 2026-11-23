@@ -2,7 +2,7 @@
 /* p0007 — a world that is one body. It does not chase. It breathes, watches, flinches, and keeps every wound.
  * Save contract (planetStates.p0007.destroyed):
  *   "y.w." wounds opened from orbit (lat/lon, 4 chars each) · "y.e." burst eyes (index, 2 chars)
- *   "y.t." cut tentacles (index 2 + remaining segments 1) · "y.s." beam scars (x/z, 4 chars) */
+ *   "y.t." cut tentacles (index 2 + remaining segments 1) · "y.s." beam scars (x/z, 4 chars) · "y.f." scars past 808 m (x/z, 6 chars) */
 (function (K) {
   'use strict';
   const { M, mesh, group } = K,
@@ -27,6 +27,8 @@
     return a < 0 || b < 0 ? -1 : a * 36 + b;
   };
   const qxz = v => M.clamp(Math.round((v + 810) / 1.25), 0, 1295);
+  const enc3 = n => B36[Math.floor(n / 1296) % 36] + B36[Math.floor(n / 36) % 36] + B36[n % 36];
+  const qfar = v => M.clamp(Math.round((v + 5832) * 4), 0, 46655);
   function pack(prefix, parts) {
     const out = [];
     let s = '';
@@ -192,6 +194,7 @@
     constructor(game, def) {
       super(game, def, {
         seed: 70707,
+        edge: 2600,
         rulerName: '눈',
         areaLabel: (def.name || ID).toUpperCase() + ' / SURFACE',
         regionName: '지표',
@@ -233,6 +236,12 @@
             const a = dec2(t, i),
               b = dec2(t, i + 2);
             if (a >= 0 && b >= 0) this.scars.push({ x: a * 1.25 - 810, z: b * 1.25 - 810 });
+          }
+        else if (t.startsWith('y.f.'))
+          for (let i = 4; i + 6 <= t.length; i += 6) {
+            const a = dec2(t, i) * 36 + B36.indexOf(t[i + 2]),
+              b = dec2(t, i + 3) * 36 + B36.indexOf(t[i + 5]);
+            if (a >= 0 && b >= 0 && B36.indexOf(t[i + 2]) >= 0 && B36.indexOf(t[i + 5]) >= 0) this.scars.push({ x: a / 4 - 5832, z: b / 4 - 5832 });
           }
       }
       // orbital wounds become open craters; a world bombed before it was known to be alive keeps those too
@@ -314,8 +323,8 @@
     }
     // Finer grid near the landing area, coarser toward the fogged edge.
     makeTerrain() {
-      const N = 170,
-        S = 1600,
+      const N = 200,
+        S = 2900,
         p = [],
         n = [],
         idx = [];
@@ -534,6 +543,66 @@
           if (!free(x, z, 0.5)) continue;
           taken.push([x, z, 0.55]);
           tentacle('small')(x, z);
+        }
+      }
+      // the body goes on past where it was first looked at: more of it, watching, further out
+      // (its own random stream, after everything above, so the numbering of what was there before is kept)
+      {
+        const r2 = M.rand(70077),
+          far = (x, z, r) => {
+            const R = Math.hypot(x, z);
+            if (R < 620 || R > 1550) return false;
+            for (const t of taken) if (Math.hypot(x - t[0], z - t[1]) < t[2] + r) return false;
+            return true;
+          };
+        const scatter = (n, r0, r1, fn, around = null) => {
+          let made = 0;
+          for (let k = 0; made < n && k < n * 50; k++) {
+            const r = r0 + r2() * (r1 - r0);
+            let x, z;
+            if (around && around.length && r2() < 0.55) {
+              const o = around[(r2() * around.length) | 0],
+                a = r2() * TAU,
+                d = o.r * 1.6 + 2 + r2() * 14;
+              x = o.x + Math.sin(a) * d;
+              z = o.z + Math.cos(a) * d;
+            } else {
+              const a = r2() * TAU,
+                d = 640 + Math.sqrt(r2()) * 900;
+              x = Math.sin(a) * d;
+              z = Math.cos(a) * d;
+            }
+            if (!far(x, z, r * 1.25)) continue;
+            taken.push([x, z, r * 1.15]);
+            fn(x, z, r);
+            made++;
+          }
+        };
+        const outer = () => this.eyes.filter(e => (e.cls === 'large' || e.cls === 'giant') && Math.hypot(e.x, e.z) > 620);
+        scatter(9, 11, 16, eye('giant'));
+        scatter(90, 3.5, 7, eye('large'));
+        scatter(16, 6, 13, pore);
+        scatter(14, 7, 9, tentacle('giant'));
+        scatter(170, 1.8, 2.6, tentacle('medium'), outer());
+        scatter(320, 1.2, 2.6, eye('medium'), outer());
+        for (let k = 0; k < 110; k++) {
+          const a = r2() * TAU,
+            d = 650 + Math.sqrt(r2()) * 880,
+            cx = Math.sin(a) * d,
+            cz = Math.cos(a) * d,
+            worms = k % 2 === 1,
+            n = 6 + ((r2() * 6) | 0);
+          for (let j = 0; j < n; j++) {
+            const b = r2() * TAU,
+              q = 0.8 + r2() * 5,
+              r = 0.35 + r2() * 0.6,
+              x = cx + Math.sin(b) * q,
+              z = cz + Math.cos(b) * q;
+            if (!far(x, z, worms ? 0.5 : r)) continue;
+            taken.push([x, z, worms ? 0.55 : r * 1.05]);
+            if (worms) tentacle('small')(x, z);
+            else eye('small')(x, z, r);
+          }
         }
       }
       // what the missiles opened took whatever stood there; what the beam burst stays burst
@@ -1255,7 +1324,11 @@
       const out = [];
       out.push(...pack('y.e.', this.eyes.filter(e => e.burst && !this.inCrater(e)).map(e => enc2(e.i))));
       out.push(...pack('y.t.', this.tentacles.filter(t => t.cut < t.n && !this.inCrater(t)).map(t => enc2(t.i) + B36[t.cut])));
-      out.push(...pack('y.s.', (this.scarList || []).slice(-112).map(s => enc2(qxz(s.x)) + enc2(qxz(s.z)))));
+      const scars = (this.scarList || []).slice(-112),
+        near = s => Math.abs(s.x) <= 808 && Math.abs(s.z) <= 808;
+      out.push(...pack('y.s.', scars.filter(near).map(s => enc2(qxz(s.x)) + enc2(qxz(s.z)))));
+      // the wider ground: scars past 808 m keep three characters a coordinate
+      out.push(...pack('y.f.', scars.filter(s => !near(s)).map(s => enc3(qfar(s.x)) + enc3(qfar(s.z)))));
       const st = this.game.save.data.planetStates[ID];
       for (const t of st?.destroyed || []) if (typeof t === 'string' && t.startsWith('y.w.')) out.push(t);
       return out;

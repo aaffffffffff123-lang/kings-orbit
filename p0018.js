@@ -2,10 +2,11 @@
 /* p0018 — heaven. A city of gold floating over a sea of cloud, a throne at its centre and someone sitting on it.
  * Nothing here can hurt the ship. While the one on the throne keeps his head, no one here is afraid.
  * Save contract (planetStates.p0018.destroyed):
- *   mansions "m<block>-<n>" (shared building rules) · "h.a." fallen angels (index, 2 chars)
+ *   mansions "n<block>-<n>" (shared building rules; "m<block>-<n>" from the smaller city are moved onto the nearest "n" house on load) · "h.a." fallen angels (index, 2 chars)
  *   "h.p." where those who fell from the air came down (index 2 · x 2 · z 2 · yaw 1)
  *   "h.t." felled trees of life (index 2) · "h.w." broken wall segments (index 2) · "h.r.1" the rainbow broken
- *   angel index: gate 0–11 · seraphim 12–17 · living creatures 20–23 · wheels 24–27 · elders 28–51 · host 52–75 */
+ *   angel index: gate 0–11 · seraphim 12–17 · living creatures 20–23 · wheels 24–27 · elders 28–51 · host 52–75, 76–93
+ *   tree index: 0–12 west, 13–25 east (the first thirteen a side), then 26… west and the rest east as the river grew */
 (function (K) {
   'use strict';
   const { M, mesh, group } = K,
@@ -38,8 +39,9 @@
   /* ---------- the city's measure ---------- */
   const CX = 0,
     CZ = -40, // the throne stands at the centre of the city
-    HALF = 300, // walls on every side
-    EDGE = 330, // the ledge outside the walls ends here, and then nothing
+    HALF = 450, // walls on every side
+    EDGE = 480, // the ledge outside the walls ends here, and then nothing
+    STREET = 225, // the side gates stand halfway between the corner and the middle gate; the streets run through them
     DEPTH = 72, // twelve foundations, six metres each
     CLOUD_Y = -150,
     ABYSS = -1000,
@@ -48,6 +50,7 @@
     GATE_W = 26,
     HEAD_Y = 40;
   const THRONE = [CX, CZ];
+  const TREES = Math.floor((CZ + HALF - 14 - 66) / 15) + 1; // thirteen a side when the walls stood at 300
   const SEA = { x: 0, z: 22, r: 32 }; // the sea of glass before the throne
   const RIVER = { w: 12, z0: SEA.z + SEA.r, z1: CZ + EDGE };
   const GOLD = '#e7b646',
@@ -442,14 +445,14 @@
         const at = u => [side.c[0] + along[0] * u, side.c[1] + along[1] * u];
         // wall segments between the corners and the gates
         const spans = [
-          [-HALF, -150 - GATE_W / 2],
-          [-150 + GATE_W / 2, -GATE_W / 2],
-          [GATE_W / 2, 150 - GATE_W / 2],
-          [150 + GATE_W / 2, HALF],
+          [-HALF, -STREET - GATE_W / 2],
+          [-STREET + GATE_W / 2, -GATE_W / 2],
+          [GATE_W / 2, STREET - GATE_W / 2],
+          [STREET + GATE_W / 2, HALF],
         ];
         for (const [u0, u1] of spans) this.wallSegment(seg++, at((u0 + u1) / 2), along, u1 - u0);
         for (let k = 0; k < 3; k++) {
-          const u = (k - 1) * 150,
+          const u = (k - 1) * STREET,
             [x, z] = at(u);
           this.gates.push({ x, z, n: side.n, along, river: si === 0 && k === 1 });
           this.gate(x, z, along, side.n);
@@ -465,54 +468,83 @@
           mesh(root, 'sphere', [x, WALL_H * 1.2 + 4.5, z], [6, 6, 6], PEARL, { em: 0.35 });
           this.solids.push({ min: [x - 9, 0, z - 9], max: [x + 9, WALL_H * 1.2 + 7, z + 9] });
         }
-      // the mansions: four by four blocks between the streets, three by three houses in each
+      // the mansions: four by four blocks between the streets, four by four houses in each
+      const plan = this.mansionPlan(HALF, STREET, 4, 'n');
+      // a save from the smaller city: a house broken there breaks the one standing where it stood, moved out with the walls
+      const before = [...this.destroyed].filter(t => /^m\d+-\d$/.test(t));
+      if (before.length) {
+        const was = new Map(this.mansionPlan(300, 150, 3, 'm').map(m => [m.id, m]));
+        for (const t of before) {
+          this.destroyed.delete(t);
+          const m = was.get(t);
+          if (!m) continue;
+          const x = CX + (m.x - CX) * (HALF / 300),
+            z = CZ + (m.z - CZ) * (HALF / 300);
+          let best = null,
+            bd = 60;
+          for (const n of plan) {
+            const d = Math.hypot(n.x - x, n.z - z);
+            if (d < bd && !this.destroyed.has(n.id)) {
+              bd = d;
+              best = n;
+            }
+          }
+          if (best) this.destroyed.add(best.id);
+        }
+      }
+      for (const m of plan) this.mansion(m.id, m.x, m.z, m.w, m.h, m.style, m.jewel, m.face);
+    }
+    // where the houses stand for a city of this size: blocks between the streets, per × per houses in each
+    mansionPlan(half, g, per, prefix) {
       const xs = [
-          [-HALF, -150],
-          [-150, 0],
-          [0, 150],
-          [150, HALF],
+          [-half, -g],
+          [-g, 0],
+          [0, g],
+          [g, half],
         ],
         zs = [
-          [CZ - HALF, CZ - 150],
-          [CZ - 150, CZ],
-          [CZ, CZ + 150],
-          [CZ + 150, CZ + HALF],
+          [CZ - half, CZ - g],
+          [CZ - g, CZ],
+          [CZ, CZ + g],
+          [CZ + g, CZ + half],
         ];
       const margin = (v, wall, main) => (v === wall ? 18 : v === main ? (main === 0 ? 38 : 22) : 15);
+      const out = [];
       let bi = 0;
       for (const [z0, z1] of zs)
         for (const [x0, x1] of xs) {
-          const mx0 = x0 + margin(x0, -HALF, 0),
-            mx1 = x1 - margin(x1, HALF, 0),
-            mz0 = z0 + margin(z0, CZ - HALF, CZ),
-            mz1 = z1 - margin(z1, CZ + HALF, CZ);
-          for (let r = 0; r < 3; r++)
-            for (let c = 0; c < 3; c++) {
-              const id = 'm' + bi + '-' + (r * 3 + c),
+          const mx0 = x0 + margin(x0, -half, 0),
+            mx1 = x1 - margin(x1, half, 0),
+            mz0 = z0 + margin(z0, CZ - half, CZ),
+            mz1 = z1 - margin(z1, CZ + half, CZ);
+          for (let r = 0; r < per; r++)
+            for (let c = 0; c < per; c++) {
+              const id = prefix + bi + '-' + (r * per + c),
                 roll = this.idRoll(id, '/style'),
                 style = roll < 0.42 ? 'house' : roll < 0.84 ? 'villa' : 'tower',
                 w = style === 'tower' ? 11 + this.idRoll(id, '/w') * 4 : 14 + this.idRoll(id, '/w') * 8,
                 h = style === 'tower' ? 34 + this.idRoll(id, '/h') * 16 : 13 + this.idRoll(id, '/h') * 15;
-              const x = mx0 + ((c + 0.5) * (mx1 - mx0)) / 3 + (this.idRoll(id, '/x') - 0.5) * 5,
-                z = mz0 + ((r + 0.5) * (mz1 - mz0)) / 3 + (this.idRoll(id, '/z') - 0.5) * 5;
+              const x = mx0 + ((c + 0.5) * (mx1 - mx0)) / per + (this.idRoll(id, '/x') - 0.5) * 5,
+                z = mz0 + ((r + 0.5) * (mz1 - mz0)) / per + (this.idRoll(id, '/z') - 0.5) * 5;
               if (Math.hypot(x - THRONE[0], z - THRONE[1]) < 112 + w * 0.6) continue;
               // face the nearest street
               let face = 0,
                 best = 1e9;
-              for (const ax of [-150, 0, 150])
+              for (const ax of [-g, 0, g])
                 if (Math.abs(x - ax) < best) {
                   best = Math.abs(x - ax);
                   face = x > ax ? -Math.PI / 2 : Math.PI / 2;
                 }
-              for (const az of [CZ - 150, CZ, CZ + 150])
+              for (const az of [CZ - g, CZ, CZ + g])
                 if (Math.abs(z - az) < best) {
                   best = Math.abs(z - az);
                   face = z > az ? Math.PI : 0;
                 }
-              this.mansion(id, x, z, w, h, style, JEWELS[(this.idRoll(id, '/j') * 12) | 0], face);
+              out.push({ id, x, z, w, h, style, jewel: JEWELS[(this.idRoll(id, '/j') * 12) | 0], face });
             }
           bi++;
         }
+      return out;
     }
     wallSegment(i, [x, z], along, len) {
       const root = this.root,
@@ -734,6 +766,8 @@
       for (let i = 0; i < 24; i++) this.addAngel(this.elder(28 + i));
       const rng = M.rand(5252);
       for (let i = 0; i < 24; i++) this.addAngel(this.host(52 + i, rng));
+      // more of the host, over the wider city
+      for (let i = 0; i < 18; i++) this.addAngel(this.host(76 + i, rng));
     }
     addAngel(a) {
       a.kind = 'angel';
@@ -1059,7 +1093,7 @@
         p: g.p,
         radius: 2.4,
         hp: 60,
-        c: [CX + (rng() - 0.5) * 380, CZ + (rng() - 0.5) * 380],
+        c: [CX + (rng() - 0.5) * 600, CZ + (rng() - 0.5) * 600],
         R: 70 + rng() * 110,
         alt: 75 + rng() * 95,
         w: (0.1 + rng() * 0.13) * (rng() < 0.5 ? -1 : 1),
@@ -1072,10 +1106,12 @@
     residentSpec() {
       return {
         species: 'saved',
-        count: 440,
+        count: 1000,
         seed: 1818,
         center: [CX, CZ],
-        radius: 280,
+        radius: 430,
+        maxR: 680,
+        cap: 1100,
         minR: 104,
         road: { x: 30, z0: RIVER.z0 + 6, z1: CZ + HALF - 12 },
         throne: THRONE,
@@ -1115,7 +1151,7 @@
       // around the trunks of the trees by the river
       if (p[2] > RIVER.z0 && Math.abs(Math.abs(p[0]) - 14.5) < 2.2) {
         const k = Math.round((p[2] - 66) / 15);
-        if (k >= 0 && k < 13) {
+        if (k >= 0 && k < TREES) {
           const tz = 66 + k * 15,
             tx = Math.sign(p[0] || 1) * 14.5,
             dx = p[0] - tx,
@@ -1140,10 +1176,10 @@
       this.treeStore = { taper: make('taper'), lowSphere: make('lowSphere'), tinySphere: make('tinySphere') };
       this.featherBatch = make('lowSphere', { capacity: 256 });
       this.markBatch = make('lowDisc', { transparent: true, capacity: 64 });
-      let n = 0;
+      // the first thirteen a side keep the numbers they always had; the river is longer now and more stand along it
       for (const side of [-1, 1])
-        for (let k = 0; k < 13; k++) {
-          const i = n++,
+        for (let k = 0; k < TREES; k++) {
+          const i = k < 13 ? (side < 0 ? 0 : 13) + k : 26 + (side < 0 ? 0 : TREES - 13) + (k - 13),
             x = side * 14.5,
             z = 66 + k * 15;
           const t = {
@@ -1420,6 +1456,11 @@
     }
 
     /* ---------- weapons against it ---------- */
+    grabCandidates() {
+      const out = super.grabCandidates();
+      for (const a of this.angels) if (a.alive && !a.dying && !a.fixed) out.push(a);
+      return out;
+    }
     raycast(origin, dir, max = 230) {
       const base = super.raycast(origin, dir, max);
       let dist = base ? base.distance : max,

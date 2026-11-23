@@ -116,6 +116,7 @@
     constructor(game, def) {
       super(game, def, {
         seed: 61180,
+        edge: 2600,
         rulerName: '균사 여왕',
         areaLabel: 'MYCEL / SURFACE',
         regionName: '살아 있는 군락',
@@ -135,7 +136,7 @@
       this.initialize();
     }
     makeTerrain() {
-      this.terrain(C.soil);
+      this.terrain(C.soil, 6200, 200);
       for (let i = 0; i < 14; i++) {
         const x = (this.rng() - 0.5) * 950,
           z = (this.rng() - 0.5) * 870;
@@ -264,6 +265,20 @@
           mesh(n, 'torus', [0, 1, 0], [1.7, 1.7, 1.7], C.stem);
         });
       }
+      // colonies grown out over the rest of the soil, each round an elder
+      this.outskirts({
+        n: 7,
+        seed: 6107,
+        rMin: 560,
+        rMax: 1500,
+        plinth: C.dark,
+        build: (id, x, z, rng, i) =>
+          i === 0
+            ? this.fungus(id, x, z, 22, 34 + rng() * 10, 'elder')
+            : i % 5 === 3
+              ? this.fungus(id, x, z, 10, 15, 'spore')
+              : this.fungus(id, x, z, 9 + rng() * 8, 10 + rng() * 12, 'home'),
+      });
     }
     makeRuler() {
       const base = group(this.root, [0, 0, -150]),
@@ -300,7 +315,9 @@
     residentSpec() {
       return {
         species: 'mycel',
-        count: 300,
+        count: 520,
+        maxR: 1560,
+        villages: this.villages,
         seed: 6118,
         center: [0, -60],
         radius: 240,
@@ -330,6 +347,19 @@
           y = 8 + this.rng() * 110,
           n = mesh(this.root, 'lowSphere', [x, y, z], [0.5, 0.65, 0.5], C.light, { em: 0.7 });
         this.floating.push({ node: n, base: n.p.slice(), phase: this.rng() * 6.283 });
+      }
+      // the giant caps go on to the horizon
+      const r2 = M.rand(6203);
+      for (let i = 0; i < 150; i++) {
+        const a = r2() * 6.283,
+          r = 850 + Math.sqrt(r2()) * 1500,
+          x = Math.sin(a) * r,
+          z = Math.cos(a) * r;
+        if (this.villages.some(v => Math.hypot(v.x - x, v.z - z) < 120)) continue;
+        const h = 75 + r2() * 160,
+          n = group(this.root, [x, this.height(x, z), z]);
+        mesh(n, 'lowCyl', [0, h * 0.5, 0], [10, h, 10], C.stem);
+        mesh(n, 'lowDome', [0, h * 0.91, 0], [75 + r2() * 50, h * 0.23, 80], i % 3 ? C.cap : C.dark);
       }
     }
     onCollapse(b) {

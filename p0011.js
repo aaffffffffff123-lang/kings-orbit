@@ -97,6 +97,7 @@
     constructor(game, def) {
       super(game, def, {
         seed: 90241,
+        edge: 2600,
         rulerName: '용광로 군주',
         areaLabel: 'CINDER / SURFACE',
         regionName: '주조 지대',
@@ -115,7 +116,7 @@
       return super.height(x, z) * 1.4;
     }
     makeTerrain() {
-      this.terrain(C.ground);
+      this.terrain(C.ground, 6200, 200);
       for (const s of [-1, 1])
         for (let i = 0; i < 21; i++) {
           const z = 530 - i * 55,
@@ -197,6 +198,20 @@
           mesh(n, 'cylinder', [0, 1, 0], [3.1, 0.4, 3.1], C.dark);
         });
       }
+      // outlying works: a pressure vessel in the middle of each, foundries round it, vents between
+      this.outskirts({
+        n: 7,
+        seed: 1107,
+        rMin: 560,
+        rMax: 1500,
+        plinth: C.dark,
+        build: (id, x, z, rng, i) =>
+          i === 0
+            ? this.facility(id, x, z, 17, 25, 'tank')
+            : i % 4 === 2
+              ? this.facility(id, x, z, 7, 12 + rng() * 8, 'pipe')
+              : this.facility(id, x, z, 18 + rng() * 8, 18 + rng() * 20),
+      });
     }
     makeRuler() {
       const base = group(this.root, [0, 0, -153]),
@@ -225,7 +240,9 @@
     residentSpec() {
       return {
         species: 'cinder',
-        count: 280,
+        count: 480,
+        maxR: 1560,
+        villages: this.villages,
         seed: 9024,
         center: [0, -30],
         radius: 220,
@@ -257,6 +274,18 @@
           z = (this.rng() - 0.5) * 1000;
         const n = mesh(this.root, 'lowSphere', [x, 70 + this.rng() * 220, z], [0.5, 0.5, 0.5], C.hot, { em: 0.8 });
         this.animated.push({ node: n, base: n.p.slice(), phase: this.rng() * 6.283 });
+      }
+      // basalt columns out to the horizon
+      const r2 = M.rand(1203);
+      for (let i = 0; i < 160; i++) {
+        const a = r2() * 6.283,
+          r = 950 + Math.sqrt(r2()) * 1450,
+          x = Math.sin(a) * r,
+          z = Math.cos(a) * r;
+        if (this.villages.some(v => Math.hypot(v.x - x, v.z - z) < 110)) continue;
+        const h = 35 + r2() * 110,
+          n = mesh(this.root, 'hex', [x, this.height(x, z) + h * 0.5, z], [25 + r2() * 30, h, 25 + r2() * 30], i % 3 ? C.dark : C.hull);
+        n.r[1] = r2() * 6.283;
       }
     }
     onCollapse(b) {

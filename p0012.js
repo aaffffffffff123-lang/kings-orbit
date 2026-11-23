@@ -105,6 +105,7 @@
     constructor(game, def) {
       super(game, def, {
         seed: 71293,
+        edge: 2600,
         rulerName: '수정 섭정',
         areaLabel: 'NACRE / SURFACE',
         regionName: '공명 도시',
@@ -123,7 +124,7 @@
       this.initialize();
     }
     makeTerrain() {
-      this.terrain(C.ground);
+      this.terrain(C.ground, 6200, 200);
       // Opaque shallow mineral sheets, not a full-screen transparent plane.
       for (let i = 0; i < 9; i++) {
         const x = ((i % 3) - 1) * 255 - 40,
@@ -232,6 +233,20 @@
           mesh(n, 'cone', [0, 2, 0], [2.2, 2, 2.2], C.accent);
         });
       }
+      // crystal hamlets round a resonator each: break one and its neighbours go with it
+      this.outskirts({
+        n: 7,
+        seed: 1207,
+        rMin: 560,
+        rMax: 1500,
+        plinth: C.dark,
+        build: (id, x, z, rng, i) =>
+          i === 0
+            ? this.crystal(id, x, z, 14, 63, 'resonator')
+            : i % 5 === 4
+              ? this.crystal(id, x, z, 7, 20 + rng() * 10, 'shard')
+              : this.crystal(id, x, z, 10 + rng() * 8, 22 + rng() * 34),
+      });
     }
     makeRuler() {
       const base = group(this.root, [0, this.height(0, -145), -145]),
@@ -263,7 +278,9 @@
     residentSpec() {
       return {
         species: 'nacre',
-        count: 310,
+        count: 520,
+        maxR: 1560,
+        villages: this.villages,
         seed: 7129,
         center: [0, -60],
         radius: 230,
@@ -284,6 +301,20 @@
         const g = group(this.root, [x, this.height(x, z), z]);
         g.r[2] = (this.rng() - 0.5) * 0.35;
         mesh(g, 'hex', [0, h * 0.3, 0], [12 + this.rng() * 15, h * 0.6, 15], i % 2 ? C.dark : C.violet);
+        mesh(g, 'cone', [0, h * 0.78, 0], [23, h * 0.65, 20], C.stone);
+      }
+      // spires of crystal stand on to the horizon
+      const r2 = M.rand(1209);
+      for (let i = 0; i < 150; i++) {
+        const a = r2() * 6.283,
+          r = 800 + Math.sqrt(r2()) * 1550,
+          x = Math.sin(a) * r,
+          z = Math.cos(a) * r;
+        if (this.villages.some(v => Math.hypot(v.x - x, v.z - z) < 110)) continue;
+        const h = 24 + r2() * 110,
+          g = group(this.root, [x, this.height(x, z), z]);
+        g.r[2] = (r2() - 0.5) * 0.35;
+        mesh(g, 'hex', [0, h * 0.3, 0], [12 + r2() * 15, h * 0.6, 15], i % 2 ? C.dark : C.violet);
         mesh(g, 'cone', [0, h * 0.78, 0], [23, h * 0.65, 20], C.stone);
       }
     }

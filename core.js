@@ -190,22 +190,42 @@ layout(location=5) in vec4 i3;
 layout(location=6) in vec4 iColor;
 layout(location=7) in vec4 iProps;
 uniform mat4 uVP;uniform float uShadow;uniform vec3 uSun;uniform vec3 uCamera;uniform vec4 uLife;uniform float uTime;
-out vec3 vWorld;out vec3 vNormal;out vec3 vLocal;out vec4 vColor;out vec4 vProps;out vec3 vCam;
+out vec3 vWorld;out vec3 vNormal;out vec3 vLocal;out vec4 vColor;out vec4 vProps;out vec3 vCam;out float vAO;
 float beatShape(float b){return exp(-fract(b)*9.)+.55*exp(-fract(b-.27)*9.);}
-void main(){mat4 model=mat4(i0,i1,i2,i3);vec4 w=model*vec4(aPos,1.0);vCam=vec3(0.);
+void main(){mat4 model=mat4(i0,i1,i2,i3);vec3 ap=aPos,an=aNormal;
+float fph=0.;if(iProps.y>33.5&&iProps.y<34.5){fph=uTime*(.7+fract(iProps.w*7.31)*.9)+iProps.w*6.2832;float cp=cos(fph),sp=sin(fph);ap.yz=vec2(cp*ap.y-sp*ap.z,sp*ap.y+cp*ap.z);an.yz=vec2(cp*an.y-sp*an.z,sp*an.y+cp*an.z);}
+if(iProps.y>35.5&&iProps.y<36.5){
+ // a crawling bug: legs (normal length 2..3.25) swing in two tripods, antennae (4..4.25) wave, cerci (5) twitch
+ float NL=length(an),gs=iProps.z,g=uTime*gs*6.2832+iProps.w*6.2832,mv=step(.01,gs);
+ if(NL>1.5&&NL<3.6){
+  float id=floor((NL-2.)*4.+.5),side=id<2.5?1.:-1.,k=mod(id,3.);
+  float ph=g+((mod(k,2.)<.5)==(side>0.)?0.:3.1416);
+  vec2 root=vec2(side*.14,k<.5?.18:k<1.5?.02:-.1),d=ap.xz-root;
+  float sw=sin(ph)*.38*mv,cs=cos(sw),sn=sin(sw);
+  ap.xz=root+vec2(cs*d.x-sn*d.y,sn*d.x+cs*d.y);
+  ap.y+=max(0.,cos(ph))*.12*length(d)*mv;
+ } else if(NL>3.6&&NL<4.6){
+  float sa=max(ap.z-.4,0.);
+  ap.x+=sin(uTime*(6.+mv*9.)+iProps.w*13.+(NL-4.)*20.)*.12*sa*sa*2.5;
+  ap.y+=sin(uTime*4.6+iProps.w*7.+(NL-4.)*9.)*.07*sa;
+ } else if(NL>4.6){ap.x+=sin(uTime*9.+iProps.w*5.)*.02;}
+ ap.y+=sin(g*2.)*.006*mv;
+}
+vec4 w=model*vec4(ap,1.0);vCam=vec3(0.);
 if(iProps.y>18.5&&iProps.y<19.5)vCam=(inverse(model)*vec4(uCamera,1.)).xyz;
 if(iProps.y>8.5&&iProps.y<9.5){float wave=sin(w.x*.011+uLife.x)*cos(w.z*.009-uLife.x*.71);w.y+=wave*1.6+sin(uLife.x)*1.25+beatShape(uLife.y)*uLife.z+sin(w.x*.37+uLife.x*47.)*sin(w.z*.31-uLife.y*41.)*uLife.w;}
 if(iProps.y>28.5&&iProps.y<29.5){float h=clamp(aPos.y+.5,0.,1.);float sx=length(model[0].xyz);w.x+=sin(uTime*7.3+iProps.w*13.+w.y*.7)*h*h*.24*sx;w.z+=cos(uTime*6.1+iProps.w*7.+w.y*.6)*h*h*.24*sx;}
 if(iProps.y>29.5&&iProps.y<30.5){float sp=floor(iProps.w);float ph=fract(iProps.w);float f=fract(uTime*sp*.1+ph);w.y-=f*iProps.z;w.x+=sin(uTime*1.7+ph*40.)*.9*f;w.z+=cos(uTime*1.3+ph*31.)*.9*f;}
 if(iProps.y>31.5&&iProps.y<32.5){float a=uTime*iProps.z;float c=cos(a),s=sin(a);w.xz=vec2(c*w.x+s*w.z,-s*w.x+c*w.z);}
-if(uShadow>.5){w.x-=uSun.x/uSun.y*w.y;w.z-=uSun.z/uSun.y*w.y;w.y=.048;}vWorld=w.xyz;vLocal=aPos;mat3 n=mat3(model);vNormal=normalize(n*(aNormal/vec3(dot(n[0],n[0]),dot(n[1],n[1]),dot(n[2],n[2]))));vColor=iColor;vProps=iProps;gl_Position=uVP*w;}`;
+if(iProps.y>33.5&&iProps.y<34.5){float rr=3.+fract(iProps.w*3.17)*8.;vec2 dir=normalize(model[3].xz+vec2(1e-4));w.xz+=dir*cos(fph)*rr;w.y+=sin(fph)*rr*.85;float a=uTime*iProps.z;float c=cos(a),s=sin(a);w.xz=vec2(c*w.x+s*w.z,-s*w.x+c*w.z);}
+if(uShadow>.5){w.x-=uSun.x/uSun.y*w.y;w.z-=uSun.z/uSun.y*w.y;w.y=.048;}vWorld=w.xyz;vLocal=aPos;vAO=length(aNormal);mat3 n=mat3(model);vNormal=normalize(n*(an/vec3(dot(n[0],n[0]),dot(n[1],n[1]),dot(n[2],n[2]))));vColor=iColor;vProps=iProps;gl_Position=uVP*w;}`;
   const noiseGL = `float hash(vec3 p){p=fract(p*.3183099+.1);p*=17.;return fract(p.x*p.y*p.z*(p.x+p.y+p.z));}
 float noise(vec3 x){vec3 i=floor(x),f=fract(x);f=f*f*(3.-2.*f);return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z);}
 float fbm(vec3 p){return noise(p)*.53+noise(p*2.03)*.27+noise(p*4.13)*.13+noise(p*8.37)*.07;}`;
   const fragment = `#version 300 es
 precision highp float;
 in vec3 vWorld;in vec3 vNormal;in vec3 vLocal;in vec4 vColor;in vec4 vProps;
-in vec3 vCam;
+in vec3 vCam;in float vAO;
 uniform vec3 uCamera,uSun,uFog,uTint;uniform float uFogD,uTime,uAmbient,uShadow,uSunK;uniform vec4 uLife;uniform vec4 uWounds[12];out vec4 outColor;
 ${noiseGL}
 vec2 vor(vec2 p){vec2 i=floor(p),f=fract(p);float d1=8.,d2=8.;for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){vec2 o=vec2(float(x),float(y));vec2 h=vec2(hash(vec3(i+o,1.)),hash(vec3(i+o,7.)));vec2 r=o+h-f;float d=dot(r,r);if(d<d1){d2=d1;d1=d;}else if(d<d2)d2=d;}return vec2(sqrt(d1),sqrt(d2));}
@@ -444,6 +464,52 @@ if(type>29.5&&type<30.5){
  float fk=1.-exp(-dist*uFogD);
  outColor=vec4(mix(col*(1.+em),uFog,fk),a);return;
 }
+if(type>35.5&&type<36.5){
+ // amber chitin: light comes through it; a glossy shell, the abdomen banded, the legs darker
+ vec3 q=vLocal;
+ float leg=step(.3,abs(q.x))+step(q.y,.035)*step(.14,abs(q.x))+step(.5,q.z);
+ float band=smoothstep(.32,.5,abs(fract(q.z*11.)-.5))*step(q.z,.08)*step(.05,q.y);
+ col*=mix(1.,.62,band)*mix(1.,.55,clamp(leg,0.,1.));
+ col*=mix(.82,1.12,noise(q*14.+vProps.w));
+ float thru=pow(max(dot(-N,L),0.),1.4)*.75+pow(1.-max(dot(N,V),0.),2.)*.4;
+ glowAdd+=col*vec3(1.,.62,.22)*(thru*1.15+.12)*(1.-clamp(leg,0.,1.)*.6);
+ wet=7.;
+}
+if(type>36.5&&type<37.5){
+ // a splat on the ground: ragged edge, flung drops, darker where it was thickest
+ vec2 q=vLocal.xz*2.;float r=length(q),an=atan(q.y,q.x);
+ float edge=.62+.25*noise(vec3(an*2.2,vProps.w,0.))+.13*noise(vec3(an*7.,vProps.w*3.,1.));
+ float drops=step(.78,noise(vec3(q*7.,vProps.w)))*step(r,.98);
+ float a=max(step(r,edge),drops);
+ if(a<.5)discard;
+ float rim=smoothstep(edge*.35,edge,r);col=mix(col*.6,col*vec3(2.3,2.,1.2)+vec3(.06,.05,0.),rim*.85)*mix(.85,1.1,noise(vec3(q*9.,vProps.w)));
+ wet=5.;N=normalize(N+vec3(noise(vec3(q*12.,2.))-.5,0.,noise(vec3(q*12.,5.))-.5)*.6);nd=max(dot(N,L),0.);
+}
+if(type>37.5&&type<38.5){
+ // an ice world thawing round the domes: wet soil and moss inside the warm ring, snow and blue ice beyond it
+ float rad=length(vWorld.xz),thaw=vProps.z;
+ float n1=fbm(vWorld*.006),n2=noise(vWorld*.11),n3=fbm(vWorld*.035+3.);
+ float edge=thaw+(n1-.5)*190.;
+ float snow=smoothstep(edge-36.,edge+28.,rad);
+ vec3 soil=mix(vec3(.2,.155,.11),vec3(.33,.26,.17),n2);
+ soil=mix(soil,vec3(.26,.38,.13),smoothstep(.52,.7,n3)*.85);
+ vec3 sn=mix(vec3(.74,.81,.9),vec3(.97,.98,1.),n2*.8+.2);
+ sn=mix(sn,vec3(.5,.64,.8),smoothstep(.6,.78,fbm(vWorld*.017+7.))*.55);
+ float slush=smoothstep(edge-36.,edge,rad)*(1.-snow);
+ col=mix(mix(soil,vec3(.42,.42,.4),slush*.6),sn,snow);
+ float rock=smoothstep(.82,.6,N.y);col=mix(col,vec3(.19,.2,.23),rock*.85);
+ wet=mix(3.2,1.6,snow)+slush*3.;
+ float sparkle=step(.985,noise(vWorld*2.7+uCamera*.05))*snow*(1.-smoothstep(20.,90.,dist));glowAdd+=vec3(.7,.8,1.)*sparkle;
+}
+if(type>34.5&&type<35.5){
+ // a sheet of wind: streaks of grit drawn round the pit, thinning out at its top and bottom
+ float ang=atan(vWorld.x,vWorld.z),rad=length(vWorld.xz);
+ float u=ang*rad*.013-uTime*vProps.z,v=vWorld.y*.15;
+ float st=noise(vec3(u,v,vProps.w))*.55+noise(vec3(u*2.6,v*2.2+u*.3,vProps.w+3.))*.3+noise(vec3(u*6.,v*5.,vProps.w+7.))*.15;
+ float a=alpha*smoothstep(.42,.82,st)*(1.-smoothstep(.3,.5,abs(vLocal.y)));
+ float fk=1.-exp(-dist*uFogD);
+ outColor=vec4(mix(col*(uAmbient*uTint*.8+em),uFog,fk*.8),a);return;
+}
 if(type>31.5&&type<32.5){
  float fk=1.-exp(-dist*uFogD);
  outColor=vec4(mix(col*(1.+em),uFog,fk),alpha*(.55+.45*noise(vec3(vWorld*.05+uTime*.2))));return;
@@ -486,6 +552,38 @@ if(type>8.5&&type<9.5){
  col=skin;
  wet=2.3+crease*1.4+wound*3.;
 }
+float ao=1.;
+if(type>32.5&&type<33.5){
+ // sculpted bodies: the occlusion measured on the shape comes in through the normal's length
+ ao=clamp(vAO,0.,1.);float det=vProps.z;vec3 q=vLocal;float sd=vProps.w;
+ float m1=fbm(q*.045+sd),m2=noise(q*.31+sd*3.);
+ if(det<.5){
+  col*=mix(.74,1.13,m1)*(.93+.14*m2);
+  float v1=1.-smoothstep(.0,.035,abs(noise(q*.085+vec3(3.,sd,1.))-.5));
+  col=mix(col,col*vec3(.62,.7,.98),v1*.3*smoothstep(.55,.95,ao));
+  col=mix(col*vec3(1.1,.72,.66),col,smoothstep(.25,.85,ao));
+  nd=max((dot(N,L)+.4)/1.4,0.);wet=1.6;
+ } else if(det<1.5){
+  vec2 c=vor(q.xz*.42+vec2(q.y*.31,-q.y*.27));float crack=1.-smoothstep(.0,.09,c.y-c.x);
+  col*=mix(.7,1.12,m1)*(1.-crack*.55);
+  float fur=noise(vec3(q.x*1.7,q.y*.22,q.z*1.7)+sd);col*=.8+.35*fur;
+  nd=max((dot(N,L)+.2)/1.2,0.);wet=1.1+crack;
+ } else if(det<2.5){
+  float s1=noise(vec3(q.x*2.6,q.y*.18,q.z*2.6)+sd),s2=noise(vec3(q.x*7.,q.y*.5,q.z*7.)+sd*2.);
+  col*=.48+.62*s1+.22*s2;wet=2.6;
+ } else if(det<3.5){
+  float rings=sin((q.y+noise(q*.6)*1.4)*9.)*.5+.5;col*=.75+.3*rings;wet=3.5;
+ } else {
+  // one head, three faces: red in front, pale towards -x, black towards +x, the hide behind and over the crown
+  float az=atan(q.x,q.z);
+  vec3 fc=az<0.?mix(vec3(.66,.09,.06),vec3(.85,.79,.55),smoothstep(.6,1.,-az)):mix(vec3(.66,.09,.06),vec3(.11,.086,.082),smoothstep(.6,1.,az));
+  fc=mix(fc,col,smoothstep(2.15,2.55,abs(az)));
+  col=mix(fc,col,smoothstep(12.,18.,q.y))*mix(.8,1.1,m1)*(.94+.12*m2);
+  nd=max((dot(N,L)+.35)/1.35,0.);wet=1.8;
+ }
+ float rim=pow(1.-max(dot(N,V),0.),3.)*ao;
+ glowAdd+=uFog*rim*.42+col*uFog*.25*(1.-ao);
+}
 if(type>19.5&&type<20.5){
  vec3 q=normalize(vLocal);float open=clamp(em,0.,1.);em=0.;
  float ang=acos(clamp(q.z,-1.,1.)),seed=vProps.w;
@@ -507,7 +605,7 @@ if(type>19.5&&type<20.5){
 }
 float hemi=.5+.5*N.y;vec3 ambient=mix(vec3(.28,.34,.39),vec3(.7,.8,.89),hemi)*uAmbient*uTint;
 float spec=pow(max(dot(reflect(-L,N),V),0.),28.)*.17*wet*uSunK;
-vec3 lit=col*(ambient+nd*.85*uSunK)+vec3(spec)+col*em+glowAdd;
+vec3 lit=col*(ambient*ao+nd*.85*uSunK*mix(.5,1.,ao))+vec3(spec)*ao+col*em+glowAdd;
 if(type>.5&&type<1.5)lit=col*(1.+em);
 if(type>5.5&&type<6.5){float radial=length(vLocal.xz);alpha*=1.-smoothstep(.16,.5,radial);lit=col;}
 float fog=1.-exp(-dist*uFogD);lit=mix(lit,uFog,fog);outColor=vec4(lit,alpha);}`;
@@ -869,10 +967,20 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       gl.bindVertexArray(vao);
       const vb = gl.createBuffer();
       gl.bindBuffer(gl.ARRAY_BUFFER, vb);
-      let a = new Float32Array(g.p.length * 2);
-      for (let i = 0; i < g.p.length / 3; i++) {
-        a.set(g.p.slice(i * 3, i * 3 + 3), i * 6);
-        a.set(g.n.slice(i * 3, i * 3 + 3), i * 6 + 3);
+      const vcount = g.p.length / 3;
+      let a = new Float32Array(vcount * 6),
+        r2 = 0;
+      for (let i = 0; i < vcount; i++) {
+        const x = g.p[i * 3],
+          y = g.p[i * 3 + 1],
+          z = g.p[i * 3 + 2];
+        a[i * 6] = x;
+        a[i * 6 + 1] = y;
+        a[i * 6 + 2] = z;
+        a[i * 6 + 3] = g.n[i * 3];
+        a[i * 6 + 4] = g.n[i * 3 + 1];
+        a[i * 6 + 5] = g.n[i * 3 + 2];
+        r2 = Math.max(r2, x * x + y * y + z * z);
       }
       gl.bufferData(gl.ARRAY_BUFFER, a, gl.STATIC_DRAW);
       gl.enableVertexAttribArray(0);
@@ -897,6 +1005,8 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         ib,
         inst,
         count: indices.length,
+        // how far the shape reaches from its own origin, for skipping what the camera cannot see
+        radius: Math.sqrt(r2),
         data: new Float32Array(96 * 16),
         capacity: 0,
       };
@@ -941,6 +1051,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         h = this.canvas.height;
       this.drawCalls = 0;
       this.triangles = 0;
+      this.culled = 0;
       this.frameId++;
       this.vp = M.mm(M.perspective((c.fov * Math.PI) / 180, w / h), M.view(c.p, c.yaw, c.pitch, c.roll));
       gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo);
@@ -994,6 +1105,65 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       gl.bindVertexArray(null);
     }
+    // the six planes of the current view volume, normalised: (a, b, c, d) each, inside where a*x+b*y+c*z+d >= 0
+    frustum() {
+      const m = this.vp,
+        f = this.planes || (this.planes = new Float32Array(24));
+      if (this.planesVP === m) return f;
+      this.planesVP = m;
+      const row = i => [m[i], m[4 + i], m[8 + i], m[12 + i]];
+      const r0 = row(0),
+        r1 = row(1),
+        r2 = row(2),
+        r3 = row(3);
+      const sets = [
+        r3.map((v, i) => v + r0[i]),
+        r3.map((v, i) => v - r0[i]),
+        r3.map((v, i) => v + r1[i]),
+        r3.map((v, i) => v - r1[i]),
+        r3.map((v, i) => v + r2[i]),
+        r3.map((v, i) => v - r2[i]),
+      ];
+      sets.forEach((q, k) => {
+        const l = Math.hypot(q[0], q[1], q[2]) || 1;
+        for (let j = 0; j < 4; j++) f[k * 4 + j] = q[j] / l;
+      });
+      return f;
+    }
+    // a static batch is skipped whole when its bounding sphere is out of view; bounds are measured once per fill
+    batchSeen(b) {
+      if (b.dynamic || b.noCull || this.noCull) return true;
+      if (b.boundsCount !== b.count || b.uploaded < b.count) {
+        b.boundsCount = b.count;
+        const g = this.geometries[b.geo],
+          d = b.data;
+        let mn = [Infinity, Infinity, Infinity],
+          mx = [-Infinity, -Infinity, -Infinity],
+          rad = 0,
+          spin = false;
+        for (let i = 0; i < b.count; i++) {
+          const o = i * 24,
+            t = d[o + 21];
+          if (t === 32 || t === 34 || t === 9) spin = true;
+          const sc = Math.sqrt(Math.max(d[o] * d[o] + d[o + 1] * d[o + 1] + d[o + 2] * d[o + 2], d[o + 4] * d[o + 4] + d[o + 5] * d[o + 5] + d[o + 6] * d[o + 6], d[o + 8] * d[o + 8] + d[o + 9] * d[o + 9] + d[o + 10] * d[o + 10]));
+          rad = Math.max(rad, (g ? g.radius : 1) * sc + (t === 30 ? Math.abs(d[o + 22]) : 0));
+          for (let k = 0; k < 3; k++) {
+            mn[k] = Math.min(mn[k], d[o + 12 + k]);
+            mx[k] = Math.max(mx[k], d[o + 12 + k]);
+          }
+        }
+        if (spin || !b.count) b.bounds = null;
+        else {
+          const c = [(mn[0] + mx[0]) / 2, (mn[1] + mx[1]) / 2, (mn[2] + mx[2]) / 2];
+          b.bounds = [c[0], c[1], c[2], Math.hypot(mx[0] - c[0], mx[1] - c[1], mx[2] - c[2]) + rad + 1];
+        }
+      }
+      if (!b.bounds) return true;
+      const f = this.frustum(),
+        q = b.bounds;
+      for (let k = 0; k < 24; k += 4) if (f[k] * q[0] + f[k + 1] * q[1] + f[k + 2] * q[2] + f[k + 3] < -q[3]) return false;
+      return true;
+    }
     drawRoot(root, time, shadows = false) {
       if (!root) return;
       const gl = this.gl;
@@ -1001,11 +1171,33 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       const groups = {},
         transparent = {},
         shadowGroups = {};
+      // what the camera cannot see is not drawn: a sphere round each shape against the six sides of the view
+      const fr = this.frustum(),
+        geos = this.geometries;
       const visit = n => {
         if (!n.visible) return;
         if (n.geo) {
-          const coll = n.alpha < 0.995 ? transparent : groups;
-          (coll[n.geo] ??= []).push(n);
+          const w = n.world,
+            g = geos[n.geo],
+            t = n.type;
+          // shapes moved by the vertex shader (orbiting, breathing) are kept whatever their resting place
+          let seen = !g || t === 32 || t === 34 || t === 9 || this.noCull;
+          if (!seen) {
+            const sx = w[0] * w[0] + w[1] * w[1] + w[2] * w[2],
+              sy = w[4] * w[4] + w[5] * w[5] + w[6] * w[6],
+              sz = w[8] * w[8] + w[9] * w[9] + w[10] * w[10],
+              r = g.radius * Math.sqrt(Math.max(sx, sy, sz)) + (t === 30 ? Math.abs(n.detail || 0) : 0) + 1;
+            seen = true;
+            for (let k = 0; k < 24; k += 4)
+              if (fr[k] * w[12] + fr[k + 1] * w[13] + fr[k + 2] * w[14] + fr[k + 3] < -r) {
+                seen = false;
+                break;
+              }
+          }
+          if (seen) {
+            const coll = n.alpha < 0.995 ? transparent : groups;
+            (coll[n.geo] ??= []).push(n);
+          } else this.culled++;
           if (
             shadows &&
             n.alpha >= 0.995 &&
@@ -1081,6 +1273,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
             if (!b.count) continue;
             if (isShadow ? !(shadows && b.shadow && !b.transparent) : b.shadowOnly || trans !== !!b.transparent)
               continue;
+            if (!isShadow && !this.batchSeen(b)) continue;
             this.drawBatch(b);
           }
       }
@@ -1237,6 +1430,337 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
   };
 })((window.KO ||= {}));
 
+// FILE: src/core/sculpt.js
+/* Sculpt: soft solids blended into one smooth mesh.
+ * A body is described as a list of shapes (ellipsoids, round cones, rounded boxes) added or carved with a blend radius.
+ * They are summed into a signed distance field on a grid and the surface is drawn out of it (surface nets).
+ * Ambient occlusion is measured on the field and stored in the length of each normal; shader type 33 reads it back. */
+(function (K) {
+  'use strict';
+  const BIG = 1e3;
+  // rotation matrix (row-major 3x3) from Euler angles applied X, then Y, then Z — the inverse is its transpose
+  function rot(r) {
+    if (!r) return null;
+    const [a, b, c] = r,
+      ca = Math.cos(a),
+      sa = Math.sin(a),
+      cb = Math.cos(b),
+      sb = Math.sin(b),
+      cc = Math.cos(c),
+      sc = Math.sin(c);
+    // R = Rz * Ry * Rx
+    return [
+      cc * cb, cc * sb * sa - sc * ca, cc * sb * ca + sc * sa,
+      sc * cb, sc * sb * sa + cc * ca, sc * sb * ca - cc * sa,
+      -sb, cb * sa, cb * ca,
+    ];
+  }
+  function ellipsoid(px, py, pz, rx, ry, rz) {
+    const k0 = Math.sqrt((px * px) / (rx * rx) + (py * py) / (ry * ry) + (pz * pz) / (rz * rz));
+    if (k0 < 1e-5) return -Math.min(rx, ry, rz);
+    const k1 = Math.sqrt((px * px) / (rx * rx * rx * rx) + (py * py) / (ry * ry * ry * ry) + (pz * pz) / (rz * rz * rz * rz));
+    return (k0 * (k0 - 1)) / k1;
+  }
+  // exact round cone between two points (after Inigo Quilez)
+  function roundCone(s, px, py, pz) {
+    const ax = px - s.a[0],
+      ay = py - s.a[1],
+      az = pz - s.a[2];
+    const y = ax * s.ba[0] + ay * s.ba[1] + az * s.ba[2],
+      z = y - s.l2;
+    const qx = ax * s.l2 - s.ba[0] * y,
+      qy = ay * s.l2 - s.ba[1] * y,
+      qz = az * s.l2 - s.ba[2] * y;
+    const x2 = qx * qx + qy * qy + qz * qz,
+      y2 = y * y * s.l2,
+      z2 = z * z * s.l2;
+    const k = Math.sign(s.rr) * s.rr * s.rr * x2;
+    if (Math.sign(z) * s.a2 * z2 > k) return Math.sqrt(x2 + z2) * s.il2 - s.r2;
+    if (Math.sign(y) * s.a2 * y2 < k) return Math.sqrt(x2 + y2) * s.il2 - s.r1;
+    return (Math.sqrt(x2 * s.a2 * s.il2) + y * s.rr) * s.il2 - s.r1;
+  }
+  function roundBox(px, py, pz, hx, hy, hz, r) {
+    const qx = Math.abs(px) - hx + r,
+      qy = Math.abs(py) - hy + r,
+      qz = Math.abs(pz) - hz + r;
+    const ox = Math.max(qx, 0),
+      oy = Math.max(qy, 0),
+      oz = Math.max(qz, 0);
+    return Math.sqrt(ox * ox + oy * oy + oz * oz) + Math.min(Math.max(qx, qy, qz), 0) - r;
+  }
+  // shape records: { kind:'e'|'c'|'b', sub, k, ... }
+  // e: { c:[x,y,z], r:[rx,ry,rz], rot:[a,b,c]? }   c: { a:[..], b:[..], r1, r2 }   b: { c, h:[hx,hy,hz], round, rot? }
+  function prep(s) {
+    const o = Object.assign({ k: 0.5, sub: false }, s);
+    if (o.kind === 'c') {
+      const ba = [o.b[0] - o.a[0], o.b[1] - o.a[1], o.b[2] - o.a[2]];
+      o.ba = ba;
+      o.l2 = Math.max(1e-6, ba[0] * ba[0] + ba[1] * ba[1] + ba[2] * ba[2]);
+      o.rr = o.r1 - o.r2;
+      o.a2 = o.l2 - o.rr * o.rr;
+      o.il2 = 1 / o.l2;
+      const m = Math.max(o.r1, o.r2);
+      o.min = [Math.min(o.a[0], o.b[0]) - m, Math.min(o.a[1], o.b[1]) - m, Math.min(o.a[2], o.b[2]) - m];
+      o.max = [Math.max(o.a[0], o.b[0]) + m, Math.max(o.a[1], o.b[1]) + m, Math.max(o.a[2], o.b[2]) + m];
+    } else {
+      o.m = rot(o.rot);
+      const e = o.kind === 'b' ? o.h : o.r,
+        m = Math.max(e[0], e[1], e[2]) * (o.m ? 1 : 0),
+        ex = o.m ? [m, m, m] : e;
+      o.min = [o.c[0] - ex[0], o.c[1] - ex[1], o.c[2] - ex[2]];
+      o.max = [o.c[0] + ex[0], o.c[1] + ex[1], o.c[2] + ex[2]];
+    }
+    return o;
+  }
+  function dist(o, x, y, z) {
+    if (o.kind === 'c') return roundCone(o, x, y, z);
+    let px = x - o.c[0],
+      py = y - o.c[1],
+      pz = z - o.c[2];
+    if (o.m) {
+      const m = o.m,
+        lx = m[0] * px + m[3] * py + m[6] * pz,
+        ly = m[1] * px + m[4] * py + m[7] * pz,
+        lz = m[2] * px + m[5] * py + m[8] * pz;
+      px = lx;
+      py = ly;
+      pz = lz;
+    }
+    if (o.kind === 'b') return roundBox(px, py, pz, o.h[0], o.h[1], o.h[2], o.round || 0);
+    return ellipsoid(px, py, pz, o.r[0], o.r[1], o.r[2]);
+  }
+  const smin = (a, b, k) => {
+    if (k <= 0) return Math.min(a, b);
+    const h = Math.max(k - Math.abs(a - b), 0) / k;
+    return Math.min(a, b) - h * h * k * 0.25;
+  };
+  const smax = (a, b, k) => -smin(-a, -b, k);
+  // corner pairs of a cell's twelve edges (corner index = dx + 2*dy + 4*dz)
+  const EDGES = [0, 1, 2, 3, 4, 5, 6, 7, 0, 2, 1, 3, 4, 6, 5, 7, 0, 4, 1, 5, 2, 6, 3, 7];
+  /**
+   * shapes: list of shape records (see prep). opts: { voxel, ao:[step, count, strength], mirrorX }
+   * Returns { geometry:{p,n,idx}, sample(x,y,z), bounds:{min,max}, triangles }
+   */
+  function sculpt(shapes, opts = {}) {
+    const vs = opts.voxel || 0.5;
+    let list = shapes.map(prep);
+    if (opts.mirrorX)
+      list = list.concat(
+        shapes
+          .filter(s => !s.center)
+          .map(s => {
+            const t = JSON.parse(JSON.stringify(s));
+            if (t.kind === 'c') {
+              t.a[0] = -t.a[0];
+              t.b[0] = -t.b[0];
+            } else {
+              t.c[0] = -t.c[0];
+              if (t.rot) t.rot = [t.rot[0], -t.rot[1], -t.rot[2]];
+            }
+            return prep(t);
+          }),
+      );
+    // keep carving after the shapes it carves: additions first, then subtractions, each in the given order
+    list = list.filter(s => !s.sub).concat(list.filter(s => s.sub));
+    const aoStep = opts.ao?.[0] ?? vs * 1.5,
+      aoCount = opts.ao?.[1] ?? 5,
+      aoK = opts.ao?.[2] ?? 1;
+    const reach = aoStep * aoCount + vs * 2;
+    const min = [BIG, BIG, BIG],
+      max = [-BIG, -BIG, -BIG];
+    for (const s of list)
+      if (!s.sub)
+        for (let i = 0; i < 3; i++) {
+          min[i] = Math.min(min[i], s.min[i] - s.k - vs * 2);
+          max[i] = Math.max(max[i], s.max[i] + s.k + vs * 2);
+        }
+    const NX = Math.ceil((max[0] - min[0]) / vs) + 1,
+      NY = Math.ceil((max[1] - min[1]) / vs) + 1,
+      NZ = Math.ceil((max[2] - min[2]) / vs) + 1;
+    if (NX * NY * NZ > 9e6) throw new Error('sculpt grid too large: ' + NX + 'x' + NY + 'x' + NZ);
+    const F = new Float32Array(NX * NY * NZ).fill(BIG),
+      SXY = NX * NY;
+    for (const s of list) {
+      const pad = s.k + reach;
+      const i0 = Math.max(0, Math.floor((s.min[0] - pad - min[0]) / vs)),
+        i1 = Math.min(NX - 1, Math.ceil((s.max[0] + pad - min[0]) / vs)),
+        j0 = Math.max(0, Math.floor((s.min[1] - pad - min[1]) / vs)),
+        j1 = Math.min(NY - 1, Math.ceil((s.max[1] + pad - min[1]) / vs)),
+        k0 = Math.max(0, Math.floor((s.min[2] - pad - min[2]) / vs)),
+        k1 = Math.min(NZ - 1, Math.ceil((s.max[2] + pad - min[2]) / vs));
+      for (let k = k0; k <= k1; k++) {
+        const z = min[2] + k * vs;
+        for (let j = j0; j <= j1; j++) {
+          const y = min[1] + j * vs,
+            row = j * NX + k * SXY;
+          for (let i = i0; i <= i1; i++) {
+            const d = dist(s, min[0] + i * vs, y, z),
+              at = row + i;
+            F[at] = s.sub ? smax(F[at], -d, s.k) : smin(F[at], d, s.k);
+          }
+        }
+      }
+    }
+    const sample = (x, y, z) => {
+      let fx = (x - min[0]) / vs,
+        fy = (y - min[1]) / vs,
+        fz = (z - min[2]) / vs;
+      if (fx < 0 || fy < 0 || fz < 0 || fx >= NX - 1 || fy >= NY - 1 || fz >= NZ - 1) return BIG;
+      const i = fx | 0,
+        j = fy | 0,
+        k = fz | 0;
+      fx -= i;
+      fy -= j;
+      fz -= k;
+      const a = i + j * NX + k * SXY;
+      const c00 = F[a] + (F[a + 1] - F[a]) * fx,
+        c10 = F[a + NX] + (F[a + NX + 1] - F[a + NX]) * fx,
+        c01 = F[a + SXY] + (F[a + SXY + 1] - F[a + SXY]) * fx,
+        c11 = F[a + NX + SXY] + (F[a + NX + SXY + 1] - F[a + NX + SXY]) * fx;
+      const c0 = c00 + (c10 - c00) * fy,
+        c1 = c01 + (c11 - c01) * fy;
+      return c0 + (c1 - c0) * fz;
+    };
+    const grad = (x, y, z, h) => {
+      const gx = sample(x + h, y, z) - sample(x - h, y, z),
+        gy = sample(x, y + h, z) - sample(x, y - h, z),
+        gz = sample(x, y, z + h) - sample(x, y, z - h),
+        l = Math.hypot(gx, gy, gz) || 1;
+      return [gx / l, gy / l, gz / l];
+    };
+    // one vertex per cell the surface passes through
+    const cellIndex = new Int32Array((NX - 1) * (NY - 1) * (NZ - 1)).fill(-1),
+      CX = NX - 1,
+      CXY = (NX - 1) * (NY - 1);
+    const P = [],
+      corner = new Float32Array(8);
+    for (let k = 0; k < NZ - 1; k++)
+      for (let j = 0; j < NY - 1; j++)
+        for (let i = 0; i < NX - 1; i++) {
+          let mask = 0;
+          for (let c = 0; c < 8; c++) {
+            const v = F[i + (c & 1) + (j + ((c >> 1) & 1)) * NX + (k + ((c >> 2) & 1)) * SXY];
+            corner[c] = v;
+            if (v < 0) mask |= 1 << c;
+          }
+          if (mask === 0 || mask === 255) continue;
+          let sx = 0,
+            sy = 0,
+            sz = 0,
+            n = 0;
+          for (let e = 0; e < 24; e += 2) {
+            const c0 = EDGES[e],
+              c1 = EDGES[e + 1],
+              a = corner[c0],
+              b = corner[c1];
+            if (a < 0 === b < 0) continue;
+            const t = a / (a - b);
+            sx += (c0 & 1) + ((c1 & 1) - (c0 & 1)) * t;
+            sy += ((c0 >> 1) & 1) + (((c1 >> 1) & 1) - ((c0 >> 1) & 1)) * t;
+            sz += ((c0 >> 2) & 1) + (((c1 >> 2) & 1) - ((c0 >> 2) & 1)) * t;
+            n++;
+          }
+          cellIndex[i + j * CX + k * CXY] = P.length / 3;
+          P.push(min[0] + (i + sx / n) * vs, min[1] + (j + sy / n) * vs, min[2] + (k + sz / n) * vs);
+        }
+    const idx = [];
+    const cell = (i, j, k) => cellIndex[i + j * CX + k * CXY];
+    for (let k = 1; k < NZ - 1; k++)
+      for (let j = 1; j < NY - 1; j++)
+        for (let i = 1; i < NX - 1; i++) {
+          const a = F[i + j * NX + k * SXY],
+            inA = a < 0;
+          // edge along x
+          if (i < NX - 1 && inA !== F[i + 1 + j * NX + k * SXY] < 0) {
+            const q = [cell(i, j - 1, k - 1), cell(i, j, k - 1), cell(i, j, k), cell(i, j - 1, k)];
+            if (q.every(v => v >= 0)) idx.push(q[0], q[1], q[2], q[0], q[2], q[3]);
+          }
+          if (j < NY - 1 && inA !== F[i + (j + 1) * NX + k * SXY] < 0) {
+            const q = [cell(i - 1, j, k - 1), cell(i, j, k - 1), cell(i, j, k), cell(i - 1, j, k)];
+            if (q.every(v => v >= 0)) idx.push(q[0], q[1], q[2], q[0], q[2], q[3]);
+          }
+          if (k < NZ - 1 && inA !== F[i + j * NX + (k + 1) * SXY] < 0) {
+            const q = [cell(i - 1, j - 1, k), cell(i, j - 1, k), cell(i, j, k), cell(i - 1, j, k)];
+            if (q.every(v => v >= 0)) idx.push(q[0], q[1], q[2], q[0], q[2], q[3]);
+          }
+        }
+    // settle each vertex onto the surface, take its normal from the field, then measure how buried it is
+    const N = new Array(P.length);
+    const h = vs * 0.5;
+    for (let v = 0; v < P.length; v += 3) {
+      let x = P[v],
+        y = P[v + 1],
+        z = P[v + 2];
+      for (let it = 0; it < 2; it++) {
+        const g = grad(x, y, z, h),
+          d = sample(x, y, z);
+        if (!(Math.abs(d) < vs)) break;
+        x -= g[0] * d;
+        y -= g[1] * d;
+        z -= g[2] * d;
+      }
+      P[v] = x;
+      P[v + 1] = y;
+      P[v + 2] = z;
+      const g = grad(x, y, z, h);
+      let occ = 0,
+        w = 1;
+      for (let s = 1; s <= aoCount; s++) {
+        const hh = aoStep * s,
+          d = sample(x + g[0] * hh, y + g[1] * hh, z + g[2] * hh);
+        occ += Math.max(0, hh - Math.min(d, hh)) * w;
+        w *= 0.72;
+      }
+      const ao = Math.max(0.12, Math.min(1, 1 - (occ / (aoStep * 2.2)) * aoK));
+      N[v] = g[0] * ao;
+      N[v + 1] = g[1] * ao;
+      N[v + 2] = g[2] * ao;
+    }
+    // even out the occlusion between neighbours: a coarse grid leaves it speckled
+    const nv = P.length / 3,
+      sum = new Float32Array(nv),
+      cnt = new Float32Array(nv),
+      len = new Float32Array(nv);
+    for (let v = 0; v < nv; v++) len[v] = Math.hypot(N[v * 3], N[v * 3 + 1], N[v * 3 + 2]);
+    for (let t = 0; t < idx.length; t += 3)
+      for (let a = 0; a < 3; a++) {
+        const v = idx[t + a];
+        for (let b = 0; b < 3; b++) {
+          sum[v] += len[idx[t + b]];
+          cnt[v]++;
+        }
+      }
+    for (let v = 0; v < nv; v++) {
+      const ao = cnt[v] ? sum[v] / cnt[v] : len[v],
+        k = ao / (len[v] || 1);
+      N[v * 3] *= k;
+      N[v * 3 + 1] *= k;
+      N[v * 3 + 2] *= k;
+    }
+    return { geometry: { p: P, n: N, idx }, sample, grad: (x, y, z) => grad(x, y, z, h), bounds: { min, max }, triangles: idx.length / 3 };
+  }
+  // helpers for writing shape lists
+  const S = {
+    e: (c, r, k = 0.5, extra = {}) => Object.assign({ kind: 'e', c, r, k }, extra),
+    c: (a, b, r1, r2 = r1, k = 0.5, extra = {}) => Object.assign({ kind: 'c', a, b, r1, r2, k }, extra),
+    b: (c, h, round = 0.2, k = 0.5, extra = {}) => Object.assign({ kind: 'b', c, h, round, k }, extra),
+  };
+  // Built once per page: leaving a world and coming back reuses the finished mesh.
+  // opts.keep holds on to the field so callers can sample the surface (to lay chains on a body, say).
+  const cache = {};
+  K.sculpt = function (engine, name, shapes, opts = {}) {
+    let res = cache[name];
+    if (!res || (opts.keep && !res.sample)) {
+      res = sculpt(shapes, opts);
+      if (!opts.keep) res.sample = res.grad = null;
+      cache[name] = res;
+    }
+    if (!engine.geometries[name]) engine.addGeometry(name, res.geometry);
+    return res;
+  };
+  K.Sculpt = { build: sculpt, S, cache };
+})((window.KO ||= {}));
+
 // FILE: src/core/input.js
 (function (K) {
   'use strict';
@@ -1266,6 +1790,8 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.stickOrigin = [0, 0];
       this.holdPointers = new Map();
       this.lockPending = false;
+      this.wheel = 0;
+      this.rightDown = null;
       this.on(window, 'keydown', e => {
         if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
         if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.code)) e.preventDefault();
@@ -1318,11 +1844,29 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         }
         if (e.button === 0) {
           this.mouseFire = true;
+          this.pressed.add('Fire');
           this.syncFire();
           if (document.pointerLockElement !== canvas && !this.mobile) this.requestLock();
         }
-        if (e.button === 2) this.drag = [e.clientX, e.clientY];
+        if (e.button === 2) {
+          // right button: the tractor beam. Without a locked mouse it also drags the view; a short click still grabs.
+          if (document.pointerLockElement === canvas) this.pressed.add('KeyQ');
+          else {
+            this.drag = [e.clientX, e.clientY];
+            this.rightDown = { t: performance.now(), moved: 0 };
+          }
+        }
       });
+      this.on(
+        canvas,
+        'wheel',
+        e => {
+          if (!this.enabled) return;
+          e.preventDefault();
+          this.wheel += Math.sign(e.deltaY);
+        },
+        { passive: false },
+      );
       const release = e => {
         if (e.pointerId === this.movePointer) this.releaseStick();
         this.pointers.delete(e.pointerId);
@@ -1332,7 +1876,12 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
             this.mouseFire = false;
             this.syncFire();
           }
-          if (e.button === 2 || e.type === 'pointercancel') this.drag = null;
+          if (e.button === 2 || e.type === 'pointercancel') {
+            const rd = this.rightDown;
+            if (e.button === 2 && rd && rd.moved < 7 && performance.now() - rd.t < 400 && this.enabled) this.pressed.add('KeyQ');
+            this.rightDown = null;
+            this.drag = null;
+          }
         }
       };
       this.on(window, 'pointerup', release);
@@ -1359,6 +1908,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         } else if (this.drag) {
           this.dx += (e.clientX - this.drag[0]) * 0.003 * this.sensitivity;
           this.dy += (e.clientY - this.drag[1]) * 0.003 * this.sensitivity;
+          if (this.rightDown) this.rightDown.moved += Math.abs(e.clientX - this.drag[0]) + Math.abs(e.clientY - this.drag[1]);
           this.drag = [e.clientX, e.clientY];
         }
       });
@@ -1406,8 +1956,9 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         x /= length;
         y /= length;
       }
+      // a small push moves gently, a full push moves fully
       const l = Math.min(length, 1),
-        amount = l < 0.08 ? 0 : (l - 0.08) / 0.92;
+        amount = l < 0.08 ? 0 : Math.pow((l - 0.08) / 0.92, 1.45);
       this.stick = l ? [(x / l) * amount, (-y / l) * amount] : [0, 0];
       if (knob) knob.style.transform = `translate(${x * radius}px,${y * radius}px)`;
     }
@@ -1429,6 +1980,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
           if (this.holdPointers.has(id)) return;
           this.holdPointers.set(id, e.pointerId);
           this[field] = true;
+          if (field === 'touchFire') this.pressed.add('Fire');
           this.syncFire();
           b.classList.add('held');
           b.setAttribute('aria-pressed', 'true');
@@ -1482,6 +2034,11 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.dx = this.dy = 0;
       return p;
     }
+    takeWheel() {
+      const w = this.wheel;
+      this.wheel = 0;
+      return w;
+    }
     end() {
       this.pressed.clear();
     }
@@ -1497,7 +2054,9 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.touchDown = false;
       this.touchBoost = false;
       this.dx = this.dy = 0;
+      this.wheel = 0;
       this.drag = null;
+      this.rightDown = null;
       this.pointers.clear();
       this.releaseStick();
       for (const id of captured)
@@ -1733,6 +2292,117 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     pulse() {
       this.tone(120, 0.8, 0.5, 24);
       this.noiseHit(0.65, 0.33, 1600);
+    }
+    // The tractor beam: a low throb while it holds something, straining higher the harder it pulls.
+    tractor(level, strain = 0) {
+      if (!this.ctx) return;
+      const c = this.ctx;
+      if (!this.beamGain) {
+        this.beamGain = c.createGain();
+        this.beamGain.gain.value = 0;
+        this.beamGain.connect(this.master);
+        const lp = c.createBiquadFilter();
+        lp.type = 'lowpass';
+        lp.frequency.value = 420;
+        lp.Q.value = 5;
+        const a = c.createOscillator(),
+          b = c.createOscillator(),
+          trem = c.createGain(),
+          lfo = c.createOscillator(),
+          depth = c.createGain();
+        a.type = 'sawtooth';
+        a.frequency.value = 52;
+        b.type = 'sine';
+        b.frequency.value = 104;
+        trem.gain.value = 0.62;
+        lfo.frequency.value = 6.5;
+        depth.gain.value = 0.38;
+        lfo.connect(depth);
+        depth.connect(trem.gain);
+        a.connect(lp);
+        b.connect(lp);
+        lp.connect(trem);
+        trem.connect(this.beamGain);
+        a.start();
+        b.start();
+        lfo.start();
+        Object.assign(this, { beamA: a, beamB: b, beamLp: lp, beamLfo: lfo });
+      }
+      const t = c.currentTime;
+      this.beamGain.gain.setTargetAtTime(level * 0.12, t, 0.05);
+      this.beamA.frequency.setTargetAtTime(52 + strain * 64, t, 0.08);
+      this.beamB.frequency.setTargetAtTime(104 + strain * 140, t, 0.08);
+      this.beamLp.frequency.setTargetAtTime(420 + strain * 1100, t, 0.08);
+      this.beamLfo.frequency.setTargetAtTime(6.5 + strain * 11, t, 0.1);
+    }
+    // caught: a deep thump under a rising zip
+    grabSnap(weight = 1) {
+      this.tone(150 - weight * 30, 0.34, 0.34, 46);
+      this.tone(320, 0.2, 0.07, 980, null, 'triangle');
+      this.noiseHit(0.24, 0.14, 1500);
+    }
+    // the beam reached for something and found nothing
+    whiff() {
+      this.tone(300, 0.24, 0.05, 130, null, 'triangle');
+      this.noiseHit(0.18, 0.05, 2600, null, 'bandpass', 600, 0, 1.4);
+    }
+    // a held thing punted away hard
+    throwKick() {
+      this.tone(112, 0.4, 0.42, 34);
+      this.noiseHit(0.44, 0.28, 3400, null, 'lowpass', 260);
+      this.tone(640, 0.26, 0.05, 170, null, 'triangle');
+    }
+    // bugs crushed: the crack of shells and the wet give under them
+    crunch(n = 1, pan = 0, gain = 1) {
+      if (!this.live() || gain < 0.03) return;
+      const d = this.spot(pan, Math.min(1.2, gain)),
+        k = Math.min(1, 0.45 + n * 0.08);
+      for (let i = 0; i < Math.min(4, 1 + (n >> 2)); i++) {
+        const at = i * 0.028 + Math.random() * 0.02;
+        this.noiseHit(0.05, 0.34 * k, 6500, d, 'highpass', 3000, at, 0.8);
+        this.noiseHit(0.17, 0.24 * k, 1400, d, 'bandpass', 260, at + 0.012, 2.2);
+      }
+      this.tone(220, 0.12, 0.12 * k, 70, d);
+    }
+    // many small feet on hard ground at once: a dry rustle that rises with how many are running
+    skitter(level) {
+      if (!this.ctx) return;
+      const c = this.ctx;
+      if (!this.skitterGain) {
+        const src = c.createBufferSource(),
+          bp = c.createBiquadFilter(),
+          trem = c.createGain(),
+          lfo = c.createOscillator(),
+          depth = c.createGain();
+        src.buffer = this.noise;
+        src.loop = true;
+        bp.type = 'bandpass';
+        bp.frequency.value = 4200;
+        bp.Q.value = 1.2;
+        trem.gain.value = 0.55;
+        lfo.type = 'square';
+        lfo.frequency.value = 23;
+        depth.gain.value = 0.45;
+        lfo.connect(depth);
+        depth.connect(trem.gain);
+        this.skitterGain = c.createGain();
+        this.skitterGain.gain.value = 0;
+        src.connect(bp);
+        bp.connect(trem);
+        trem.connect(this.skitterGain);
+        this.skitterGain.connect(this.master);
+        src.start();
+        lfo.start();
+        this.skitterLfo = lfo;
+      }
+      const t = c.currentTime;
+      this.skitterGain.gain.setTargetAtTime(Math.min(0.16, level * 0.16), t, 0.12);
+      this.skitterLfo.frequency.setTargetAtTime(17 + level * 14, t, 0.2);
+    }
+    // the drive opening up
+    boost() {
+      this.noiseHit(0.55, 0.13, 700, null, 'bandpass', 3200, 0, 0.9);
+      this.tone(64, 0.45, 0.1, 150);
     }
     success() {
       this.metal();
@@ -2483,13 +3153,19 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.engine2.frequency.setTargetAtTime(54 + Math.min(speed, 160) * 0.37, t, 0.2);
       this.laserGain.gain.setTargetAtTime(firing ? 0.09 : 0, t, 0.04);
       this.laser.frequency.setTargetAtTime(92 + (firing ? Math.sin(t * 9) * 12 : 0), t, 0.03);
-      if (mode !== 'planet') this.silenceAmbience();
+      if (mode !== 'planet') {
+        this.silenceAmbience();
+        if (this.beamGain) this.beamGain.gain.setTargetAtTime(0, t, 0.04);
+        if (this.skitterGain) this.skitterGain.gain.setTargetAtTime(0, t, 0.04);
+      }
     }
     stop() {
       if (!this.ctx) return;
       this.choirStop(0.3);
       this.engineGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.04);
       this.laserGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.04);
+      if (this.beamGain) this.beamGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.04);
+      if (this.skitterGain) this.skitterGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.04);
       this.silenceAmbience();
     }
   }
@@ -2750,6 +3426,14 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       def.typeName = '함몰 세계';
       def.trueName = '지옥';
     }
+    if (meta.thaw) {
+      // An ice world half warmed. Nobody lives there any more, by the register.
+      def.thaw = true;
+      def.color = '#c9d8e4';
+      def.air = '#d8ecf6';
+      def.typeName = '테라포밍 세계';
+      def.trueName = 'THAW';
+    }
     if (meta.heaven) {
       // A world that lights itself. Its people call it by the name of a city.
       def.heaven = true;
@@ -2776,6 +3460,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.lost = 0;
       this.freeing = false;
       this.freed = 0;
+      this.stowaways = 0;
       const tokens = this.save.data.planetStates[LEDGER]?.destroyed || [];
       for (const t of tokens) {
         if (typeof t !== 'string') continue;
@@ -2803,6 +3488,10 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         if (t.startsWith('cargo-')) {
           const n = Math.min(20, Number(t.slice(6)) || 0);
           for (let i = 0; i < n; i++) this.hold.push('');
+          continue;
+        }
+        if (t.startsWith('stow-')) {
+          this.stowaways = Math.max(0, Math.min(60, Number(t.slice(5)) || 0));
           continue;
         }
         if (t.startsWith('lost-')) {
@@ -2904,6 +3593,11 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
           extra,
         ),
       );
+    }
+    // what the scanner last counted crawling on a world of bugs (kept by the world itself when it was left)
+    bugCount(id) {
+      for (const t of this.save.data.planetStates?.[id]?.destroyed || []) if (typeof t === 'string' && t.startsWith('x.n.')) return parseInt(t.slice(4), 36) || 0;
+      return null;
     }
     // Only worlds with a surface file of their own have people. The rest were always empty.
     inhabited(id) {
@@ -3037,6 +3731,17 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
           gone ? '그들은 이곳을 지옥이라 불렀다' : '그들은 이곳을 지옥이라 부른다',
         ];
       }
+      if (def.thaw) {
+        const off = this.hasTrophy(id),
+          bugs = this.bugCount?.(id);
+        return [
+          `반경 ${n(def.radius)} km · 빙하 세계 · 테라포밍 ${off ? '정지' : '진행 중'} — 63%`,
+          gone ? '대기 소실 · 잔해 온도 하강 중' : off ? '대기 — 질소 · 이산화탄소 · 온도 하강 중' : '대기 — 질소 · 이산화탄소 · 수증기 (가공 중)',
+          gone ? '지표 파열 · 궤도에 잔해 띠' : '지표 — 빙원 · 해빙 구역 · 온실 돔 5기',
+          gone ? '생존 신호 없음' : `거주자 0 · 생존 신호 ${bugs == null ? '— 셀 수 없음' : n(bugs)}`,
+          gone ? '그들은 이곳을 THAW라 불렀다' : '이주 기록 — 철수 완료',
+        ];
+      }
       if (def.heaven) {
         const dark = this.hasTrophy(id);
         return [
@@ -3087,7 +3792,8 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         'hold-' + this.hold.join('.'),
         'lost-' + this.lost,
         'freed-' + this.freed,
-      ].concat(this.freeing ? ['freeing'] : []);
+      ]
+        .concat(this.stowaways > 0 ? ['stow-' + this.stowaways] : []).concat(this.freeing ? ['freeing'] : []);
       [...this.states]
         .sort(([a], [b]) => a.localeCompare(b))
         .forEach(([id, s]) => {
@@ -3859,6 +4565,8 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.game.input.clear();
       document.body.classList.toggle('touch', v);
       this.game.input.mobile = v;
+      // a touch screen has no R key to name
+      $('returnAction').textContent = v ? '모선 귀환' : 'R · 모선 귀환';
     }
     start() {
       $('title').classList.add('hidden');
@@ -3885,13 +4593,14 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       $('worldLabels').innerHTML = '';
       this.setSignal(null);
       $('context').textContent = '';
+      this.cache.context = '';
       $('pullMeter').classList.add('hidden');
       const hint = {
         interior: '<kbd>W A S D</kbd> 이동　마우스 시선　<kbd>E</kbd> 표시된 행동　<kbd>Shift</kbd> 빠르게 걷기',
         space:
           '<kbd>W A S D</kbd> 비행　<kbd>Shift</kbd> 가속　<kbd>J</kbd> 도약　<kbd>X</kbd> 정지　<kbd>M</kbd> 성도　<kbd>Q</kbd> 대상　좌클릭 유지 · 미사일',
         planet:
-          '<kbd>W A S D</kbd> 비행　<kbd>Space</kbd><kbd>C</kbd> 고도　좌클릭 광선　<kbd>Q</kbd> 견인·놓기　<kbd>F</kbd> 충격파　<kbd>Shift</kbd> 돌진',
+          '<kbd>W A S D</kbd> 수평 비행　<kbd>Space</kbd><kbd>C</kbd> 고도　좌클릭 광선·던지기　우클릭(<kbd>Q</kbd>) 견인·놓기　<kbd>F</kbd> 충격파　<kbd>Shift</kbd> 돌진',
       }[mode];
       $('controlHint').innerHTML = hint;
       this.setStatus(mode === 'interior' ? '선내 보행' : '', 'NØMAD');
@@ -3942,8 +4651,33 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       button.textContent = active ? verb : '';
       button.setAttribute('aria-label', active ? text : '');
     }
+    // Texts name the keyboard's keys; on a touch screen they name the buttons, and on a PC the right click.
+    keys(text) {
+      if (!text || this.cache.mode !== 'planet') return text;
+      if (document.body.classList.contains('touch'))
+        return text
+          .replace('좌클릭 광선 · Q 견인 · F 충격파 · R 언제든 귀환', '광선 · 견인 · 충격파 버튼 · 오른쪽 위에서 언제든 귀환')
+          .replace(/Q로 /g, '견인 버튼으로 ')
+          .replace(/ · Q 견인/g, ' · 견인 버튼')
+          .replace(/Q · /g, '견인 버튼 · ')
+          .replace(/가까이 가서 Q\./g, '가까이 가서 견인 버튼.')
+          .replace(/S로 뒤로 물러나/g, '뒤로 물러나')
+          .replace(/R로 /g, '오른쪽 위 귀환 버튼으로 ')
+          .replace(/R · 모선 귀환/g, '오른쪽 위 귀환 버튼')
+          .replace(/F는 근접 충격파/g, '충격파 버튼은 근접 충격파');
+      return text
+        .replace('좌클릭 광선 · Q 견인', '좌클릭 광선 · 우클릭 견인')
+        .replace(/Q로 /g, '우클릭으로 ')
+        .replace(/ · Q 견인/g, ' · 우클릭 견인')
+        .replace(/Q · /g, '우클릭 · ')
+        .replace(/가까이 가서 Q\./g, '가까이 가서 우클릭.');
+    }
     context(text, active = false, progress = -1) {
-      $('context').textContent = text;
+      text = this.keys(text);
+      if (this.cache.context !== text) {
+        $('context').textContent = text;
+        this.cache.context = text;
+      }
       $('crosshair').classList.toggle('active', active);
       $('pullMeter').classList.toggle('hidden', progress < 0);
       if (progress >= 0) $('pullMeter').firstElementChild.style.width = `${K.M.clamp(progress, 0, 1) * 100}%`;
@@ -3953,8 +4687,8 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       $('hitmarker').classList.add('hit');
     }
     toast(a, b = '', seconds = 4.5) {
-      $('toast').querySelector('strong').textContent = a;
-      $('toast').querySelector('span').textContent = b;
+      $('toast').querySelector('strong').textContent = this.keys(a);
+      $('toast').querySelector('span').textContent = this.keys(b);
       $('toast').classList.add('show');
       this.toastUntil = performance.now() + seconds * 1000;
     }
@@ -4119,7 +4853,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     }
     help() {
       this.open(
-        `<div class="eyebrow">FLIGHT MANUAL / 01</div><h2>가고 싶은 곳으로.</h2><div class="controlsTable"><div>W A S D</div><div>걷기 / 비행 · 마우스로 시선</div><div>화면 클릭</div><div>마우스 고정. 안 되면 우클릭 드래그.<br>방향키 좌우로도 회전할 수 있습니다.</div><div>E</div><div>조종석 · 전시 기록 · 파괴정 탑승</div><div>Space / C</div><div>상승 / 하강</div><div>Shift 유지</div><div>누르는 동안 빠르게 걷기 / 가속·충돌</div><div>M / T / J / X</div><div>성도 / 자동항해 / 도약 / 추진 정지</div><div>좌클릭 길게</div><div>모선: 미사일 장전·발사 / 파괴정: 절단 광선</div><div>Q</div><div>모선: 바라보는 행성 선택 / 파괴정: 견인·놓기</div><div>F</div><div>근접 충격파 · 재충전 3초</div><div>R</div><div>행성에서 언제든 모선으로 귀환</div><div>Esc / P</div><div>메뉴 / 일시정지</div></div><p class="text">처음에는 조종석에 앉아 <b>T</b>로 에덴에 접근하세요. 행성이 하늘과 구름으로 가득 보일 때까지 접근합니다. 상공에 정박하면 <b>E</b>로 일어나 뒤쪽 격납고에서 파괴정으로 갈아탑니다.</p><p class="text">행성에서는 눈앞의 건물을 부수거나 밀어버리세요. 왕좌를 무력화한 뒤 왕의 머리를 바라보고 <b>Q</b>로 붙잡아 <b>S</b>로 뒤로 물러나면 회수할 수 있습니다. 왕을 잡지 않고 떠나도 됩니다.</p><p class="text">모선의 <b>M · 성도</b>에서 64개 항성계의 512개 행성을 찾아갈 수 있습니다. <b>포격 궤도로 항해</b>한 뒤 행성을 바라보고 미사일 버튼을 길게 누르세요. <b>5회 명중하면 행성이 소멸</b>하며, 아직 얻지 않은 왕의 머리는 회수할 수 없습니다. 이미 전시한 머리는 남습니다. 에덴 · NACRE · CINDER · MYCEL 네 행성에 상륙할 수 있습니다. 성도의 상단 바로가기로 선택하세요.</p><div class="finePrint">터치: 왼쪽 빈 화면 어디서든 누른 곳을 기준으로 이동 / 오른쪽 빈 화면 드래그로 시선.<br>오른쪽 가속 버튼은 누르는 동안만 작동합니다. 손을 떼면 가속 입력이 해제되며, 우주에서는 관성으로 잠시 더 흘러갑니다.<br>기능을 막는 연료·목숨·제한시간은 없습니다. 우주에서는 엔진을 멈추면 고요해집니다.</div><div class="panelActions"><button id="closeHelp" class="primary">알겠습니다 ↗</button></div>`,
+        `<div class="eyebrow">FLIGHT MANUAL / 01</div><h2>가고 싶은 곳으로.</h2><div class="controlsTable"><div>W A S D</div><div>걷기 / 비행 · 마우스로 시선<br>파괴정은 바라보는 곳과 상관없이 수평으로 움직입니다.</div><div>화면 클릭</div><div>마우스 고정. 안 되면 우클릭 드래그.<br>방향키 좌우로도 회전할 수 있습니다.</div><div>E</div><div>조종석 · 전시 기록 · 파괴정 탑승</div><div>Space / C</div><div>상승 / 하강 · Shift와 함께 누르면 급강하<br>땅에 세게 내리꽂으면 충격파가 터집니다.</div><div>Shift 유지</div><div>누르는 동안 빠르게 걷기 / 가속·충돌</div><div>M / T / J / X</div><div>성도 / 자동항해 / 도약 / 추진 정지</div><div>좌클릭 길게</div><div>모선: 미사일 장전·발사 / 파괴정: 절단 광선<br>견인으로 붙잡고 있을 때 좌클릭은 세게 던지기입니다.</div><div>우클릭 · Q</div><div>모선: 바라보는 행성 선택(Q) / 파괴정: 견인<br>조준점 둘레 원뿔 안에 든 대상이 붙잡힙니다. 다시 누르면 천천히 내려놓습니다. 붙잡은 동안 마우스 휠로 거리 조절.</div><div>F</div><div>근접 충격파 · 재충전 3초</div><div>R</div><div>행성에서 언제든 모선으로 귀환</div><div>Esc / P</div><div>메뉴 / 일시정지</div></div><p class="text">처음에는 조종석에 앉아 <b>T</b>로 에덴에 접근하세요. 행성이 하늘과 구름으로 가득 보일 때까지 접근합니다. 상공에 정박하면 <b>E</b>로 일어나 뒤쪽 격납고에서 파괴정으로 갈아탑니다.</p><p class="text">행성에서는 눈앞의 건물을 부수거나 밀어버리세요. 왕좌를 무력화한 뒤 왕의 머리를 바라보고 <b>우클릭</b>(Q)으로 붙잡아 <b>S</b>로 뒤로 물러나면 회수할 수 있습니다. 왕을 잡지 않고 떠나도 됩니다.</p><p class="text">모선의 <b>M · 성도</b>에서 64개 항성계의 512개 행성을 찾아갈 수 있습니다. <b>포격 궤도로 항해</b>한 뒤 행성을 바라보고 미사일 버튼을 길게 누르세요. <b>5회 명중하면 행성이 소멸</b>하며, 아직 얻지 않은 왕의 머리는 회수할 수 없습니다. 이미 전시한 머리는 남습니다. 상륙할 수 있는 행성은 성도 상단의 바로가기에 모여 있습니다.</p><div class="finePrint">터치: 왼쪽 빈 화면 어디서든 누른 곳을 기준으로 이동 / 오른쪽 빈 화면 드래그로 시선.<br>견인 버튼: 붙잡기 / 다시 누르면 내려놓기. 붙잡은 채 광선 버튼을 누르면 던집니다.<br>오른쪽 가속 버튼은 누르는 동안만 작동합니다. 손을 떼면 가속 입력이 해제되며, 우주에서는 관성으로 잠시 더 흘러갑니다.<br>기능을 막는 연료·목숨·제한시간은 없습니다. 우주에서는 엔진을 멈추면 고요해집니다.</div><div class="panelActions"><button id="closeHelp" class="primary">알겠습니다 ↗</button></div>`,
       );
       $('closeHelp').onclick = () => this.close();
     }
@@ -6288,6 +7022,10 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
 (function (K) {
   'use strict';
   const M = K.M;
+  // The tractor beam reaches this far and catches whatever stands inside a cone this wide (half-angle, radians).
+  // The cone is drawn on screen as it is judged. The cutting beam stays a thin line aimed at the crosshair.
+  const RANGE = 140,
+    CONE = 0.1;
   class Destroyer {
     constructor(game, planet) {
       this.game = game;
@@ -6300,6 +7038,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.shake = 0;
       this.kick = 0;
       this.bank = 0;
+      this.nose = 0;
       this.bob = 0;
       this.firing = false;
       this.pulseCooldown = 0;
@@ -6307,6 +7046,17 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.grab = null;
       this.grabStart = 0;
       this.tension = 0;
+      this.hv = [0, 0, 0];
+      this.holdDist = 16;
+      this.pick = null;
+      this.pickFrame = 0;
+      this.flash = 0;
+      this.flashDir = [0, 0, 1];
+      this.fovKick = 0;
+      this.wasBoost = false;
+      this.lastYaw = 0;
+      this.yawRate = 0;
+      this.holdFire = false;
       this.carrying = !!game.save.data.trophies.length;
       this.rig.carry.visible = false;
       const factory = K.TrophyModels?.[planet.definition?.rulerId];
@@ -6315,6 +7065,19 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         factory(this.rig.carry, game);
         this.rig.carry.r[1] = Math.PI;
       }
+      // the beam as it is seen: a cone of light from under the nose, and a ring round what it has hold of
+      const fx = planet.fxRoot;
+      this.cone = K.mesh(fx, 'cone', [0, 0, 0], [1, 1, 1], '#a8f6de', { type: 1, em: 1.1, alpha: 0.15 });
+      this.cone.visible = false;
+      this.lock = K.mesh(fx, 'haloRing', [0, 0, 0], [1, 1, 1], '#c4ffe9', { type: 1, em: 1.6, alpha: 0.8 });
+      this.lock.visible = false;
+    }
+    get touch() {
+      return document.body.classList.contains('touch');
+    }
+    floorAt(p) {
+      // the height passed along lets a world with a floating floor (heaven) tell above from below
+      return this.planet.floor ? this.planet.floor(p[0], p[2], p[1]) : this.planet.height(p[0], p[2]);
     }
     update(dt, input) {
       const [dx, dy] = input.look();
@@ -6323,32 +7086,51 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.yaw += (input.keys.has('ArrowLeft') ? dt : 0) - (input.keys.has('ArrowRight') ? dt : 0);
       const a = input.axes(),
         f = M.dir(this.yaw, this.pitch),
+        flat = M.dir(this.yaw, 0),
         right = M.right(this.yaw);
-      let target = M.add(M.mul(f, a.z), M.mul(right, a.x));
-      target[1] += a.y;
-      if (M.len(target) > 1) target = M.norm(target);
-      const top = a.boost ? 76 : 31;
-      this.velocity = this.velocity.map((v, i) => M.damp(v, target[i] * top, 2.5, dt));
-      this.p = M.add(this.p, M.mul(this.velocity, dt));
-      // the height passed along lets a world with a floating floor (heaven) tell above from below
-      let ground = this.planet.floor ? this.planet.floor(this.p[0], this.p[2], this.p[1]) : this.planet.height(this.p[0], this.p[2]);
-      if (this.p[1] < ground + 3.6) {
-        if (this.velocity[1] < -12) {
-          this.game.audio.impact(0.8);
-          this.shake = 0.25;
-          this.planet.pulseAt([this.p[0], ground, this.p[2]], 16, 65);
-        }
-        this.p[1] = ground + 3.6;
-        this.velocity[1] = Math.max(0, this.velocity[1] * -0.18);
+      /* ---------- flight: W A S D across the ground, Space and C for height; looking about never moves the ship ---------- */
+      const boost = a.boost;
+      if (boost && !this.wasBoost) {
+        this.fovKick = Math.max(this.fovKick, 1);
+        this.shake = Math.max(this.shake, 0.16);
+        this.game.audio.boost();
       }
-      if (this.p[1] > 420) {
-        this.p[1] = 420;
+      this.wasBoost = boost;
+      let hx = flat[0] * a.z + right[0] * a.x,
+        hz = flat[2] * a.z + right[2] * a.x;
+      const hl = Math.hypot(hx, hz);
+      if (hl > 1) {
+        hx /= hl;
+        hz /= hl;
+      }
+      const load = this.grab ? this.weight(this.grab) : 0,
+        top = (boost ? 82 : 34) * (1 - load * 0.3),
+        climb = boost ? 44 : 20;
+      // quick to answer the stick and quick to stop when it is let go
+      const eH = 1 - Math.exp(-(hl > 0.05 ? (boost ? 5.5 : 7) : 5.2) * dt),
+        eV = 1 - Math.exp(-(Math.abs(a.y) > 0.05 ? 7 : 5.5) * dt),
+        before = this.velocity.slice();
+      this.velocity[0] += (hx * top - this.velocity[0]) * eH;
+      this.velocity[2] += (hz * top - this.velocity[2]) * eH;
+      this.velocity[1] += (a.y * climb - this.velocity[1]) * eV;
+      this.p = M.add(this.p, M.mul(this.velocity, dt));
+      const hover = this.planet.config?.hover ?? 3.6;
+      let ground = this.floorAt(this.p);
+      if (this.p[1] < ground + hover) {
+        if (this.velocity[1] < -13) this.slam(ground, -this.velocity[1]);
+        this.p[1] = ground + hover;
+        this.velocity[1] = Math.max(0, this.velocity[1] * -0.15);
+      }
+      const ceiling = this.planet.config?.ceiling ?? 420;
+      if (this.p[1] > ceiling) {
+        this.p[1] = ceiling;
         this.velocity[1] = Math.min(0, this.velocity[1]);
       }
-      if (Math.hypot(this.p[0], this.p[2]) > 1390) {
-        const a = Math.atan2(this.p[0], this.p[2]);
-        this.p[0] = Math.sin(a) * 1380;
-        this.p[2] = Math.cos(a) * 1380;
+      const edge = this.planet.edge || 1390;
+      if (Math.hypot(this.p[0], this.p[2]) > edge) {
+        const ang = Math.atan2(this.p[0], this.p[2]);
+        this.p[0] = Math.sin(ang) * (edge - 10);
+        this.p[2] = Math.cos(ang) * (edge - 10);
         this.velocity = M.mul(this.velocity, -0.2);
         this.game.ui.toast('대륙 가장자리', 'R로 상공의 모선에 귀환할 수 있습니다.');
       }
@@ -6356,20 +7138,38 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.pulseCooldown = Math.max(0, this.pulseCooldown - dt);
       this.shake = M.damp(this.shake, 0, 7, dt);
       this.kick = M.damp(this.kick, 0, 12, dt);
-      this.bank = M.damp(this.bank, -a.x * 0.035, 5, dt);
+      this.fovKick = M.damp(this.fovKick, 0, 3.2, dt);
+      // the craft leans into a slide or a turn and dips its nose as it gathers speed
+      const yr = (this.yaw - this.lastYaw) / Math.max(dt, 1e-3);
+      this.lastYaw = this.yaw;
+      this.yawRate = M.damp(this.yawRate, M.clamp(yr, -6, 6), 8, dt);
+      const side = (this.velocity[0] * right[0] + this.velocity[2] * right[2]) / 82,
+        fwdAcc = ((this.velocity[0] - before[0]) * flat[0] + (this.velocity[2] - before[2]) * flat[2]) / Math.max(dt, 1e-3);
+      this.bank = M.damp(this.bank, M.clamp(-side * 0.34 - this.yawRate * 0.03, -0.22, 0.22), 6, dt);
+      this.nose = M.damp(this.nose, M.clamp(-fwdAcc * 0.0017, -0.06, 0.06), 5, dt);
       this.bob += dt;
       this.planet.collide(this, dt);
       if (input.take('KeyR')) {
         this.game.returnHome();
         return;
       }
+      /* ---------- the cutter and the tractor ---------- */
+      const tractorPress = input.take('KeyQ'),
+        firePress = input.take('Fire'),
+        wheel = input.takeWheel();
+      if (!input.fire) this.holdFire = false;
+      if (this.grab) {
+        const e = this.grab;
+        if (wheel) this.holdDist = M.clamp(this.holdDist + wheel * 2, 10, 40);
+        if (firePress && e.kind !== 'ruler' && e.kind !== 'building') this.throwHeld(f);
+        else if (tractorPress) this.release(true);
+      } else if (tractorPress) this.tryGrab(f);
       const aim = this.planet.raycast(this.p, f, 230);
-      this.firing = input.fire && !this.game.busy;
+      this.firing = input.fire && !this.game.busy && !this.grab && !this.holdFire;
       if (this.firing) {
         this.planet.fire(this, aim, dt);
         this.kick = 0.017;
       } else this.planet.stopFire();
-      if (input.take('KeyQ')) this.toggleGrab(aim);
       if (this.grab) this.updateGrab(dt, f);
       this.liftSurvivor(dt);
       if (input.take('KeyF')) {
@@ -6380,55 +7180,34 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
           this.planet.pulseAt(this.p, 42, 120);
           this.planet.wave(this.p);
           this.kick = 0.23;
+          this.fovKick = Math.max(this.fovKick, 0.5);
         } else this.game.ui.toast('충격파 재충전', `${Math.ceil(this.pulseCooldown)}초`, 1);
       }
-      let context = '',
-        progress = -1;
-      if (this.grab) {
-        if (this.grab.kind === 'ruler') {
-          context = '연결 고정 · 뒤로 물러나 당기기';
-          progress = this.tension / 1.8;
-        } else context = 'Q · 던져 놓기';
-      } else if (aim) {
-        if (aim.entity.kind === 'ruler')
-          context =
-            aim.entity.hp <= 0
-              ? this.planet.config?.rulerAim || this.planet.rulerName + ' · Q로 머리 견인'
-              : this.planet.guardText?.() || this.planet.rulerName + ' · 왕좌를 무력화하세요';
-        else if (aim.entity.label !== undefined) context = aim.entity.label;
-        else if (aim.distance < 75)
-          context =
-            aim.entity.kind === 'creature'
-              ? aim.entity.beg
-                ? 'Q · 생존자 견인'
-                : 'Q · 생명체 견인'
-              : 'Q · 붙잡아 당기기';
+      // what the cone would catch if it were let out now, looked at a few times a second
+      if (!this.grab && --this.pickFrame <= 0) {
+        this.pickFrame = 4;
+        this.pick = this.findTarget(f);
+        this.bugsInCone = !this.pick && this.planet.swarm && !this.planet.swarm.ball ? this.planet.swarm.gather(this.p, f, RANGE, CONE * 1.25, 70).length : 0;
+      } else if (this.grab) {
+        this.pick = null;
+        this.bugsInCone = 0;
       }
-      if (this.grab?.kind === 'creature' && this.grab.beg)
-        context = this.game.universe.cargoFull()
-          ? '화물칸 가득 참 · Q로 내려놓기'
-          : '240m 위로 올라가면 모선이 끌어올립니다';
-      this.game.ui.context(context, !!aim, progress);
-      this.game.ui.prompt('', false);
-      let speed = M.len(this.velocity);
-      this.game.ui.setArea(
-        this.planet.areaLabel,
-        this.planet.ruler.captured ? this.planet.afterLabel : this.planet.regionName,
-      );
-      this.game.ui.setStatus(
-        this.grab ? '중력 견인 중' : this.firing ? '절단 광선' : '파괴정 · TALON',
-        `${Math.round(speed)} m/s`,
-      );
-      const shake = this.shake * this.game.settings.shake;
-      const t = this.bob;
+      this.beamFX(dt, f);
+      this.hud(aim);
+      this.game.audio.tractor(this.grab ? (this.grab.kind === 'ruler' ? 1 : 0.8) : this.flash > 0 ? 0.6 * this.flash * 3 : 0, this.grab?.kind === 'ruler' ? Math.min(1, this.tension / 1.8) : this.grab?.kind === 'building' ? 0.5 : 0);
+      const speed = M.len(this.velocity),
+        shake = this.shake * this.game.settings.shake,
+        t = this.bob;
       this.game.engine.camera = {
         p: M.add(this.p, [Math.sin(t * 67) * shake * 0.21, Math.sin(t * 51) * shake * 0.19, 0]),
         yaw: this.yaw + Math.sin(t * 38) * shake * 0.006,
         pitch: this.pitch + Math.sin(t * 47) * shake * 0.006 + this.kick * 0.01,
         roll: this.bank + Math.sin(t * 36) * shake * 0.008,
-        fov: 78 + Math.min(speed / 76, 1) * 5,
+        fov: 78 + Math.min(speed / 82, 1) * 9 + this.fovKick * 6,
       };
       this.rig.root.s = innerWidth < innerHeight ? [0.69, 0.85, 1] : [1, 1, 1];
+      // the nose dip is the cockpit's, not the view's: the crosshair stays where the beams go
+      this.rig.root.r[0] = this.nose;
       this.rig.arms.forEach((arm, i) => {
         arm.r[0] = this.grab ? -0.08 : this.firing ? Math.sin(t * 40) * 0.012 : 0;
         arm.r[1] = this.grab ? (i === 0 ? -0.13 : 0.13) : 0;
@@ -6437,12 +7216,286 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.rig.carry.visible = this.carrying && this.planet.ruler.captured && this.planet.newCapture;
       this.game.engine.impact = shake;
     }
+    // coming down hard onto the ground: the hull hits it, and so does whatever is under it
+    slam(ground, speed) {
+      const k = M.clamp((speed - 13) / 30, 0, 1);
+      this.game.audio.impact(0.8 + k * 1.4);
+      this.shake = Math.max(this.shake, 0.3 + k * 0.6);
+      this.fovKick = Math.max(this.fovKick, 0.5 * k);
+      const at = [this.p[0], ground, this.p[2]];
+      this.planet.pulseAt(at, 12 + k * 18, 50 + k * 110);
+      this.planet.wave([at[0], ground + 0.6, at[2]], '#e2d3ae', 70 + k * 70, 0.55);
+      this.planet.slammed?.(at, k, this);
+    }
+    hud(aim) {
+      const touch = this.touch,
+        grabKey = touch ? '견인 버튼' : '우클릭';
+      let context = '',
+        progress = -1;
+      const e = this.grab;
+      if (e) {
+        if (e.kind === 'ruler') {
+          context = '연결 고정 · 뒤로 물러나 당기기';
+          progress = this.tension / 1.8;
+        } else if (e.kind === 'building') context = '잡아당기는 중 · ' + grabKey + ' 놓기';
+        else context = touch ? '광선 버튼 던지기 · 견인 버튼 내려놓기' : '좌클릭 던지기 · 우클릭 내려놓기';
+        if (e.kind === 'creature' && e.beg)
+          context = this.game.universe.cargoFull() ? '화물칸 가득 참 · ' + grabKey + '으로 내려놓기' : '240m 위로 올라가면 모선이 끌어올립니다';
+      } else {
+        const t = this.pick?.entity || aim?.entity;
+        if (t) {
+          if (t.kind === 'ruler')
+            context = t.hp <= 0 ? this.planet.config?.rulerAim || this.planet.rulerName + ' · Q로 머리 견인' : this.planet.guardText?.() || this.planet.rulerName + ' · 왕좌를 무력화하세요';
+          else if (t.label !== undefined) context = t.label;
+          else if (this.pick)
+            context = t.kind === 'creature' ? (t.beg ? 'Q · 생존자 견인' : 'Q · 생명체 견인') : t.kind === 'building' ? 'Q · 붙잡아 당기기' : '';
+        } else if (this.bugsInCone >= 3) context = '벌레 ' + (this.bugsInCone >= 70 ? '70마리 넘게' : this.bugsInCone + '마리') + ' · Q 견인';
+      }
+      this.game.ui.context(context, !!(this.pick || aim || this.bugsInCone >= 3), progress);
+      this.game.ui.prompt('', false);
+      this.game.ui.setArea(this.planet.areaLabel, this.planet.ruler.captured ? this.planet.afterLabel : this.planet.regionName);
+      this.game.ui.setStatus(this.grab ? '중력 견인 중' : this.firing ? '절단 광선' : '파괴정 · TALON', `${Math.round(M.len(this.velocity))} m/s`);
+    }
+    /* ---------- the tractor beam ---------- */
+    centerOf(e) {
+      if (e.hit?.length) return [e.hit[0][0], e.hit[0][1], e.hit[0][2]];
+      if (e.kind === 'ruler') return e.p;
+      const p = e.node && (e.kind === 'demon' || e.kind === 'angel') ? e.node.p : e.p;
+      if (e.sp && e.scale) return [p[0], p[1] + (e.sp.center || 0.9) * e.scale, p[2]];
+      if (e.hy) return [p[0], p[1] + e.hy, p[2]];
+      if (e.kind === 'creature') return [p[0], p[1] + 1, p[2]];
+      return p;
+    }
+    radiusOf(e) {
+      return e.hit?.[0]?.[3] || e.radius || 1;
+    }
+    // how heavy a held thing is, 0 (a person) to 1 (a keeper of hell)
+    weight(e) {
+      if (e.kind === 'ruler' || e.kind === 'building') return 0.6;
+      return M.clamp((this.radiusOf(e) - 1.4) / 3, 0, 1);
+    }
+    grabbable(e) {
+      if (!e || !e.alive || e.dying) return false;
+      if (e.kind === 'ruler') return e.hp <= 0;
+      if (e.kind === 'building') return false;
+      return !e.fixed && !e.carrier && !e.gone;
+    }
+    // What a press of the tractor would catch: what the crosshair is on, or else the nearest thing inside the cone
+    // that nothing solid stands in front of. A wall or building under the crosshair is pulled at if nothing else is.
+    findTarget(f) {
+      const aim = this.planet.raycast(this.p, f, RANGE);
+      if (aim && aim.entity.kind !== 'building' && (this.grabbable(aim.entity) || aim.entity.fixed || aim.entity.kind === 'ruler')) return aim;
+      const list = this.planet.grabCandidates ? this.planet.grabCandidates() : [];
+      let best = null,
+        bestScore = Infinity;
+      for (const e of list) {
+        if (!this.grabbable(e)) continue;
+        const c = this.centerOf(e),
+          v = M.sub(c, this.p),
+          d = M.len(v),
+          r = this.radiusOf(e);
+        if (d > RANGE + r || d < 0.5) continue;
+        const cos = (v[0] * f[0] + v[1] * f[1] + v[2] * f[2]) / d;
+        if (cos < 0.9) continue;
+        const ang = Math.acos(M.clamp(cos, -1, 1)),
+          size = Math.atan(r / d);
+        if (ang > CONE + size) continue;
+        const score = ang - size * 0.5 + d * 0.0005;
+        if (score < bestScore) {
+          bestScore = score;
+          best = { entity: e, distance: d, point: c };
+        }
+      }
+      if (best) {
+        // something solid in the way keeps it out of reach
+        const dir = M.norm(M.sub(best.point, this.p)),
+          block = this.planet.raycast(this.p, dir, best.distance);
+        if (!block || block.entity === best.entity || block.distance > best.distance - this.radiusOf(best.entity) - 1 || !(block.entity.kind === 'building' || block.entity.kind === 'wall' || block.entity.fixed))
+          return best;
+      }
+      if (aim && aim.entity.kind === 'building') return aim;
+      return null;
+    }
+    tryGrab(f) {
+      // nothing solid in the cone: on a world with bugs, the beam takes up a ball of them instead
+      const pick = this.findTarget(f) || this.planet.tractorFallback?.(this.p, f, RANGE, CONE) || null;
+      if (!pick) {
+        // the beam goes out and comes back empty: seen and heard, nothing more
+        this.flash = 0.32;
+        this.flashDir = f.slice();
+        this.game.audio.whiff();
+        return;
+      }
+      const e = pick.entity;
+      if (e.kind === 'ruler' && e.hp > 0) {
+        const [title, line] = this.planet.lockedText?.() || ['왕좌가 버티고 있습니다.', '광선이나 충돌로 구속 장치를 먼저 부수세요.'];
+        this.game.ui.toast(title, line, 3);
+        this.flash = 0.25;
+        this.flashDir = f.slice();
+        return;
+      }
+      if (e.fixed) {
+        this.game.ui.toast('견인이 걸리지 않습니다.', e.fixedNote || '땅과 이어져 있습니다.', 2);
+        this.flash = 0.25;
+        this.flashDir = f.slice();
+        this.game.audio.whiff();
+        return;
+      }
+      this.grab = e;
+      this.grabStart = M.dist(this.p, e.p);
+      this.tension = 0;
+      this.hv = e.velocity ? e.velocity.slice() : [0, 0, 0];
+      this.holdDist = M.clamp(9 + this.radiusOf(e) * 3.2, 13, 30);
+      this.planet.attach(e, this);
+      const w = this.weight(e);
+      this.game.audio.grabSnap(w);
+      this.shake = Math.max(this.shake, 0.18 + w * 0.3);
+      // the weight comes on: the craft sags under it
+      this.velocity[1] -= 2.5 + w * 5;
+      if (e.kind === 'ruler') {
+        const [title, line] = this.planet.config?.rulerGrab || ['왕관 고정', 'S로 뒤로 물러나거나 방향을 틀어 잡아당기세요.'];
+        this.game.ui.toast(title, line, 5);
+      }
+    }
+    updateGrab(dt, f) {
+      const e = this.grab;
+      if (!e.alive && e.kind !== 'ruler' && e.kind !== 'loose') {
+        this.release(true);
+        return;
+      }
+      if (e.kind === 'ruler') {
+        const dist = M.dist(this.p, e.p),
+          stretch = Math.max(0, dist - this.grabStart);
+        this.tension += Math.max(0, stretch - 2) * dt * (this.planet.config?.pullRate || 0.11);
+        this.tension = Math.max(0, this.tension - dt * 0.015);
+        this.planet.tetherTo(e.p, this);
+        const k = Math.min(this.tension, 1.8);
+        this.planet.ruler.head.r[2] = Math.sin(this.bob * (27 + k * 14)) * Math.min(0.06, this.tension * 0.04);
+        this.planet.ruler.head.p[1] = (this.planet.ruler.headRestY ?? 18) + k * (this.planet.config?.pullRise || 1.2);
+        // the line strains: the craft is held back and shudders more the nearer it comes to tearing loose
+        this.shake = Math.max(this.shake, 0.06 + this.tension * 0.2);
+        if (stretch > 2) {
+          const back = M.norm(M.sub(this.p, e.p)),
+            outward = this.velocity[0] * back[0] + this.velocity[1] * back[1] + this.velocity[2] * back[2];
+          if (outward > 0) this.velocity = M.sub(this.velocity, M.mul(back, outward * Math.min(1, dt * 2.2)));
+        }
+        if (this.tension >= 1.8) {
+          this.planet.captureRuler();
+          this.carrying = true;
+          this.grab = null;
+          this.shake = 0.8;
+          this.fovKick = 1;
+          this.game.audio.success();
+          this.game.audio.throwKick();
+          this.game.ui.toast(this.planet.rulerName + ' 회수', '떠날 때가 되면 R · 모선 귀환', 7);
+          this.planet.stopTether();
+        }
+      } else if (e.kind === 'building') {
+        const dist = M.dist(this.p, e.p),
+          stretch = Math.max(0, dist - this.grabStart);
+        e.node.r[2] = Math.sin(this.bob * 20) * Math.min(0.07, stretch * 0.006);
+        this.planet.tetherTo(M.add(e.p, [0, e.h * 0.6, 0]), this);
+        this.shake = Math.max(this.shake, Math.min(0.3, stretch * 0.02));
+        if (stretch > 2) this.planet.damage(e, dt * (40 + stretch * 11), M.norm(M.sub(this.p, e.p)), 'pull');
+      } else {
+        // a spring hauls it in, then it hangs in front and swings behind when the craft turns
+        const target = M.add(this.p, M.add(M.mul(f, this.holdDist), [0, -2.4, 0])),
+          kS = 34,
+          c = 9;
+        for (let i = 0; i < 3; i++) this.hv[i] += (kS * (target[i] - e.p[i]) - c * (this.hv[i] - this.velocity[i])) * dt;
+        const sp = M.len(this.hv);
+        if (sp > 150) this.hv = M.mul(this.hv, 150 / sp);
+        const np = M.add(e.p, M.mul(this.hv, dt)),
+          fl = this.planet.floor ? this.planet.floor(np[0], np[2], np[1]) : this.planet.height(np[0], np[2]);
+        if (np[1] < fl + 0.4) {
+          np[1] = fl + 0.4;
+          this.hv[1] = Math.max(0, this.hv[1]);
+        }
+        e.p = np;
+        e.node.p = np.slice();
+        const rel = M.sub(this.hv, this.velocity);
+        e.node.r[2] = M.damp(e.node.r[2] || 0, M.clamp(-(rel[0] * Math.cos(this.yaw) - rel[2] * Math.sin(this.yaw)) * 0.03, -0.8, 0.8), 6, dt);
+        e.velocity = [0, 0, 0];
+        this.planet.tetherTo(e.p, this);
+      }
+    }
+    // let go: what was held is lowered, not dropped, so a person set down from high up lands on their feet
+    release(gentle = true) {
+      if (this.grab) {
+        const e = this.grab;
+        if (e.kind === 'creature' || e.kind === 'loose' || ((e.kind === 'angel' || e.kind === 'demon') && !e.fixed)) {
+          e.velocity = M.add(M.mul(this.hv, 0.3), M.mul(this.velocity, 0.2));
+          e.thrown = true;
+          e.lowered = gentle && (e.kind === 'creature' || e.kind === 'loose');
+        }
+        if (e.kind === 'building') e.node.r[2] = 0;
+      }
+      this.grab = null;
+      this.tension = 0;
+      this.planet.stopTether();
+    }
+    throwHeld(f) {
+      const e = this.grab;
+      this.grab = null;
+      this.tension = 0;
+      this.planet.stopTether();
+      e.velocity = M.add(M.mul(f, 88), M.mul(this.velocity, 0.6));
+      e.thrown = true;
+      e.lowered = false;
+      // the punt pushes back on the craft
+      this.velocity = M.add(this.velocity, M.mul(f, -6 - this.weight(e) * 8));
+      this.kick = 0.3;
+      this.shake = Math.max(this.shake, 0.32);
+      this.fovKick = Math.max(this.fovKick, 0.7);
+      this.flash = 0.22;
+      this.flashDir = f.slice();
+      this.holdFire = true;
+      this.game.audio.throwKick();
+    }
+    // the beam drawn: a cone of light to what it holds or is reaching for, and a ring round the catch
+    beamFX(dt, f) {
+      const from = M.add(this.p, [0, -1.1, 0]);
+      this.flash = Math.max(0, this.flash - dt);
+      let to = null,
+        width = 0,
+        alpha = 0;
+      if (this.grab) {
+        const e = this.grab,
+          c = e.kind === 'building' ? M.add(e.p, [0, e.h * 0.6, 0]) : this.centerOf(e);
+        to = c;
+        width = this.radiusOf(e) * (e.kind === 'ruler' ? 1.4 : 2.4) + 1;
+        alpha = e.kind === 'ruler' ? 0.12 + Math.min(1, this.tension / 1.8) * 0.12 : 0.15;
+      } else if (this.flash > 0) {
+        const len = this.flash > 0.2 ? RANGE * (1 - (this.flash - 0.2) / 0.12) * 0.9 + 12 : RANGE;
+        to = M.add(from, M.mul(this.flashDir, Math.max(10, Math.min(RANGE, len))));
+        width = Math.tan(CONE) * 2 * M.dist(from, to);
+        alpha = 0.22 * Math.min(1, this.flash / 0.18);
+      }
+      if (to) {
+        this.planet.setLine(this.cone, to, from, width);
+        this.cone.alpha = alpha * (0.85 + Math.sin(this.bob * 31) * 0.15);
+      } else this.cone.visible = false;
+      // the ring: on the catch while held, on what the cone would catch while aiming
+      const ringOn = this.grab && this.grab.kind !== 'building' ? this.grab : this.pick && this.pick.entity.kind !== 'building' && this.grabbable(this.pick.entity) ? this.pick.entity : null;
+      if (ringOn) {
+        const c = this.centerOf(ringOn),
+          r = this.radiusOf(ringOn) * (ringOn.kind === 'ruler' ? 1.05 : 1.7) + 0.6,
+          toCam = M.norm(M.sub(this.p, c));
+        this.lock.visible = true;
+        this.lock.p = c;
+        this.lock.s = [r, r, r];
+        // stood up to face the craft
+        this.lock.r = [Math.atan2(Math.hypot(toCam[0], toCam[2]), toCam[1]), Math.atan2(toCam[0], toCam[2]), 0];
+        this.lock.alpha = this.grab ? 0.32 : 0.42 + Math.sin(this.bob * 6) * 0.14;
+        this.lock.em = this.grab ? 0.5 : 1.2;
+      } else this.lock.visible = false;
+    }
     liftSurvivor(dt) {
       const e = this.grab,
         u = this.game.universe;
       this.liftHint = Math.max(0, (this.liftHint || 0) - dt);
       if (!e || e.kind !== 'creature' || !e.alive || !e.beg) return;
-      const alt = this.p[1] - (this.planet.floor ? this.planet.floor(this.p[0], this.p[2], this.p[1]) : this.planet.height(this.p[0], this.p[2]));
+      const alt = this.p[1] - this.floorAt(this.p);
       if (alt < 240) return;
       if (u.cargoFull()) {
         if (this.liftHint <= 0) {
@@ -6465,13 +7518,14 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         5,
       );
     }
+    // kept for worlds that call it directly (a test, a scripted grab): same as a tractor press on what is aimed at
     toggleGrab(aim) {
       if (this.grab) {
-        this.release();
+        this.release(false);
         return;
       }
-      if (!aim || aim.distance > 85) {
-        this.game.ui.toast('견인할 대상이 없습니다.', '조준점을 맞추고 가까이 접근하세요.', 2);
+      if (!aim) {
+        this.tryGrab(M.dir(this.yaw, this.pitch));
         return;
       }
       const e = aim.entity;
@@ -6487,65 +7541,9 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.grab = e;
       this.grabStart = M.dist(this.p, e.p);
       this.tension = 0;
+      this.hv = [0, 0, 0];
+      this.holdDist = M.clamp(9 + this.radiusOf(e) * 3.2, 13, 30);
       this.planet.attach(e, this);
-      this.game.audio.metal();
-      if (e.kind === 'ruler') {
-        const [title, line] = this.planet.config?.rulerGrab || ['왕관 고정', 'S로 뒤로 물러나거나 방향을 틀어 잡아당기세요.'];
-        this.game.ui.toast(title, line, 5);
-      }
-    }
-    updateGrab(dt, f) {
-      const e = this.grab;
-      if (!e.alive && e.kind !== 'ruler' && e.kind !== 'loose') {
-        this.release();
-        return;
-      }
-      if (e.kind === 'ruler') {
-        const dist = M.dist(this.p, e.p),
-          stretch = Math.max(0, dist - this.grabStart);
-        this.tension += Math.max(0, stretch - 2) * dt * (this.planet.config?.pullRate || 0.11);
-        this.tension = Math.max(0, this.tension - dt * 0.015);
-        this.planet.tetherTo(e.p, this);
-        this.planet.ruler.head.r[2] = Math.sin(this.bob * 27) * Math.min(0.06, this.tension * 0.04);
-        this.planet.ruler.head.p[1] =
-          (this.planet.ruler.headRestY ?? 18) + Math.min(this.tension, 1.8) * (this.planet.config?.pullRise || 1.2);
-        this.shake = Math.max(this.shake, this.tension * 0.15);
-        if (this.tension >= 1.8) {
-          this.planet.captureRuler();
-          this.carrying = true;
-          this.grab = null;
-          this.shake = 0.8;
-          this.game.audio.success();
-          this.game.ui.toast(this.planet.rulerName + ' 회수', '떠날 때가 되면 R · 모선 귀환', 7);
-          this.planet.stopTether();
-        }
-      } else if (e.kind === 'building') {
-        const dist = M.dist(this.p, e.p),
-          stretch = Math.max(0, dist - this.grabStart);
-        e.node.r[2] = Math.sin(this.bob * 20) * Math.min(0.07, stretch * 0.006);
-        this.planet.tetherTo(M.add(e.p, [0, e.h * 0.6, 0]), this);
-        if (stretch > 2) this.planet.damage(e, dt * (40 + stretch * 11), M.norm(M.sub(this.p, e.p)), 'pull');
-      } else {
-        const target = M.add(this.p, M.mul(f, 19));
-        e.p = e.p.map((v, i) => M.damp(v, target[i], 7, dt));
-        e.node.p = e.p.slice();
-        e.node.r[2] += dt * 1.2;
-        e.velocity = [0, 0, 0];
-        this.planet.tetherTo(e.p, this);
-      }
-    }
-    release() {
-      if (this.grab) {
-        const e = this.grab;
-        if (e.kind === 'creature' || e.kind === 'loose' || ((e.kind === 'angel' || e.kind === 'demon') && !e.fixed)) {
-          e.velocity = M.add(M.mul(M.dir(this.yaw, this.pitch), 72), this.velocity);
-          e.thrown = true;
-        }
-        if (e.kind === 'building') e.node.r[2] = 0;
-      }
-      this.grab = null;
-      this.tension = 0;
-      this.planet.stopTether();
     }
   }
   K.Destroyer = Destroyer;
@@ -6839,6 +7837,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     return best;
   };
   const enc2 = n => B36[Math.floor(n / 36) % 36] + B36[n % 36];
+  const enc3 = n => B36[Math.floor(n / 1296) % 36] + B36[Math.floor(n / 36) % 36] + B36[n % 36];
 
   /* Final resting pose of a body. Deterministic from type and seed, so saved bodies look the same. */
   function corpsePose(type, seed, half) {
@@ -6984,6 +7983,25 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
               pal: pc,
             });
           }
+        } else if (t.startsWith('z.f.')) {
+          const body = t.slice(4);
+          for (let i = 0; i + 9 <= body.length; i += 9) {
+            const q = k => B36.indexOf(body[i + k]);
+            let bad = false;
+            for (let k = 0; k < 9; k++) if (q(k) < 0) bad = true;
+            if (bad) continue;
+            const xq = (q(0) * 36 + q(1)) * 36 + q(2),
+              zq = (q(3) * 36 + q(4)) * 36 + q(5),
+              tc = q(6);
+            st.corpses.push({
+              x: xq / 4 - 5832,
+              z: zq / 4 - 5832,
+              type: TYPES[Math.floor(tc / 6)] || 'fling',
+              size: tc % 6,
+              yaw: (q(7) / 36) * TAU,
+              pal: q(8),
+            });
+          }
         }
       }
       return st;
@@ -7085,7 +8103,9 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       // the living outside
       const slots = preset || this.slots(Math.max(this.v0, vi), spec.seed || 1);
       const made = [];
-      for (let i = 0; i < vi && i < OUTSIDE_CAP && slots[i]; i++) {
+      // a world that places every one of its people itself may keep more of them outside (hell: every circle full)
+      this.outsideCap = spec.cap || OUTSIDE_CAP;
+      for (let i = 0; i < vi && i < this.outsideCap && slots[i]; i++) {
         const sl = slots[i],
           r = this.make(sl.x, sl.z, { child: sl.child, sp: sl.sp ? SPECIES[sl.sp] : null });
         r.slot = sl;
@@ -7118,7 +8138,15 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       while (out.length < n && guard++ < n * 40) {
         const k = rng();
         let x, z;
-        if (k < 0.3 && sites.length) {
+        const vil = spec.villages || [];
+        if (vil.length && k >= 0.3 && k < 0.46) {
+          // out in the villages
+          const v = vil[(rng() * vil.length) | 0],
+            a = rng() * TAU,
+            d = 8 + Math.sqrt(rng()) * 70;
+          x = v.x + Math.sin(a) * d;
+          z = v.z + Math.cos(a) * d;
+        } else if (k < 0.3 && sites.length) {
           const b = sites[(rng() * sites.length) | 0],
             a = rng() * TAU,
             d = b.w * 0.62 + 2 + rng() * 9;
@@ -7133,7 +8161,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
           x = cx + Math.sin(a) * d;
           z = cz + Math.cos(a) * d;
         }
-        if (Math.hypot(x, z) > 600) continue;
+        if (Math.hypot(x, z) > (spec.maxR || 600)) continue;
         if (Math.hypot(x - throne[0], z - throne[1]) < throneR) continue;
         if (this.blocked(x, z, 1.2)) continue;
         out.push({ x, z, child: rng() < 0.16 });
@@ -7348,10 +8376,11 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
           r.p[2] = th[1] + (dz / d) * tr;
         }
       }
-      const R = Math.hypot(r.p[0], r.p[2]);
-      if (R > 615) {
-        r.p[0] *= 615 / R;
-        r.p[2] *= 615 / R;
+      const R = Math.hypot(r.p[0], r.p[2]),
+        lim = (this.spec?.maxR || 600) + 15;
+      if (R > lim) {
+        r.p[0] *= lim / R;
+        r.p[2] *= lim / R;
       }
       // a district with walls of its own (heaven) keeps its people inside them; hell keeps each in their circle
       this.spec?.clamp?.(r.p, r);
@@ -8085,6 +9114,16 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     fly(r, dt) {
       const s = this.s;
       r.velocity[1] -= 22 * dt;
+      // set down by the beam rather than dropped: a slow descent, feet first
+      if (r.lowered) {
+        const k = Math.exp(-2.4 * dt);
+        r.velocity[0] *= k;
+        r.velocity[2] *= k;
+        r.velocity[1] = Math.max(r.velocity[1], -11);
+        r.spinP = M.damp(r.spinP || 0, 0, 4, dt);
+        r.spinR = M.damp(r.spinR || 0, 0, 4, dt);
+        r.vp = r.vr = 0;
+      }
       r.p[0] += r.velocity[0] * dt;
       r.p[1] += r.velocity[1] * dt;
       r.p[2] += r.velocity[2] * dt;
@@ -8114,14 +9153,16 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       const floor = s.height(r.p[0], r.p[2]);
       if (r.p[1] <= floor) {
         r.p[1] = floor;
-        if (v > 14 || r.deathOnLand) {
+        if ((v > 14 || r.deathOnLand) && !r.lowered) {
           r.thrown = false;
           this.kill(r, r.throwCause || 'splat', M.norm([r.velocity[0], 0, r.velocity[2]]));
           return;
         }
+        const soft = r.lowered;
+        r.lowered = false;
         r.thrown = false;
         r.velocity = [0, 0, 0];
-        r.down = 1.2 + Math.random();
+        r.down = soft ? 0.5 : 1.2 + Math.random();
         r.downMax = r.down;
         r.state = this.calm ? 'wander' : this.mode === 'beg' ? 'beg' : 'flee';
         r.fear = this.calm ? 0 : Math.max(r.fear, 8);
@@ -8162,7 +9203,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       for (const b of this.s.buildings) {
         if (!b.pouring || !b.alive || b.pourLeft <= 0 || b.occ <= 0) continue;
         if (this.t < b.pourNext) continue;
-        if (this.list.length >= OUTSIDE_CAP) continue;
+        if (this.list.length >= (this.outsideCap || OUTSIDE_CAP)) continue;
         b.pourNext = this.t + 0.12 + Math.random() * 0.25;
         b.pourLeft--;
         b.occ--;
@@ -8431,7 +9472,8 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         if (part.lod > lod || (bigOnly && !part.big)) continue;
         if (part.dyn === 'halo' && (!alive || this.haloOff)) continue;
         if (half && part.half !== half) continue;
-        const b = store[part.geo];
+        // far away a round part is drawn with the coarse sphere: the same shape at a few pixels, a third of the triangles
+        const b = (lod === 0 && part.geo === 'lowSphere' && store.tinySphere) || store[part.geo];
         if (!b) continue;
         const d = b.data.length < (b.count + 1) * 24 ? engine.growBatch(b, b.count + 1) : b.data,
           o = b.count * 24;
@@ -8748,20 +9790,32 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         const step = saved.length / SAVE_CAP;
         saved = Array.from({ length: SAVE_CAP }, (_, i) => saved[Math.floor(i * step)]);
       }
-      let chunk = '';
+      // bodies within 808 m of the middle keep the old two-character places; the wider worlds put the rest in "z.f." with three
+      let chunk = '',
+        far = '';
       for (const c of saved) {
-        const xq = M.clamp(Math.round((c.x + 810) / 1.25), 0, 1295),
-          zq = M.clamp(Math.round((c.z + 810) / 1.25), 0, 1295),
-          tc = Math.max(0, TYPES.indexOf(c.type)) * 6 + (c.size ?? 3),
+        const tc = Math.max(0, TYPES.indexOf(c.type)) * 6 + (c.size ?? 3),
           yq = ((Math.round((((c.yaw % TAU) + TAU) % TAU) / TAU * 36) % 36) + 36) % 36;
         const code = this.mixSlots ? Math.max(0, this.slotOf(c.sp)) * 6 + Math.min(5, c.pal | 0) : c.pal | 0;
-        chunk += enc2(xq) + enc2(zq) + B36[tc] + B36[yq] + B36[Math.min(35, code)];
-        if (chunk.length >= 56) {
-          out.push('z.c.' + chunk);
-          chunk = '';
+        const tail = B36[tc] + B36[yq] + B36[Math.min(35, code)];
+        if (Math.abs(c.x) <= 808 && Math.abs(c.z) <= 808) {
+          const xq = M.clamp(Math.round((c.x + 810) / 1.25), 0, 1295),
+            zq = M.clamp(Math.round((c.z + 810) / 1.25), 0, 1295);
+          chunk += enc2(xq) + enc2(zq) + tail;
+          if (chunk.length >= 56) {
+            out.push('z.c.' + chunk);
+            chunk = '';
+          }
+        } else {
+          far += enc3(M.clamp(Math.round((c.x + 5832) * 4), 0, 46655)) + enc3(M.clamp(Math.round((c.z + 5832) * 4), 0, 46655)) + tail;
+          if (far.length >= 54) {
+            out.push('z.f.' + far);
+            far = '';
+          }
         }
       }
       if (chunk) out.push('z.c.' + chunk);
+      if (far) out.push('z.f.' + far);
       return out;
     }
     signal() {
@@ -8832,6 +9886,634 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
   };
 })((window.KO ||= {}));
 
+// FILE: src/worlds/swarm.js
+/* Swarm: small crawling bugs in their thousands, kept in flat arrays and drawn as instances.
+ * Each bug belongs to a patch (a cluster) it wanders in and comes back to. It runs from the ship's shadow when the ship
+ * comes down close, from the cutting beam and from blasts, and gathers again once the danger has passed.
+ * Legs, antennae and the gait are worked in the vertex shader (type 36); the CPU only moves and turns them. */
+(function (K) {
+  'use strict';
+  const M = K.M,
+    TAU = Math.PI * 2;
+  const IDLE = 0,
+    WALK = 1,
+    FLEE = 2,
+    BACK = 3,
+    SLEEP = 4,
+    DEAD = 5,
+    HELD = 6,
+    FALL = 7,
+    LOOK = 8,
+    GONE = 9;
+  // one body, unit length (head tip +0.5, tail -0.5). Leg vertices carry normals of length 2 + id/4, antennae 4 + k/4, cerci 5.
+  function ellipsoid(P, N, I, c, r, nu, nv) {
+    const o = P.length / 3;
+    for (let j = 0; j <= nv; j++) {
+      const v = (j / nv) * Math.PI,
+        sv = Math.sin(v),
+        cv = Math.cos(v);
+      for (let i = 0; i <= nu; i++) {
+        const u = (i / nu) * TAU,
+          x = Math.sin(u) * sv,
+          y = cv,
+          z = Math.cos(u) * sv;
+        P.push(c[0] + x * r[0], c[1] + y * r[1], c[2] + z * r[2]);
+        const nx = x / r[0],
+          ny = y / r[1],
+          nz = z / r[2],
+          l = Math.hypot(nx, ny, nz) || 1;
+        N.push(nx / l, ny / l, nz / l);
+      }
+    }
+    for (let j = 0; j < nv; j++)
+      for (let i = 0; i < nu; i++) {
+        const a = o + j * (nu + 1) + i,
+          b = a + nu + 1;
+        I.push(a, b, a + 1, b, b + 1, a + 1);
+      }
+  }
+  // a thin three-sided rod from a to b; its normals are stretched to the given length so the shader knows what it is
+  function rod(P, N, I, a, b, w, mark) {
+    const d = M.norm(M.sub(b, a)),
+      up = Math.abs(d[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0],
+      s = M.norm(M.cross(d, up)),
+      t = M.cross(s, d),
+      o = P.length / 3;
+    for (const end of [a, b])
+      for (let k = 0; k < 3; k++) {
+        const ang = (k / 3) * TAU,
+          n = M.add(M.mul(s, Math.cos(ang)), M.mul(t, Math.sin(ang)));
+        P.push(end[0] + n[0] * w, end[1] + n[1] * w, end[2] + n[2] * w);
+        N.push(n[0] * mark, n[1] * mark, n[2] * mark);
+      }
+    for (let k = 0; k < 3; k++) {
+      const k2 = (k + 1) % 3;
+      I.push(o + k, o + 3 + k, o + k2, o + 3 + k, o + 3 + k2, o + k2);
+    }
+  }
+  function bugMesh(near) {
+    const P = [],
+      N = [],
+      I = [];
+    if (!near) {
+      ellipsoid(P, N, I, [0, 0.08, -0.02], [0.27, 0.08, 0.48], 6, 3);
+      return { p: P, n: N, idx: I };
+    }
+    ellipsoid(P, N, I, [0, 0.085, -0.12], [0.27, 0.08, 0.36], 8, 5);
+    ellipsoid(P, N, I, [0, 0.1, 0.22], [0.25, 0.055, 0.16], 7, 3);
+    ellipsoid(P, N, I, [0, 0.055, 0.36], [0.085, 0.06, 0.065], 5, 3);
+    const legs = [
+      [[0.12, 0.06, 0.2], [0.27, 0.09, 0.3], [0.36, 0.0, 0.47]],
+      [[0.15, 0.06, 0.03], [0.38, 0.1, 0.02], [0.52, 0.0, -0.12]],
+      [[0.13, 0.06, -0.09], [0.37, 0.1, -0.26], [0.49, 0.0, -0.6]],
+    ];
+    for (const side of [1, -1])
+      legs.forEach((L, k) => {
+        const id = (side > 0 ? 0 : 3) + k,
+          mark = 2 + id * 0.25,
+          f = q => [q[0] * side, q[1], q[2]];
+        rod(P, N, I, f(L[0]), f(L[1]), 0.034, mark);
+        rod(P, N, I, f(L[1]), f(L[2]), 0.02, mark);
+      });
+    for (const side of [1, -1]) {
+      const mark = 4 + (side > 0 ? 0 : 0.25),
+        f = q => [q[0] * side, q[1], q[2]];
+      rod(P, N, I, f([0.045, 0.08, 0.42]), f([0.15, 0.13, 0.72]), 0.012, mark);
+      rod(P, N, I, f([0.15, 0.13, 0.72]), f([0.3, 0.1, 1.05]), 0.009, mark);
+      rod(P, N, I, f([0.05, 0.085, -0.46]), f([0.1, 0.1, -0.57]), 0.012, 5);
+    }
+    return { p: P, n: N, idx: I };
+  }
+  function geometry(engine) {
+    if (!engine.geometries['bug-near']) engine.addGeometry('bug-near', bugMesh(true));
+    if (!engine.geometries['bug-far']) engine.addGeometry('bug-far', bugMesh(false));
+  }
+  const { trs } = K.Mat;
+  class Swarm {
+    /* world: the surface; opt: { size, color, capacity, near, far, seed } */
+    constructor(world, opt = {}) {
+      this.w = world;
+      this.engine = world.game.engine;
+      geometry(this.engine);
+      this.size = opt.size || 0.28;
+      this.color = M.hex(opt.color || '#d6862a').slice();
+      this.coldColor = M.hex('#7c6450').slice();
+      this.nearD = opt.near || 32;
+      this.farD = opt.far || 230;
+      const n = (this.cap = opt.capacity || 9000);
+      for (const k of ['x', 'y', 'z', 'yaw', 'v', 'tx', 'tz', 't', 'ph', 'pitch', 'gait', 'vy', 'var', 'fear', 'react', 'rx', 'rz'])
+        this[k] = new Float32Array(n);
+      this.st = new Uint8Array(n);
+      this.cl = new Uint16Array(n);
+      this.count = 0;
+      this.alive = 0;
+      this.clusters = [];
+      this.rng = M.rand(opt.seed || 41);
+      this.near = this.engine.makeBatch('bug-near', { capacity: 600 });
+      this.far = this.engine.makeBatch('bug-far', { capacity: 2400 });
+      this.smears = this.engine.makeBatch('lowDisc', { capacity: 400, dynamic: false });
+      this.smears.noCull = true;
+      this.smearCap = opt.smears || 1600;
+      this.smearAt = 0;
+      this.saved = []; // the most recent smears, for the save file: [x, z, kind]
+      world.residents.all.push(this.near, this.far, this.smears);
+      this.cold = 0;
+      this.held = [];
+      this.ball = null;
+      this.frame = 0;
+      this.running = 0;
+      this.killed = 0;
+      this.onKill = null;
+    }
+    // where a bug stands: the cluster's own floor if it has one, else the world's
+    floorY(cl, x, z) {
+      if (cl.yFn) return cl.yFn(x, z);
+      const w = this.w;
+      return (w.floor ? w.floor(x, z, 1e9) : w.height(x, z)) + cl.y0;
+    }
+    /* c: { x, z, r, n, y0, yFn, dead, warm } — n bugs scattered over a disc, thicker toward the middle */
+    addCluster(c) {
+      const k = this.clusters.length,
+        rng = this.rng,
+        n = Math.min(c.n, this.cap - this.count);
+      const cl = { k, x: c.x, z: c.z, r: c.r, n0: n, start: this.count, end: this.count + n, alive: 0, y0: c.y0 || 0, yFn: c.yFn || null, cold: 0, reach: c.r + 30, tag: c.tag || null };
+      const dead = Math.min(n, c.dead || 0);
+      for (let j = 0; j < n; j++) {
+        const i = this.count++,
+          a = rng() * TAU,
+          rr = Math.pow(rng(), c.spread ?? 0.62) * c.r;
+        this.x[i] = c.x + Math.sin(a) * rr;
+        this.z[i] = c.z + Math.cos(a) * rr;
+        this.y[i] = this.floorY(cl, this.x[i], this.z[i]);
+        this.yaw[i] = rng() * TAU;
+        this.var[i] = rng();
+        this.ph[i] = rng();
+        this.t[i] = rng() * 3;
+        this.cl[i] = k;
+        this.v[i] = 0;
+        this.pitch[i] = 0;
+        this.gait[i] = 0;
+        this.fear[i] = 0;
+        this.st[i] = j >= n - dead ? GONE : rng() < 0.55 ? IDLE : WALK;
+        if (this.st[i] === WALK) this.pickTarget(i, cl);
+        if (this.st[i] !== GONE) cl.alive++;
+      }
+      this.alive += cl.alive;
+      this.clusters.push(cl);
+      return cl;
+    }
+    pickTarget(i, cl, wide = 1) {
+      const rng = this.rng,
+        a = rng() * TAU,
+        rr = Math.pow(rng(), 0.7) * cl.r * wide;
+      // most walks are short hops near where it already is; some cross back toward the warm middle
+      if (rng() < 0.7) {
+        const h = 0.6 + rng() * 2.4;
+        this.tx[i] = this.x[i] + Math.sin(a) * h;
+        this.tz[i] = this.z[i] + Math.cos(a) * h;
+        const dx = this.tx[i] - cl.x,
+          dz = this.tz[i] - cl.z,
+          d = Math.hypot(dx, dz);
+        if (d > cl.r) {
+          this.tx[i] = cl.x + (dx / d) * cl.r * 0.9;
+          this.tz[i] = cl.z + (dz / d) * cl.r * 0.9;
+        }
+      } else {
+        this.tx[i] = cl.x + Math.sin(a) * rr;
+        this.tz[i] = cl.z + Math.cos(a) * rr;
+      }
+    }
+    /* threat: { p, alt, speed, low, shadow, beam: [x,y,z] | null, blast: [x,z,r] | null } */
+    update(dt, threat) {
+      const f = this.frame++;
+      this.running = 0;
+      for (const cl of this.clusters) {
+        if (!cl.alive) continue;
+        const d = Math.hypot(cl.x - threat.p[0], cl.z - threat.p[2]) - cl.r,
+          step = d < 70 ? 1 : d < 220 ? 3 : 9;
+        if ((f + cl.k) % step) continue;
+        const h = Math.min(0.3, dt * step),
+          cold = Math.max(this.cold, cl.cold);
+        for (let i = cl.start; i < cl.end; i++) {
+          const s = this.st[i];
+          if (s === DEAD || s === GONE || s === HELD) continue;
+          this.think(i, h, cl, threat, cold, d < 70);
+        }
+      }
+      if (this.held.length) this.updateHeld(dt);
+    }
+    think(i, dt, cl, T, cold, close) {
+      const rng = this.rng;
+      let s = this.st[i];
+      const x = this.x[i],
+        z = this.z[i];
+      if (s === FALL) {
+        this.vy[i] -= 22 * dt;
+        this.y[i] += this.vy[i] * dt;
+        this.x[i] += Math.sin(this.yaw[i]) * this.v[i] * dt;
+        this.z[i] += Math.cos(this.yaw[i]) * this.v[i] * dt;
+        const fl = this.floorY(cl, this.x[i], this.z[i]);
+        if (this.y[i] <= fl) {
+          this.y[i] = fl;
+          this.st[i] = FLEE;
+          this.t[i] = 1 + rng() * 1.5;
+          this.v[i] = 0;
+        }
+        return;
+      }
+      // the cold: once the heat has gone they slow, gather in heaps and stop
+      if (cold > 0.97) {
+        if (s !== SLEEP) {
+          this.st[i] = SLEEP;
+          this.gait[i] = 0;
+          this.pitch[i] = 0;
+        }
+        return;
+      }
+      const slow = 1 - cold * 0.85;
+      // startled: frozen for a blink, then off at a run
+      if (this.react[i] > 0) {
+        this.react[i] -= dt;
+        this.gait[i] = 0;
+        this.v[i] = 0;
+        if (this.react[i] <= 0) this.flee(i, x - this.rx[i], z - this.rz[i], 1, 1.1 + this.var[i] * 1.4);
+        return;
+      }
+      // what frightens them: the ship's shadow close above, the cutting beam, a blast
+      if (close && s !== FLEE) {
+        const sx = x - T.p[0],
+          sz = z - T.p[2],
+          sd = Math.hypot(sx, sz);
+        if (T.alt < 34 && sd < T.shadow) {
+          this.startle(i, T.p[0], T.p[2], 0.05 + this.var[i] * 0.22);
+          return;
+        } else if (T.alt < 34 && sd < T.shadow + 14 && s !== LOOK && T.speed < 6 && rng() < dt * 1.5) {
+          // the ship hangs there, not too close: they stop and rear up to look at it
+          this.st[i] = s = LOOK;
+          this.t[i] = 0.8 + rng() * 1.6;
+        }
+        if (T.beam && s !== FLEE) {
+          const bx = x - T.beam[0],
+            bz = z - T.beam[2],
+            bd = Math.hypot(bx, bz);
+          if (bd < 8) {
+            this.startle(i, T.beam[0], T.beam[2], 0.18 + this.var[i] * 0.4);
+            return;
+          }
+        }
+      }
+      if (T.blast && s !== FLEE) {
+        const bx = x - T.blast[0],
+          bz = z - T.blast[1],
+          bd = Math.hypot(bx, bz);
+        if (bd < T.blast[2] * 1.6) {
+          this.flee(i, bx, bz, bd, 2 + this.var[i] * 2);
+          s = FLEE;
+        }
+      }
+      if (this.fear[i] > 0) {
+        this.fear[i] -= dt;
+        if (s !== FLEE && this.fear[i] > 0.3) {
+          this.flee(i, x - this.tx[i], z - this.tz[i], 1, this.fear[i]);
+          s = FLEE;
+        }
+      }
+      let tx = 0,
+        tz = 0,
+        speed = 0;
+      this.t[i] -= dt;
+      switch (s) {
+        case IDLE:
+          speed = 0;
+          // grooming: a little turn this way and that
+          if (this.var[i] > 0.6) this.yaw[i] += Math.sin(this.w.time * 3 + this.var[i] * 40) * dt * 0.8;
+          if (this.t[i] <= 0) {
+            this.st[i] = WALK;
+            this.pickTarget(i, cl);
+          }
+          break;
+        case LOOK: {
+          speed = 0;
+          const want = Math.atan2(T.p[0] - x, T.p[2] - z);
+          this.yaw[i] += M.clamp(angleTo(this.yaw[i], want), -dt * 4, dt * 4);
+          this.pitch[i] = M.damp(this.pitch[i], 0.55, 8, dt);
+          if (this.t[i] <= 0) {
+            this.st[i] = IDLE;
+            this.t[i] = 0.5 + rng() * 2;
+          }
+          break;
+        }
+        case WALK:
+          tx = this.tx[i];
+          tz = this.tz[i];
+          speed = (0.35 + this.var[i] * 0.45) * slow;
+          if (Math.hypot(tx - x, tz - z) < 0.25) {
+            this.st[i] = IDLE;
+            this.t[i] = (0.4 + rng() * 2.8) * (1 + cold * 3);
+          }
+          break;
+        case FLEE:
+          tx = this.tx[i];
+          tz = this.tz[i];
+          speed = (3.2 + this.var[i] * 2.2) * slow;
+          this.running++;
+          if (this.t[i] <= 0) {
+            this.st[i] = BACK;
+            this.pickTarget(i, cl, 0.8);
+          }
+          break;
+        case BACK:
+          tx = this.tx[i];
+          tz = this.tz[i];
+          speed = (1.2 + this.var[i] * 0.8) * slow;
+          if (Math.hypot(tx - x, tz - z) < 0.4) {
+            this.st[i] = IDLE;
+            this.t[i] = 0.5 + rng() * 2;
+          }
+          break;
+        case SLEEP:
+          // warm again (it never warms again here, but a world could): wake slowly
+          if (rng() < dt * 0.3) this.st[i] = IDLE;
+          break;
+      }
+      if (s !== LOOK) this.pitch[i] = M.damp(this.pitch[i], 0, 10, dt);
+      if (speed > 0) {
+        const want = Math.atan2(tx - x, tz - z),
+          turn = angleTo(this.yaw[i], want);
+        this.yaw[i] += M.clamp(turn, -dt * (s === FLEE ? 12 : 5), dt * (s === FLEE ? 12 : 5));
+        const go = speed * Math.max(0, Math.cos(turn) * 0.8 + 0.2);
+        this.v[i] = go;
+        this.x[i] += Math.sin(this.yaw[i]) * go * dt;
+        this.z[i] += Math.cos(this.yaw[i]) * go * dt;
+        this.y[i] = this.floorY(cl, this.x[i], this.z[i]);
+        this.gait[i] = Math.min(15, go / (this.size * 0.5));
+      } else {
+        this.v[i] = 0;
+        this.gait[i] = 0;
+      }
+    }
+    startle(i, fx, fz, wait) {
+      this.react[i] = wait;
+      this.rx[i] = fx;
+      this.rz[i] = fz;
+      this.pitch[i] = 0.25;
+    }
+    flee(i, dx, dz, d, time) {
+      const rng = this.rng,
+        a = Math.atan2(dx, dz) + (rng() - 0.5) * 0.9,
+        run = 5 + rng() * 7;
+      this.tx[i] = this.x[i] + Math.sin(a) * run;
+      this.tz[i] = this.z[i] + Math.cos(a) * run;
+      this.st[i] = FLEE;
+      this.t[i] = Math.max(this.t[i] > 0 && this.st[i] === FLEE ? this.t[i] : 0, time);
+    }
+    // everything inside a disc dies (crushed by the hull or a blast, burnt by the beam); returns how many
+    squash(x, z, r, how = 'crush', yHint = null, max = 400) {
+      let n = 0;
+      const r2 = r * r;
+      for (const cl of this.clusters) {
+        if (!cl.alive || Math.hypot(cl.x - x, cl.z - z) > cl.reach + r) continue;
+        for (let i = cl.start; i < cl.end && n < max; i++) {
+          const s = this.st[i];
+          if (s === DEAD || s === GONE || s === HELD) continue;
+          const dx = this.x[i] - x,
+            dz = this.z[i] - z;
+          if (dx * dx + dz * dz > r2) continue;
+          if (yHint != null && Math.abs(this.y[i] - yHint) > 4) continue;
+          this.kill(i, how);
+          n++;
+        }
+      }
+      if (n) this.alarm(x, z, r + 6);
+      return n;
+    }
+    alarm(x, z, r) {
+      for (const cl of this.clusters) {
+        if (!cl.alive || Math.hypot(cl.x - x, cl.z - z) > cl.reach + r) continue;
+        for (let i = cl.start; i < cl.end; i++) {
+          const s = this.st[i];
+          if (s === DEAD || s === GONE || s === HELD || s === SLEEP) continue;
+          const dx = this.x[i] - x,
+            dz = this.z[i] - z,
+            d = Math.hypot(dx, dz);
+          if (d < r) this.flee(i, dx, dz, d, 1 + this.var[i] * 1.5);
+        }
+      }
+    }
+    kill(i, how = 'crush') {
+      const cl = this.clusters[this.cl[i]];
+      if (this.st[i] === HELD) this.held = this.held.filter(j => j !== i);
+      this.st[i] = DEAD;
+      this.react[i] = 0;
+      cl.alive--;
+      this.alive--;
+      this.killed++;
+      this.smear(this.x[i], this.y[i], this.z[i], how);
+      this.onKill?.(i, how);
+    }
+    // a bug that climbs aboard: gone from here without a mark
+    take(i) {
+      const cl = this.clusters[this.cl[i]];
+      this.st[i] = GONE;
+      cl.alive--;
+      this.alive--;
+    }
+    smear(x, y, z, how = 'crush', size = 1) {
+      const b = this.smears,
+        slot = this.smearAt % this.smearCap;
+      this.smearAt++;
+      const d = this.engine.growBatch(b, Math.max(b.count, slot + 1)),
+        o = slot * 24,
+        s = this.size * (1.6 + Math.random() * 1.1) * size,
+        col = how === 'burn' ? [0.07, 0.05, 0.04] : how === 'cold' ? [0.42, 0.32, 0.22] : [0.3 + Math.random() * 0.08, 0.2, 0.05];
+      trs(d, o, x, y + 0.04 + (slot % 7) * 0.002, z, 0, Math.random() * TAU, 0, s, 0.01, s * (0.8 + Math.random() * 0.4));
+      d[o + 16] = col[0];
+      d[o + 17] = col[1];
+      d[o + 18] = col[2];
+      d[o + 19] = 1;
+      d[o + 20] = 0;
+      d[o + 21] = 37;
+      d[o + 22] = 0;
+      d[o + 23] = Math.random() * 50;
+      b.count = Math.max(b.count, slot + 1);
+      b.uploaded = Math.min(b.uploaded, slot);
+      this.saved.push([x, z, how === 'burn' ? 1 : 0]);
+      if (this.saved.length > 320) this.saved.shift();
+    }
+    // the tractor's cone: which bugs stand inside it, nearest the middle first
+    gather(o, dir, range, cone, max = 60) {
+      const out = [];
+      for (const cl of this.clusters) {
+        if (!cl.alive) continue;
+        const cx = cl.x - o[0],
+          cz = cl.z - o[2],
+          cd = Math.hypot(cx, cz);
+        if (cd - cl.reach > range) continue;
+        for (let i = cl.start; i < cl.end; i++) {
+          const s = this.st[i];
+          if (s === DEAD || s === GONE || s === HELD) continue;
+          const vx = this.x[i] - o[0],
+            vy = this.y[i] + 0.1 - o[1],
+            vz = this.z[i] - o[2],
+            d = Math.hypot(vx, vy, vz);
+          if (d > range || d < 0.5) continue;
+          const c = (vx * dir[0] + vy * dir[1] + vz * dir[2]) / d;
+          if (c < Math.cos(cone)) continue;
+          out.push([1 - c, i]);
+        }
+      }
+      out.sort((a, b) => a[0] - b[0]);
+      return out.slice(0, max).map(e => e[1]);
+    }
+    // bugs taken up together into a ball held in the beam
+    hold(list, ball) {
+      for (const i of list) {
+        this.st[i] = HELD;
+        this.v[i] = 0;
+      }
+      this.held = list.slice();
+      this.ball = ball;
+      // each keeps a place in the ball and its own scrabbling
+      this.ballSlots = list.map((_, k) => {
+        const yy = 1 - (2 * (k + 0.5)) / list.length,
+          rr = Math.sqrt(1 - yy * yy),
+          a = k * 2.39996;
+        return [Math.cos(a) * rr, yy, Math.sin(a) * rr];
+      });
+    }
+    updateHeld(dt) {
+      const b = this.ball;
+      if (!b) return;
+      const R = b.radius * 0.85,
+        t = this.w.time;
+      this.held.forEach((i, k) => {
+        const s = this.ballSlots[k],
+          wob = 1 + Math.sin(t * 9 + k) * 0.08;
+        this.x[i] = b.p[0] + s[0] * R * wob;
+        this.y[i] = b.p[1] + s[1] * R * wob - 0.05;
+        this.z[i] = b.p[2] + s[2] * R * wob;
+        this.yaw[i] += dt * (2 + (k % 5));
+        this.pitch[i] = Math.sin(t * 5 + k) * 1.2;
+        this.gait[i] = 12;
+      });
+    }
+    // the ball let go of: splattered where it lands hard, or set down and running
+    releaseHeld(splat) {
+      const b = this.ball;
+      let n = 0;
+      for (const i of this.held) {
+        if (this.st[i] !== HELD) continue;
+        if (splat) {
+          const cl = this.clusters[this.cl[i]];
+          this.x[i] = b.p[0] + (Math.random() - 0.5) * 3;
+          this.z[i] = b.p[2] + (Math.random() - 0.5) * 3;
+          this.y[i] = this.floorY(cl, this.x[i], this.z[i]);
+          this.kill(i, 'crush');
+          n++;
+        } else {
+          this.st[i] = FALL;
+          this.vy[i] = 1 + Math.random() * 2;
+          this.v[i] = 1 + Math.random() * 2;
+          this.yaw[i] = Math.random() * TAU;
+          this.pitch[i] = 0;
+        }
+      }
+      this.held = [];
+      this.ball = null;
+      return n;
+    }
+    // how many still move (the count kept on screen)
+    get living() {
+      return this.alive;
+    }
+    // fill this frame's instances: near ones in full, far ones as plain shells, none behind the camera or past the haze
+    render() {
+      const e = this.engine,
+        cam = e.camera.p,
+        fr = e.planes,
+        near = this.near,
+        far = this.far,
+        S = this.size,
+        nd2 = this.nearD * this.nearD,
+        fd = this.farD,
+        fd2 = fd * fd,
+        col = this.color,
+        cc = this.coldColor;
+      near.count = 0;
+      far.count = 0;
+      for (const cl of this.clusters) {
+        if (!cl.alive && !(this.held.length && this.ball)) continue;
+        const cy = this.floorY(cl, cl.x, cl.z),
+          cd = Math.hypot(cl.x - cam[0], cy - cam[1], cl.z - cam[2]);
+        if (cd - cl.reach > fd) continue;
+        if (fr) {
+          let out = false;
+          for (let k = 0; k < 24; k += 4)
+            if (fr[k] * cl.x + fr[k + 1] * cy + fr[k + 2] * cl.z + fr[k + 3] < -cl.reach - 2) {
+              out = true;
+              break;
+            }
+          if (out) continue;
+        }
+        const cold = Math.max(this.cold, cl.cold);
+        for (let i = cl.start; i < cl.end; i++) {
+          const s = this.st[i];
+          if (s === DEAD || s === GONE) continue;
+          const x = this.x[i],
+            y = this.y[i],
+            z = this.z[i],
+            dx = x - cam[0],
+            dy = y - cam[1],
+            dz = z - cam[2],
+            d2 = dx * dx + dy * dy + dz * dz;
+          if (d2 > fd2) continue;
+          if (fr) {
+            let out = false;
+            for (let k = 0; k < 24; k += 4)
+              if (fr[k] * x + fr[k + 1] * y + fr[k + 2] * z + fr[k + 3] < -0.6) {
+                out = true;
+                break;
+              }
+            if (out) continue;
+          }
+          const b = d2 < nd2 || s === HELD ? near : far,
+            d = e.growBatch(b, b.count + 1),
+            o = b.count * 24,
+            v = this.var[i],
+            k = 0.86 + v * 0.26,
+            sc = S * (0.88 + v * 0.24);
+          trs(d, o, x, y, z, -this.pitch[i], this.yaw[i], 0, sc, sc, sc);
+          const c0 = cold * (s === SLEEP ? 1 : 0.6);
+          d[o + 16] = (col[0] + (cc[0] - col[0]) * c0) * k;
+          d[o + 17] = (col[1] + (cc[1] - col[1]) * c0) * k;
+          d[o + 18] = (col[2] + (cc[2] - col[2]) * c0) * k;
+          d[o + 19] = 1;
+          d[o + 20] = 0;
+          d[o + 21] = 36;
+          d[o + 22] = this.gait[i];
+          d[o + 23] = this.ph[i];
+          b.count++;
+        }
+      }
+    }
+    // state for saving: losses per cluster (index, dead) and the most recent smears
+    losses() {
+      return this.clusters.filter(c => c.alive < c.n0).map(c => [c.k, c.n0 - c.alive]);
+    }
+    dispose() {
+      for (const b of [this.near, this.far, this.smears]) this.engine.freeBatch(b);
+    }
+  }
+  function angleTo(a, b) {
+    let d = (b - a) % TAU;
+    if (d > Math.PI) d -= TAU;
+    if (d < -Math.PI) d += TAU;
+    return d;
+  }
+  Swarm.STATE = { IDLE, WALK, FLEE, BACK, SLEEP, DEAD, HELD, FALL, LOOK, GONE };
+  K.Swarm = Swarm;
+})((window.KO ||= {}));
+
 // FILE: src/worlds/surface.js
 /* Shared local-world simulation. Planet files own geometry, ecology and reactions.
  * Stable building IDs are the save contract. Transient particles never enter saves.
@@ -8881,6 +10563,8 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.fxRoot = group(this.root);
       this.residents = new K.Residents(this, this.residentTokens);
       this.lastAlarm = -1;
+      this.edge = config.edge || 1390;
+      this.villages = [];
     }
     initialize() {
       this.makeTerrain();
@@ -8893,6 +10577,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.makeCreatures();
       this.residents.populate(this.residentSpec ? this.residentSpec() : null);
       this.makeScenery();
+      this.infest();
       this.vehicle = new K.Destroyer(this.game, this);
       this.vehicle.p = this.spawn.p.slice();
       this.vehicle.yaw = this.spawn.yaw;
@@ -8911,6 +10596,44 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     // Where things come to rest. Worlds whose ground moves override this.
     floor(x, z) {
       return this.height(x, z);
+    }
+    // More of the same out where the land was empty: villages of the world's own buildings, placed by count on
+    // ground flat enough to stand on. build(id, x, z, rng, i) makes one building and returns it.
+    outskirts({ n = 6, rMin = 480, rMax = 1200, count = [9, 15], seed = 1, spread = 52, plinth = null, build }) {
+      const rng = M.rand(seed),
+        sites = [];
+      for (let k = 0; k < n * 60 && sites.length < n; k++) {
+        const a = rng() * Math.PI * 2,
+          R = rMin + Math.sqrt(rng()) * (rMax - rMin),
+          x = Math.sin(a) * R,
+          z = Math.cos(a) * R;
+        if (sites.some(s => Math.hypot(s[0] - x, s[1] - z) < 300)) continue;
+        let lo = Infinity,
+          hi = -Infinity;
+        for (let j = 0; j < 9; j++) {
+          const b = (j / 9) * Math.PI * 2,
+            h = this.height(x + Math.sin(b) * spread, z + Math.cos(b) * spread);
+          lo = Math.min(lo, h);
+          hi = Math.max(hi, h);
+        }
+        if (hi - lo > 22 && k < n * 50) continue;
+        sites.push([x, z]);
+      }
+      sites.forEach(([cx, cz], v) => {
+        const total = count[0] + Math.floor(rng() * (count[1] - count[0] + 1));
+        for (let i = 0; i < total; i++) {
+          const ring = i < 1 ? 0 : i < 7 ? 1 : 2,
+            per = ring === 1 ? 6 : Math.max(1, total - 7),
+            ang = ((ring === 1 ? i - 1 : i - 7) / per) * Math.PI * 2 + v + (rng() - 0.5) * 0.3,
+            rr = ring === 0 ? 0 : ring === 1 ? spread * 0.48 + rng() * 6 : spread * 0.95 + rng() * 10,
+            x = cx + Math.sin(ang) * rr,
+            z = cz + Math.cos(ang) * rr,
+            b = build(`v${v}-${i}`, x, z, rng, i);
+          // a footing under it, so nothing hangs over a slope
+          if (b && plinth) mesh(b.node, 'box', [0, -3, 0], [b.w * 1.12, 6.4, b.w * 1.12], plinth);
+        }
+        this.villages.push({ x: cx, z: cz });
+      });
     }
     terrain(color, size = 3200, steps = 100, type = 8) {
       const p = [],
@@ -9099,10 +10822,51 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       }
       return entity ? { entity, distance, point: M.add(origin, M.mul(dir, distance)) } : null;
     }
+    // where a line from o along d first meets the ground, or Infinity within max
+    groundAt(o, d, max = 230) {
+      const f = (x, z, y) => (this.floor ? this.floor(x, z, y) : this.height(x, z));
+      if (o[1] < f(o[0], o[2], o[1]) - 0.5) return Infinity;
+      let t = 0,
+        step = 1.2;
+      while (t < max) {
+        const nt = Math.min(max, t + step),
+          y = o[1] + d[1] * nt;
+        if (y < f(o[0] + d[0] * nt, o[2] + d[2] * nt, y)) {
+          let a = t,
+            b = nt;
+          for (let k = 0; k < 7; k++) {
+            const m = (a + b) / 2,
+              ym = o[1] + d[1] * m;
+            if (ym < f(o[0] + d[0] * m, o[2] + d[2] * m, ym)) b = m;
+            else a = m;
+          }
+          return (a + b) / 2;
+        }
+        t = nt;
+        step = Math.min(7, step * 1.18);
+      }
+      return Infinity;
+    }
     fire(ship, hit, dt) {
       const dir = M.dir(ship.yaw, ship.pitch),
-        right = M.right(ship.yaw),
-        end = hit?.point || M.add(ship.p, M.mul(dir, 230));
+        right = M.right(ship.yaw);
+      // the beam stops where it meets the ground; what stands behind a hill is not touched
+      const g = this.groundAt(ship.p, dir, hit ? hit.distance : 230);
+      if (g < Infinity) hit = null;
+      const ground = g < Infinity ? M.add(ship.p, M.mul(dir, g)) : null,
+        end = hit?.point || ground || M.add(ship.p, M.mul(dir, 230));
+      this.beamGround = ground;
+      if (ground) {
+        if (this.swarm) {
+          const n = this.swarm.squash(ground[0], ground[2], 1.5, 'burn', ground[1]);
+          if (n) this.squashed(n, ground, 'beam');
+        }
+        this.shotTime += dt;
+        if (this.shotTime > 0.08) {
+          this.shotTime = 0;
+          this.emit(end, 2, this.config.scorch || this.config.rubble, 7, 0.5, true);
+        }
+      }
       for (let i = 0; i < 2; i++)
         this.setLine(
           this.beams[i],
@@ -9110,7 +10874,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
           end,
           0.12 + Math.random() * 0.035,
         );
-      this.flare.visible = !!hit;
+      this.flare.visible = !!(hit || ground);
       this.flare.p = end;
       this.flare.s = [1.3, 1.3, 1.3];
       if (hit) {
@@ -9131,12 +10895,22 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.lastFireFX = this.time;
     }
     stopFire() {
+      this.beamGround = null;
       this.beams.forEach(n => (n.visible = false));
       if (this.flare) this.flare.visible = false;
     }
     attach(e, ship) {
       if (e.kind === 'creature' || e.kind === 'loose') e.thrown = false;
+      e.lowered = false;
       this.tetherTo(e.p, ship);
+    }
+    // what the tractor's cone may catch on this world (worlds with keepers or angels add theirs)
+    grabCandidates() {
+      const out = [];
+      for (const list of [this.creatures, this.loose]) for (const e of list) if (e.alive) out.push(e);
+      for (const r of this.residents.list) if (r.alive && !r.carrier && !r.gone) out.push(r);
+      if (this.ruler?.alive && this.ruler.hp <= 0) out.push(this.ruler);
+      return out;
     }
     tetherTo(p, ship) {
       const right = M.right(ship.yaw);
@@ -9210,6 +10984,11 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     }
     // Delayed cascades are bounded and processed outside damage(): no recursive chain explosion.
     shock(p, radius, force, { throwCreatures = true, ruler = false } = {}) {
+      if (this.swarm && throwCreatures) {
+        const n = this.swarm.squash(p[0], p[2], radius * 0.28, 'crush', null, 400);
+        if (n) this.squashed(n, p, 'blast');
+        this.swarm.alarm(p[0], p[2], radius * 1.5);
+      }
       for (const b of this.buildings)
         if (b.alive) {
           const d = M.dist(M.add(b.p, [0, b.h * 0.4, 0]), p);
@@ -9363,15 +11142,30 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       return true;
     }
     updateThrown(e, dt) {
+      if (e.ball) return this.updateBall(e, dt);
       e.velocity[1] -= 22 * dt;
+      // set down by the beam: it comes down slowly and lands on its feet
+      if (e.lowered) {
+        const k = Math.exp(-2.4 * dt);
+        e.velocity[0] *= k;
+        e.velocity[2] *= k;
+        e.velocity[1] = Math.max(e.velocity[1], -11);
+      }
       e.p = M.add(e.p, M.mul(e.velocity, dt));
       e.node.r[0] += dt * 2.7;
       e.node.r[2] += dt * 1.9;
       const floor = this.floor(e.p[0], e.p[2]) + 1;
       if (e.p[1] < floor) {
         e.p[1] = floor;
-        if (e.kind === 'creature' && M.len(e.velocity) > 14) {
+        if (e.kind === 'creature' && M.len(e.velocity) > 14 && !e.lowered) {
           this.kill(e, [0, 1, 0]);
+          return;
+        }
+        if (e.lowered) {
+          e.lowered = false;
+          e.thrown = false;
+          e.velocity = [0, 0, 0];
+          e.node.p = e.p.slice();
           return;
         }
         e.velocity = [e.velocity[0] * 0.7, Math.abs(e.velocity[1]) * 0.28, e.velocity[2] * 0.7];
@@ -9393,6 +11187,147 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
           else e.velocity = M.mul(e.velocity, -0.35);
           break;
         }
+    }
+    /* ---------- bugs, on whatever world has them ---------- */
+    // a world brings its own swarm (THAW); any other one gets the few that rode in on the ship
+    infest() {
+      if (this.config.noInfest || this.swarm) return;
+      const u = this.game.universe;
+      let n = 0,
+        at = null;
+      for (const t of this.destroyed)
+        if (t.startsWith('v.')) {
+          const parts = t.split('.');
+          n = parseInt(parts[1], 36) || 0;
+          if (parts[2]) at = [parseInt(parts[2], 36) - 2000, parseInt(parts[3], 36) - 2000];
+        }
+      const aboard = u.stowaways || 0;
+      const grown = n > 0;
+      if (grown) n = Math.min(700, Math.round(n * 1.5 + 4));
+      if (aboard > 0) {
+        n += aboard;
+        u.stowaways = 0;
+        u.flush?.();
+      }
+      if (n <= 0) return;
+      if (!at) {
+        const sp = this.spawn.p,
+          ang = Math.random() * Math.PI * 2;
+        at = [Math.round(sp[0] + Math.sin(ang) * 14), Math.round(sp[2] - 30 + Math.cos(ang) * 14)];
+      }
+      this.infestAt = at;
+      this.swarm = new K.Swarm(this, { capacity: n + 8, seed: n + 3 });
+      this.swarm.addCluster({ x: at[0], z: at[1], r: 4 + Math.sqrt(n) * 0.9, n });
+      this.infestCount = () => this.swarm.alive;
+      if (aboard > 0)
+        this.later(2.5, () =>
+          this.game.ui.toast(
+            '실려 온 벌레들이 내려갔습니다',
+            grown ? `이 땅에 먼저 자리 잡은 벌레들과 합쳐졌습니다. ${n}마리.` : `THAW에서 따라온 ${aboard}마리가 이 땅에 자리를 잡습니다.`,
+            6,
+          ),
+        );
+    }
+    // a world's own reaction to bugs dying (THAW keeps count and speaks of it)
+    squashed(n, p, how) {
+      const v = this.vehicle,
+        d = M.dist(v.p, p);
+      const [pan, gain] = [M.clamp((p[0] - v.p[0]) / 60, -1, 1), Math.max(0.15, 1 - d / 90)];
+      if (this.time - (this.lastCrunch || 0) > 0.07) {
+        this.lastCrunch = this.time;
+        this.game.audio.crunch(Math.min(n, 12), pan, gain);
+      }
+      this.emit([p[0], p[1] + 0.3, p[2]], Math.min(10, 2 + n), how === 'beam' ? '#2a1a10' : '#c9781f', 6 + Math.min(n, 10), 0.7, true);
+      if (how === 'hull' || how === 'slam') v.shake = Math.max(v.shake, Math.min(0.25, 0.04 + n * 0.012));
+      this.onSquash?.(n, p, how);
+    }
+    slammed(at, k) {
+      if (!this.swarm) return;
+      const n = this.swarm.squash(at[0], at[2], 3.5 + k * 6, 'crush', at[1], 800);
+      if (n) this.squashed(n, at, 'slam');
+      this.swarm.alarm(at[0], at[2], 14 + k * 18);
+    }
+    // the tractor finding nothing solid in its cone takes up the bugs that are in it, as a ball
+    tractorFallback(o, f, range, cone) {
+      if (!this.swarm || this.swarm.ball) return null;
+      const list = this.swarm.gather(o, f, range, cone * 1.25, 70);
+      if (list.length < 3) return null;
+      const S = this.swarm;
+      let cx = 0,
+        cy = 0,
+        cz = 0;
+      for (const i of list) {
+        cx += S.x[i];
+        cy += S.y[i];
+        cz += S.z[i];
+      }
+      const p = [cx / list.length, cy / list.length + 0.4, cz / list.length],
+        ball = { kind: 'loose', ball: true, alive: true, p, velocity: [0, 0, 0], node: { p: p.slice(), r: [0, 0, 0], visible: true }, radius: 0.3 + Math.cbrt(list.length) * 0.22, label: '벌레 떼 · ' + list.length + '마리', hp: 1, thrown: false };
+      S.hold(list, ball);
+      this.loose.push(ball);
+      return { entity: ball, distance: M.dist(o, p), point: p };
+    }
+    updateBall(e, dt) {
+      e.velocity[1] -= 22 * dt;
+      if (e.lowered) {
+        const k = Math.exp(-2.4 * dt);
+        e.velocity[0] *= k;
+        e.velocity[2] *= k;
+        e.velocity[1] = Math.max(e.velocity[1], -11);
+      }
+      e.p = M.add(e.p, M.mul(e.velocity, dt));
+      e.node.p = e.p.slice();
+      const fl = (this.floor ? this.floor(e.p[0], e.p[2], e.p[1]) : this.height(e.p[0], e.p[2])) + e.radius * 0.5;
+      let hitWall = false;
+      for (const b of this.buildings)
+        if (b.alive && Math.abs(e.p[0] - b.p[0]) < b.w * 0.55 && Math.abs(e.p[2] - b.p[2]) < b.w * 0.55 && e.p[1] > b.p[1] && e.p[1] < b.p[1] + b.h) {
+          hitWall = true;
+          break;
+        }
+      if (e.p[1] <= fl || hitWall) {
+        const speed = M.len(e.velocity),
+          splat = !e.lowered && (speed > 9 || hitWall);
+        e.p[1] = Math.max(e.p[1], fl);
+        const n = this.swarm.releaseHeld(splat);
+        if (splat && n) {
+          this.squashed(n, e.p, 'throw');
+          this.game.audio.squelch('pop', 0, 0.9);
+        }
+        e.alive = false;
+        e.thrown = false;
+        this.loose.splice(this.loose.indexOf(e), 1);
+      }
+    }
+    // bugs where the ship hangs low and still: some climb aboard and go wherever it goes next
+    swarmStep(dt) {
+      const sw = this.swarm,
+        v = this.vehicle;
+      if (!sw) return;
+      const fl = this.floor ? this.floor(v.p[0], v.p[2], v.p[1]) : this.height(v.p[0], v.p[2]),
+        alt = v.p[1] - fl,
+        speed = M.len(v.velocity),
+        hover = this.config.hover ?? 3.6;
+      const threat = { p: v.p, alt, speed, shadow: 2.5 + Math.max(0, 26 - alt) * 0.32 + speed * 0.1, beam: this.beamGround || null, blast: null };
+      sw.update(dt, threat);
+      // the hull, skimming within a metre or so of the ground, runs over what has not got out of the way
+      if (alt < hover + 1.1 && speed > 1.2) {
+        const n = sw.squash(v.p[0] + v.velocity[0] * 0.05, v.p[2] + v.velocity[2] * 0.05, 2.5, 'crush', fl);
+        if (n) this.squashed(n, [v.p[0], fl, v.p[2]], 'hull');
+      }
+      if (alt < hover + 1.6 && speed < 2.5 && this.config.stowable !== false && (this.stow || 0) < 24) {
+        this.stowT = (this.stowT || 0) + dt;
+        if (this.stowT > 0.55) {
+          this.stowT = 0;
+          const near = sw.gather([v.p[0], fl + 3, v.p[2]], [0, -1, 0], 6, 1.1, 1);
+          if (near.length) {
+            sw.take(near[0]);
+            this.stow = (this.stow || 0) + 1;
+            if (this.stow === 3)
+              this.game.ui.toast('벌레 몇 마리가 기체 밑으로 숨어들었습니다', '떠날 때 같이 실려 갑니다.', 5);
+          }
+        }
+      }
+      sw.render();
     }
     update(dt, input) {
       this.time += dt;
@@ -9457,8 +11392,14 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         e.node.r[1] = Math.atan2(dir[0], dir[2]);
         e.node.r[2] = Math.sin(this.time * 13 + e.seed) * (e.panic ? 0.1 : 0.015);
       }
-      for (const e of this.loose) if (e.alive && e.thrown && this.vehicle.grab !== e) this.updateThrown(e, dt);
+      for (const e of this.loose.slice()) if (e.alive && e.thrown && this.vehicle.grab !== e) this.updateThrown(e, dt);
+      // a ball of bugs let go of without being thrown hangs on the beam's last pull and comes down slowly
+      for (const e of this.loose.slice()) if (e.ball && e.alive && !e.thrown && this.vehicle.grab !== e) {
+        e.thrown = true;
+        e.lowered = true;
+      }
       this.residents.update(dt);
+      this.swarmStep(dt);
       this.game.ui.setSignal(this.signalValue());
       for (let i = this.fragments.length - 1; i >= 0; i--) {
         const f = this.fragments[i];
@@ -9503,10 +11444,22 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     }
     snapshot() {
       if (this.disposed) return;
+      let keep = [...this.destroyed];
+      if (this.infestCount && !this.config.noInfest) {
+        keep = keep.filter(t => !t.startsWith('v.'));
+        const n = this.infestCount();
+        if (n > 0) keep.push('v.' + n.toString(36) + '.' + (this.infestAt[0] + 2000).toString(36) + '.' + (this.infestAt[1] + 2000).toString(36));
+      }
       this.game.save.data.planetStates[this.id] = {
-        destroyed: [...this.destroyed, ...this.residents.tokens()],
+        destroyed: [...keep, ...this.residents.tokens()],
         visited: true,
       };
+      // bugs that climbed aboard go with the ship
+      if (this.stow > 0) {
+        this.game.universe.stowaways = Math.min(60, (this.game.universe.stowaways || 0) + this.stow);
+        this.stow = 0;
+        this.game.universe.flush?.();
+      }
       if (!this.game.save.data.visited.includes(this.id)) this.game.save.data.visited.push(this.id);
     }
     dispose() {

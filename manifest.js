@@ -1,7 +1,7 @@
 /* Planet manifest — loaded first. Worlds with a surface file of their own, and what the atlas knows of them.
  * Release layout: every file sits next to index.html. Bump BUILD whenever any file changes. */
 window.KO = Object.assign(window.KO || {}, {
-  BUILD: '0.5.0',
+  BUILD: '0.6.0',
   BUNDLED: false,
   SurfaceFiles: {
     eden: 'eden.js',
@@ -11,6 +11,7 @@ window.KO = Object.assign(window.KO || {}, {
     p0007: 'p0007.js',
     p0018: 'p0018.js',
     p0019: 'p0019.js',
+    p0009: 'p0009.js',
   },
   SurfaceMeta: {
     eden: {
@@ -84,6 +85,18 @@ window.KO = Object.assign(window.KO || {}, {
       species: 'damned',
       inhabited: false,
       hell: true,
+    },
+    // People left. What came out of the ice to the warmth did not.
+    p0009: {
+      id: 'p0009',
+      name: 'THAW',
+      shortName: 'THAW',
+      description: '버려진 테라포밍 기지 · 온실 돔마다 호박색 벌레가 가득합니다.',
+      rulerName: '대기 처리기 코어',
+      trophyNote: '꺼진 뒤에도 진행률 63%를 띄우고 있다.',
+      species: 'bugs',
+      inhabited: false,
+      thaw: true,
     },
   },
 });

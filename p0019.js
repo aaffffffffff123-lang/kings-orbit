@@ -60,14 +60,16 @@
 
   /* ---------- the measure of the pit ---------- */
   // Each circle is a terrace, each lower than the last, narrower than the last; cliffs between them.
+  // The pit was laid out at the radii written in this file; it stands S times as wide as that, and as deep as it was.
+  const S = 1.4;
   const ICE_Y = -332,
     ICE_BED = -341,
-    ICE_R = 92,
-    GATE = [0, 545],
-    ACH = { r0: 472, r1: 505, water: -3 },
-    STYX = { r0: 254, r1: 282, water: -132 },
-    WALL_R = 249,
-    BLOOD = { r0: 189, r1: 206, surface: -192.5 },
+    ICE_R = 92 * S,
+    GATE = [0, 545 * S],
+    ACH = { r0: 472 * S, r1: 505 * S, water: -3 },
+    STYX = { r0: 254 * S, r1: 282 * S, water: -132 },
+    WALL_R = 249 * S,
+    BLOOD = { r0: 189 * S, r1: 206 * S, surface: -192.5 },
     MALE_Y = -262;
   // circle letter, the band its people keep to, the terrace height, the toast when the ship first comes down into it
   const CIRCLES = {
@@ -86,6 +88,10 @@
     c: { r0: 121.5, r1: 125.5, y: MALE_Y },
     i: { r0: 18, r1: 88, y: ICE_Y, n: '제9옥 · 배신', t: '코키투스. 얼어붙은 호수입니다.' },
   };
+  for (const c of Object.values(CIRCLES)) {
+    c.r0 *= S;
+    c.r1 *= S;
+  }
   const BOUND = new Set(['g', 'y', 'h', 'b', 'p', 'c', 'i']); // held in place by their punishment
   // the ten ditches of the eighth circle: centre radius, width, depth
   const BOLGE = [
@@ -100,7 +106,7 @@
     [110, 2.6, 5],
     [106.4, 2.2, 4.5],
   ];
-  const PITCH = { r: 131, w: 6.6, surface: MALE_Y - 3.4 };
+  const PITCH = { r: 131 * S, w: 6.6 * S, surface: MALE_Y - 3.4 };
   const cliff = (a, b, ya, yb, R) => ya + (yb - ya) * ss(0.1, 0.9, (R - a) / (b - a));
   function ditch(R) {
     let d = 0;
@@ -110,8 +116,9 @@
     }
     return d;
   }
-  // radial profile of the pit; noise is laid on top of it
+  // radial profile of the pit, read at the radius it was laid out at; noise is laid on top of it
   function profile(R) {
+    R /= S;
     if (R >= 505) return R < 760 ? 0 : 165 * ss(760, 1010, R);
     if (R >= 472) {
       const t = (R - 472) / 33;
@@ -143,6 +150,7 @@
     return ICE_BED + (ICE_Y - ICE_BED) * ss(84, 92, R);
   }
   function roughness(R) {
+    R /= S;
     if (R >= 760) return 0;
     if (R >= 505) return 0.9;
     if ((R > 414 && R < 426) || (R > 358 && R < 368) || (R > 318 && R < 328) || (R > 282 && R < 290) || (R > 206 && R < 216) || (R > 150 && R < 158) || (R > 92 && R < 104))
@@ -271,55 +279,310 @@
     ICE = '#bfe2ff',
     BASALT = '#2e2523',
     IRON = '#3a2421';
-  // One head, three faces: red in front, pale yellow over the right shoulder, black over the left.
-  // Unit size: about 3 across. Faces look out along +Z, +X and -X of the head's own frame.
-  function luciferHead(g, lit) {
-    const out = { jaws: [], eyes: [], mouths: [], tears: [] };
-    mesh(g, 'sphere', [0, 0.25, -0.15], [2.5, 2.4, 2.3], HIDE, { em: 0 });
-    mesh(g, 'sphere', [0, 1.15, -0.1], [2.1, 1.1, 2.0], HIDE);
+  // Sculpted bodies (shared with the trophy). Sizes in metres; ice at y=0 for him, the soles at y=0 for a giant.
+  const SH = K.Sculpt.S;
+  const HEAD_Y = 52,
+    HEAD_S = 1.25;
+  // what of him stands out of the ice, for aiming and for flying into: chest, shoulders, arms laid on the ice, hands
+  const LUC_SPHERES = [
+    [0, 10, 0, 27],
+    [0, 26, -2, 17],
+    [-34, 21, 0, 13],
+    [34, 21, 0, 13],
+    [-49, 11, 8, 9.5],
+    [49, 11, 8, 9.5],
+    [-51, 3, 32, 7.5],
+    [51, 3, 32, 7.5],
+    [-41, 3, 58, 10],
+    [41, 3, 58, 10],
+  ];
+  function luciferShapes() {
+    const e = SH.e,
+      c = SH.c,
+      C = { center: true },
+      sub = (o = {}) => Object.assign({ sub: true }, o);
+    // from mid-breast up out of the ice, facing +z; arms out on the ice, hands dug into it
+    const body = [
+      e([0, 6, -1], [25, 21, 17.5], 4, C),
+      e([0, 19, 3.5], [24, 11, 13], 4, C),
+      e([12.5, 15.5, 12.2], [12.5, 8.6, 6.4], 2.4, { rot: [0.2, 0.32, -0.25] }),
+      ...[0, 1, 2].map(i => e([19.5 - i * 0.4, 9.5 - i * 4.4, 9.5 - i * 0.6], [3.4, 2.0, 3.2], 1.6, { rot: [0, 0.6, -0.5] })),
+      e([34, 21, 0], [12.5, 13.5, 13.5], 3.5),
+      e([15, 31.5, -4], [15.5, 8, 10], 4.5, { rot: [0, 0, -0.42] }),
+      c([0, 24, -2], [0, 41, 1], 15, 13, 4, C),
+      c([3, 27, 10.5], [28, 29, 3], 2.4, 2.1, 2.2),
+      ...[0, 1, 2, 3, 4].map(i => e([0, 34 - i * 7, -19 + i * 0.5], [3.2, 3.6, 3.0], 2, C)),
+      // three wing roots a side, low to high
+      e([10, 33, -14], [7.5, 7.5, 7.5], 3.5),
+      e([19, 25, -13], [6.8, 6.8, 6.8], 3.5),
+      e([25, 15, -10], [6.2, 6.2, 6.2], 3.5),
+      c([39, 21, 2], [59, 1, 15], 11, 8, 3.5),
+      e([46, 15, 9], [9, 11, 8.5], 3, { rot: [0, 0, 0.75] }),
+      e([59.5, 0.8, 15.5], [8.2, 6.6, 8.2], 3),
+      c([59, 1.4, 16], [43, 2.4, 50], 7.6, 5.4, 3),
+      e([54, 3.6, 27], [8.4, 6, 10], 3, { rot: [0, -0.42, 0] }),
+      e([41.5, 2.6, 54], [9, 3.8, 8], 2.4),
+      ...[-1.5, -0.5, 0.5, 1.5].map(k => c([41.5 + k * 3.6, 3.0, 58], [39 + k * 5.6, 1.4, 70 - Math.abs(k) * 2.2], 2.3, 1.6, 1.0)),
+      ...[-1.5, -0.5, 0.5, 1.5].map(k => c([39 + k * 5.6, 1.4, 70 - Math.abs(k) * 2.2], [38 + k * 6.2, -1.0, 77 - Math.abs(k) * 2.8], 1.6, 1.0, 0.7)),
+      c([48, 2.8, 52], [55, 1.0, 60], 2.6, 1.7, 1.0),
+    ];
+    // one skull, three faces: red in front (+z), the pale one turned to -x, the black one to +x
+    const face = [
+      e([0, -2, 10.5], [8.6, 12.5, 7.8], 3),
+      // brows raised where they meet, as in weeping
+      e([3.9, 5.8, 15.6], [4.6, 2.2, 3.6], 1.6, { rot: [0, 0, -0.32] }),
+      e([-3.9, 5.8, 15.6], [4.6, 2.2, 3.6], 1.6, { rot: [0, 0, 0.32] }),
+      e([3.9, 1.4, 16.6], [3.0, 2.6, 3.4], 1.0, sub()),
+      e([-3.9, 1.4, 16.6], [3.0, 2.6, 3.4], 1.0, sub()),
+      e([6.0, -1.6, 13.8], [3.4, 2.8, 3.2], 1.6),
+      e([-6.0, -1.6, 13.8], [3.4, 2.8, 3.2], 1.6),
+      c([0, 4, 16.8], [0, -3.4, 21], 1.8, 3.2, 1.4),
+      e([2.4, -3.8, 18.8], [2.2, 1.7, 2.1], 0.9),
+      e([-2.4, -3.8, 18.8], [2.2, 1.7, 2.1], 0.9),
+      e([0, -7.2, 17.2], [6.8, 2.6, 4.2], 1.8),
+      e([0, -10.8, 16.6], [5.8, 3.9, 6.6], 1.1, sub()),
+      c([1.2, 8.0, 18.2], [2.0, 4.6, 19.4], 0.55, 0.45, 0.5, sub()),
+      c([-1.2, 8.0, 18.2], [-2.0, 4.6, 19.4], 0.55, 0.45, 0.5, sub()),
+      c([4.2, -3.5, 17.6], [6.4, -9.5, 16.2], 0.7, 0.6, 0.7, sub()),
+      c([-4.2, -3.5, 17.6], [-6.4, -9.5, 16.2], 0.7, 0.6, 0.7, sub()),
+    ];
+    const turn = (s, a) => {
+      const t = JSON.parse(JSON.stringify(s)),
+        ca = Math.cos(a),
+        sa = Math.sin(a),
+        f = p => [p[0] * ca + p[2] * sa, p[1], -p[0] * sa + p[2] * ca];
+      if (t.kind === 'c') {
+        t.a = f(t.a);
+        t.b = f(t.b);
+      } else {
+        t.c = f(t.c);
+        t.rot = [t.rot ? t.rot[0] : 0, (t.rot ? t.rot[1] : 0) + a, t.rot ? t.rot[2] : 0];
+      }
+      return t;
+    };
+    const head = [e([0, 6, -1], [18.5, 16.5, 18.5], 4, C)];
+    for (const a of [0, -Math.PI / 2, Math.PI / 2]) for (const s of face) head.push(turn(s, a));
+    // one lower jaw, hinged at its origin
+    const jaw = [
+      SH.b([0, -4.2, 6.5], [6.6, 2.2, 6.8], 1.6, 1.6),
+      e([0, -5.2, 12.2], [3.6, 2.6, 2.8], 1.6),
+      e([5.2, -2.6, 1.5], [1.6, 3.4, 3.2], 1.4),
+      e([-5.2, -2.6, 1.5], [1.6, 3.4, 3.2], 1.4),
+      e([0, -1.8, 8.5], [5.2, 2.2, 6.0], 1.0, sub()),
+    ];
+    // a horn curling up and back
+    const horn = [];
+    let p = [0, 0, 0],
+      r = 3.6;
+    for (let i = 0; i < 9; i++) {
+      const t = (i + 1) / 9,
+        q = [Math.sin(t * 1.5) * 4, t * 26 - t * t * 6, -t * t * 14];
+      horn.push(c(p, q, r, r * 0.82, 0.6));
+      p = q;
+      r *= 0.82;
+    }
+    return { body, head, jaw, horn };
+  }
+  function lucMeshes(engine) {
+    const L = luciferShapes();
+    return {
+      body: K.sculpt(engine, 'hell-luc-body', L.body, { voxel: 2.0, mirrorX: true, ao: [2.4, 5, 1], keep: true }),
+      head: K.sculpt(engine, 'hell-luc-head', L.head, { voxel: 1.0, ao: [1.2, 5, 1] }),
+      jaw: K.sculpt(engine, 'hell-luc-jaw', L.jaw, { voxel: 0.8, ao: [1, 4, 1] }),
+      horn: K.sculpt(engine, 'hell-luc-horn', L.horn, { voxel: 0.7, ao: [0.8, 3, 1] }),
+    };
+  }
+  // the giants round the well: a heavy man's body, the left arm bound in front, the right behind
+  function giantShapes() {
+    const e = SH.e,
+      c = SH.c,
+      C = { center: true },
+      sub = (o = {}) => Object.assign({ sub: true }, o);
+    const body = [
+      e([0, 61.5, 0.2], [10.2, 9.8, 7.0], 2.6, C),
+      e([0, 65.0, 2.2], [9.0, 5.0, 4.8], 2.2, C),
+      e([4.9, 63.2, 5.0], [5.7, 3.7, 2.4], 1.1, { rot: [0.12, 0.28, -0.2] }),
+      c([0.8, 68.6, 4.2], [10.2, 69.4, 1.0], 0.95, 0.8, 1.2),
+      e([0, 52.4, 0.8], [7.7, 9.2, 6.0], 2.6, C),
+      ...[0, 1, 2].map(i => e([2.05, 58.0 - i * 3.5, 6.0 - i * 0.1], [1.85, 1.5, 1.0], 0.55)),
+      e([0, 47.6, 5.3], [4.2, 2.9, 1.4], 1.2, C),
+      e([7.2, 51.6, 1.6], [2.7, 6.0, 4.4], 1.8),
+      ...[0, 1, 2].map(i => e([8.7 - i * 0.2, 59.6 - i * 2.2, 3.3 - i * 0.1], [1.4, 0.85, 1.3], 0.55, { rot: [0, 0, -0.5] })),
+      e([0, 44.0, -0.3], [9.2, 6.5, 6.6], 2.6, C),
+      e([4.4, 42.4, -3.4], [4.9, 5.6, 4.2], 1.6),
+      e([6.6, 58.2, -2.9], [4.4, 7.8, 2.6], 2.2, { rot: [0, 0, 0.26] }),
+      e([5.0, 64.6, -4.9], [3.3, 3.8, 1.1], 1.6, { rot: [0, 0, 0.2] }),
+      e([2.2, 51.0, -5.3], [1.8, 8.0, 1.7], 1.2),
+      c([0, 68.5, -8.1], [0, 46.0, -7.6], 1.5, 1.4, 1.4, sub(C)),
+      e([5.0, 69.2, -1.6], [5.4, 3.0, 3.4], 1.8, { rot: [0, 0, -0.4] }),
+      c([0, 67.5, -0.6], [0, 75.2, 0.9], 4.2, 3.8, 1.8, C),
+      c([1.5, 68.6, 2.8], [2.6, 74.3, -0.2], 1.05, 0.95, 0.8),
+      e([11.2, 66.4, 0.2], [3.8, 4.6, 4.4], 1.6),
+    ];
+    // the left leg takes the weight; the right is eased, its knee forward
+    const leg = (sd, bend) => [
+      c([sd * 5.0, 43.0, 0], [sd * 5.6, 24.5, 1.0 + bend], 6.2, 3.8, 2.2, C),
+      e([sd * 5.5, 33.0, 3.1 + bend * 0.5], [3.6, 7.4, 2.9], 1.7, C),
+      e([sd * 3.2, 36.0, 0.6], [2.5, 6.0, 3.3], 1.7, C),
+      e([sd * 5.5, 33.0, -2.5 + bend * 0.4], [3.3, 7.0, 2.8], 1.7, C),
+      e([sd * 6.6, 28.6, 2.2 + bend * 0.7], [1.6, 2.4, 1.6], 1.0, C),
+      e([sd * 5.6, 23.6, 2.0 + bend], [2.8, 2.6, 2.6], 1.0, C),
+      e([sd * 5.6, 24.2, 3.8 + bend], [1.5, 1.7, 0.9], 0.6, C),
+      c([sd * 5.6, 23.0, 0.5 + bend], [sd * 5.9, 4.0, -0.4], 3.3, 1.7, 1.3, C),
+      e([sd * 5.95, 16.8, -1.9 + bend * 0.6], [3.2, 5.4, 2.8], 1.5, C),
+      e([sd * 5.7, 14.0, 1.5 + bend * 0.6], [1.4, 7.0, 1.1], 0.9, C),
+      e([sd * 5.9, 3.2, -0.2], [1.8, 1.6, 1.9], 0.9, C),
+      e([sd * 6.1, 1.4, 2.6], [2.7, 1.4, 5.3], 1.0, C),
+      e([sd * 5.9, 1.5, -1.2], [1.8, 1.5, 1.8], 0.9, C),
+      ...[0, 1, 2, 3, 4].map(i => e([sd * (4.5 + i * 0.8), 0.75, 7.7 - i * 0.35], [0.5, 0.6, 0.9], 0.3, C)),
+    ];
+    const arm = (sd, fz) => [
+      c([sd * 11.8, 65.5, 0], [sd * 12.9, 52.6, 3 * fz], 3.6, 2.6, 1.3, C),
+      e([sd * 12.4, 58.8, 3.2 * fz], [2.5, 4.6, 2.5], 1.2, C),
+      e([sd * 12.7, 58.8, -1.4 * fz], [2.5, 5.0, 2.3], 1.2, C),
+      c([sd * 12.9, 52.4, 3.3 * fz], [sd * 4.6, 49.6, 8.4 * fz], 2.5, 1.7, 1.0, C),
+      e([sd * 10.6, 51.6, 5.2 * fz], [3.1, 2.2, 2.2], 1.0, Object.assign({ rot: [0, sd * fz * 0.95, 0] }, C)),
+      e([sd * 3.3, 49.6, 9.0 * fz], [2.2, 1.9, 1.8], 0.7, C),
+      ...[0, 1, 2, 3].map(i => e([sd * 1.85, 50.9 - i * 0.85, 10.2 * fz], [0.72, 0.52, 0.72], 0.3, C)),
+    ];
+    // the head: chin at 0, crown near 11, looking along +z
+    const head = open => [
+      e([0, 6.6, -0.6], [4.3, 4.6, 5.0], 1.6, C),
+      e([0, 4.3, 1.5], [3.7, 4.3, 3.5], 1.6, C),
+      e([0, open ? 1.5 : 1.9, 1.6], [3.6, 2.3, 3.3], 1.4, C),
+      e([0, open ? 0.2 : 0.7, 3.6], [1.5, 1.2, 1.2], 0.8, C),
+      e([2.5, 4.7, 3.3], [1.4, 1.0, 1.1], 0.8),
+      e([0, 6.55, 3.85], [3.5, 1.0, 1.3], 0.9, C),
+      e([1.5, 5.6, 4.6], [1.05, 0.8, 0.9], 0.5, sub()),
+      c([0, 6.1, 4.6], [0, 4.2, 6.0], 0.6, 0.9, 0.5, C),
+      e([0.65, 4.2, 5.3], [0.65, 0.5, 0.6], 0.35),
+      e([0, 3.1, 4.9], [1.7, 0.5, 0.75], 0.45, C),
+      e([0, open ? 1.6 : 2.5, 4.8], [1.5, 0.45, 0.7], 0.45, C),
+      open ? e([0, 2.4, 5.0], [1.3, 0.95, 1.1], 0.4, sub(C)) : e([0, 2.8, 5.4], [1.4, 0.15, 0.6], 0.15, sub(C)),
+      e([4.2, 5.0, 0.3], [0.55, 1.5, 1.0], 0.4),
+    ];
+    const hair = [
+      e([0, 7.0, -0.9], [4.7, 4.7, 5.4], 1, C),
+      c([0, 7.0, -3.0], [0, -2.5, -4.6], 3.4, 2.2, 1.2, C),
+      c([3.2, 6.0, -1.0], [4.3, -0.8, -1.9], 1.4, 1.0, 1),
+      c([1.6, 6.5, -2.5], [2.4, -3.2, -3.9], 1.3, 0.8, 1),
+      e([0, 4.6, 5.3], [3.8, 4.3, 3.6], 0.6, sub(C)),
+      e([0, 5.6, 3.2], [3.4, 2.6, 3.0], 0.6, sub(C)),
+    ];
+    const beard = open => [
+      e([0, 1.5, 3.0], [3.4, 2.6, 2.2], 1, C),
+      e([0, -0.8, 3.0], [2.3, 2.3, 1.7], 1.2, C),
+      e([0, -2.6, 2.7], [1.3, 1.6, 1.1], 1, C),
+      e([3.3, 3.6, 1.6], [0.9, 2.2, 1.6], 0.8),
+      e([0, 3.45, 5.25], [1.9, 0.42, 0.6], 0.4, C),
+      e([0, open ? 2.1 : 2.7, 5.5], [1.6, open ? 1.1 : 0.7, 1.3], 0.4, sub(C)),
+    ];
+    return { body: body.concat(leg(1, 0), leg(-1, 1.6), arm(1, 1), arm(-1, -1)), head, hair, beard };
+  }
+  function giantMeshes(engine) {
+    const G = giantShapes();
+    return {
+      body: K.sculpt(engine, 'hell-giant-body', G.body, { voxel: 1.2, mirrorX: true, ao: [1.8, 5, 1], keep: true }),
+      head: K.sculpt(engine, 'hell-giant-head', G.head(false), { voxel: 0.4, mirrorX: true, ao: [0.5, 5, 1] }),
+      headOpen: K.sculpt(engine, 'hell-giant-head-open', G.head(true), { voxel: 0.4, mirrorX: true, ao: [0.5, 5, 1] }),
+      hair: K.sculpt(engine, 'hell-giant-hair', G.hair, { voxel: 0.6, mirrorX: true, ao: [0.7, 4, 1] }),
+      beard: K.sculpt(engine, 'hell-giant-beard', G.beard(false), { voxel: 0.5, mirrorX: true, ao: [0.6, 4, 1] }),
+      beardOpen: K.sculpt(engine, 'hell-giant-beard-open', G.beard(true), { voxel: 0.5, mirrorX: true, ao: [0.6, 4, 1] }),
+    };
+  }
+  // a chain link: an oval ring standing along its local Y
+  function linkGeometry(engine) {
+    if (engine.geometries['hell-link']) return;
+    const p = [],
+      n = [],
+      idx = [],
+      U = 10,
+      V = 4;
+    for (let i = 0; i <= U; i++)
+      for (let j = 0; j <= V; j++) {
+        const u = (i / U) * TAU,
+          v = (j / V) * TAU,
+          cx = Math.cos(u) * 0.32,
+          cy = Math.sin(u) * 0.5,
+          nx = Math.cos(u),
+          ny = Math.sin(u) * 0.64,
+          nl = Math.hypot(nx, ny),
+          rx = (nx / nl) * Math.cos(v),
+          ry = (ny / nl) * Math.cos(v),
+          rz = Math.sin(v);
+        p.push(cx + rx * 0.12, cy + ry * 0.12, rz * 0.12);
+        n.push(rx, ry, rz);
+      }
+    for (let i = 0; i < U; i++)
+      for (let j = 0; j < V; j++) {
+        const a = i * (V + 1) + j,
+          b = a + V + 1;
+        idx.push(a, b, a + 1, b, b + 1, a + 1);
+      }
+    engine.addGeometry('hell-link', { p, n, idx });
+  }
+  // where a horizontal line from the axis outwards leaves a sculpted body (local coords); null if it never does
+  function surfaceOut(res, a, y, r0 = 0, r1 = 90) {
+    let prev = res.sample(Math.sin(a) * r0, y, Math.cos(a) * r0);
+    for (let r = r0 + 0.5; r < r1; r += 0.5) {
+      const d = res.sample(Math.sin(a) * r, y, Math.cos(a) * r);
+      if (prev < 0 && d >= 0) {
+        const t = prev / (prev - d),
+          R = r - 0.5 + t * 0.5;
+        return { p: [Math.sin(a) * R, y, Math.cos(a) * R], n: res.grad(Math.sin(a) * R, y, Math.cos(a) * R), R };
+      }
+      prev = d;
+    }
+    return null;
+  }
+  // One head, three faces. Unit: metres of the sculpt; the caller scales.
+  function luciferHead(engine, g, lit) {
+    lucMeshes(engine);
+    const out = { jaws: [], eyes: [], mouths: [], tears: [] },
+      IVORY = '#e8dcc0';
+    mesh(g, 'hell-luc-head', [0, 0, 0], [1, 1, 1], HIDE, { type: 33, detail: 4, seed: 0.3 });
     for (const sd of [-1, 1]) {
-      const horn = mesh(g, 'cone', [sd * 0.7, 1.95, -0.25], [0.34, 1.25, 0.34], HORN);
-      horn.r = [-0.35, 0, -sd * 0.42];
+      const h = mesh(g, 'hell-luc-horn', [sd * 7.5, 16, -4], [sd, 1, 1], HORN, { type: 33, detail: 3, seed: sd });
+      h.r = [-0.1, 0, -sd * 0.3];
     }
     [
       [0, RED],
       [-Math.PI / 2, PALE],
       [Math.PI / 2, BLACK],
     ].forEach(([a, col], k) => {
-      const f = group(g, [0, 0, 0]);
+      const f = group(g);
       f.r[1] = a;
-      const skin = mesh(f, 'sphere', [0, 0.1, 0.72], [1.7, 2.0, 1.35], col);
-      mesh(f, 'sphere', [0, 0.62, 1.22], [1.5, 0.34, 0.42], col).color = rgb(col).map(c => c * 0.62);
-      mesh(f, 'lowCone', [0, 0.26, 1.5], [0.32, 0.5, 0.32], col).r = [Math.PI / 2 - 0.2, 0, 0];
+      mesh(f, 'sphere', [0, -10.8, 13.5], [10, 6.4, 8], '#120406');
       for (const sd of [-1, 1]) {
-        const e = mesh(f, 'sphere', [sd * 0.42, 0.42, 1.28], [0.38, 0.32, 0.3], '#ff2a0c', { type: 20, em: 1, detail: 0.15 });
-        e.r = [0, sd * 0.35, 0];
+        const e = mesh(f, 'sphere', [sd * 3.9, 1.3, 15.4], [4.4, 3.7, 3.7], '#ff2a0c', { type: 20, em: 1, detail: 0.15 });
+        e.r = [0, sd * 0.3, 0];
         out.eyes.push(e);
         // tears down to the chin, with the bloody foam of what the mouth is chewing
-        const t = mesh(f, 'box', [sd * 0.44, -0.42, 1.34], [0.07, 1.25, 0.06], TEAR, { em: lit ? 0.9 : 0.25, alpha: 0.85 });
-        t.r = [-0.18, 0, sd * 0.06];
+        const t = mesh(f, 'box', [sd * 4.2, -4.4, 18.9], [0.42, 8.6, 0.32], TEAR, { em: lit ? 0.9 : 0.25, alpha: 0.85 });
+        t.r = [-0.22, 0, sd * 0.05];
         out.tears.push(t);
+        mesh(f, 'lowCone', [sd * 2.7, -9.2, 19.8], [1.0, 3.6, 1.0], IVORY).r = [Math.PI, 0, 0];
       }
-      mesh(f, 'sphere', [0, -0.42, 1.24], [1.0, 0.62, 0.5], '#120406');
+      for (let i = 0; i < 4; i++) mesh(f, 'lowCone', [(i - 1.5) * 1.25, -8.9, 20.4 - Math.abs(i - 1.5) * 0.4], [0.55, 1.7, 0.55], IVORY).r = [Math.PI, 0, 0];
       out.mouths.push(f);
-      const jaw = group(f, [0, -0.5, 0.85]);
-      mesh(jaw, 'sphere', [0, -0.28, 0.32], [1.3, 0.6, 1.0], col);
-      for (let i = 0; i < 5; i++) mesh(jaw, 'lowCone', [(i - 2) * 0.2, -0.05, 0.75 - Math.abs(i - 2) * 0.05], [0.09, 0.22, 0.09], '#e8dcc0');
-      for (let i = 0; i < 3; i++) mesh(jaw, 'lowSphere', [(i - 1) * 0.28, -0.58, 0.62], [0.26, 0.34, 0.2], FOAM, { em: lit ? 0.15 : 0 });
+      const jaw = group(f, [0, -7.5, 5.5]);
+      mesh(jaw, 'hell-luc-jaw', [0, 0, 0], [1, 1, 1], col, { type: 33, detail: 0, seed: k * 1.3 });
+      for (let i = 0; i < 5; i++) mesh(jaw, 'lowCone', [(i - 2) * 1.3, -3.1, 12.6 - Math.abs(i - 2) * 0.5], [0.6, 1.9, 0.6], IVORY);
+      for (const sd of [-1, 1]) mesh(jaw, 'lowCone', [sd * 3.1, -2.7, 11.6], [1.0, 3.2, 1.0], IVORY);
+      for (let i = 0; i < 3; i++) mesh(jaw, 'lowSphere', [(i - 1) * 2.4, -5.2, 13.6], [2.4, 2.0, 1.8], FOAM, { em: lit ? 0.15 : 0 });
       out.jaws.push(jaw);
-      if (k === 0) for (let i = 0; i < 4; i++) mesh(f, 'lowCone', [(i - 1.5) * 0.36, 0.92, 1.16], [0.12, 0.3, 0.12], '#e8dcc0').r = [Math.PI, 0, 0];
     });
     return out;
   }
-  K.TrophyModels[ID + '-ruler'] = root => {
+  K.TrophyModels[ID + '-ruler'] = (root, game) => {
     // the archive shows every head facing -Z; the red face goes to the front
-    const g = group(root, [0, 0.35, 0]);
-    g.s = [0.62, 0.62, 0.62];
+    const g = group(root, [0, 0.3, 0]);
+    g.s = [0.042, 0.042, 0.042];
     g.r[1] = Math.PI;
-    luciferHead(g, false);
-    mesh(g, 'cylinder', [0, -1.5, -0.1], [1.7, 1.2, 1.6], HIDE);
-    mesh(g, 'disc', [0, -2.1, -0.1], [1.75, 0.06, 1.65], '#5b1a14');
-    mesh(g, 'disc', [0, -2.13, -0.1], [1.2, 0.05, 1.1], ICE, { em: 0.2 });
+    luciferHead(game.engine, g, false);
+    mesh(g, 'cylinder', [0, -17, -0.5], [27, 17, 26], HIDE, { type: 33, detail: 1, seed: 0.7 });
+    mesh(g, 'disc', [0, -25.6, -0.5], [28, 1.2, 27], '#5b1a14');
+    mesh(g, 'disc', [0, -26.2, -0.5], [20, 1, 19], ICE, { em: 0.2 });
     return g;
   };
   // the words over the gate, in the size they are seen at
@@ -352,7 +615,8 @@
         stablePhase: true,
         environment: TOP,
         wind: 0.05,
-        spawn: { p: [0, 46, 700], yaw: 0, pitch: -0.12 },
+        spawn: { p: [0, 46, 700 * S], yaw: 0, pitch: -0.12 },
+        edge: 1560,
         rulerAim: '루시퍼 · Q로 머리 붙잡기',
         rulerGrab: ['루시퍼의 머리를 붙잡았습니다', 'S로 뒤로 물러나 끝까지 당기세요. 날개 바람이 함선을 밀어냅니다.'],
         pullRate: 0.06,
@@ -414,7 +678,7 @@
       let y = profile(R);
       const k = roughness(R);
       if (k > 0) y += (vnoise(x * 0.045, z * 0.045) - 0.5) * 2 * k + (vnoise(x * 0.16 + 7.3, z * 0.16 - 2.1) - 0.5) * k * 0.7;
-      if (R >= 760) y += (vnoise(x * 0.006, z * 0.006) - 0.4) * 150 * ss(760, 900, R) + (vnoise(x * 0.021, z * 0.021) - 0.5) * 44 * ss(760, 860, R);
+      if (R >= 760 * S) y += (vnoise(x * 0.006, z * 0.006) - 0.4) * 150 * ss(760 * S, 900 * S, R) + (vnoise(x * 0.021, z * 0.021) - 0.5) * 44 * ss(760 * S, 860 * S, R);
       return y;
     }
     // where people stand: on the ice at the bottom, on the beds of the rivers they stand in
@@ -438,11 +702,12 @@
       return f;
     }
     circleAt(R, y) {
+      const r = R / S;
       for (const k of ['l', 'w', 'g', 'a', 'y', 'h', 'b', 'p', 'i']) {
         const c = CIRCLES[k],
-          lo = k === 'b' ? 158 : k === 'p' ? 104 : k === 'i' ? 0 : k === 'h' ? 216 : c.r0 - 2,
-          hi = k === 'b' ? 206 : k === 'p' ? 150 : k === 'i' ? 92 : k === 'y' ? 282 : c.r1 + 2;
-        if (R >= lo && R <= hi && y < c.y + 90) return k;
+          lo = k === 'b' ? 158 : k === 'p' ? 104 : k === 'i' ? 0 : k === 'h' ? 216 : c.r0 / S - 2,
+          hi = k === 'b' ? 206 : k === 'p' ? 150 : k === 'i' ? 92 : k === 'y' ? 282 : c.r1 / S + 2;
+        if (r >= lo && r <= hi && y < c.y + 90) return k;
       }
       return null;
     }
@@ -456,6 +721,23 @@
         o = b.count * 24,
         col = typeof c === 'string' ? rgb(c) : c;
       trs(d, o, p[0], p[1], p[2], r[0], r[1], r[2], s[0], s[1], s[2]);
+      d[o + 16] = col[0];
+      d[o + 17] = col[1];
+      d[o + 18] = col[2];
+      d[o + 19] = alpha;
+      d[o + 20] = em;
+      d[o + 21] = type;
+      d[o + 22] = det;
+      d[o + 23] = seed;
+      b.count++;
+      return o;
+    }
+    // an instance from three axis vectors (already scaled) and a position
+    putBasis(b, p, X, Y, Z, c, em = 0, type = 0, det = 0, seed = 0, alpha = 1) {
+      const d = this.game.engine.growBatch(b, b.count + 1),
+        o = b.count * 24,
+        col = typeof c === 'string' ? rgb(c) : c;
+      d.set([X[0], X[1], X[2], 0, Y[0], Y[1], Y[2], 0, Z[0], Z[1], Z[2], 0, p[0], p[1], p[2], 1], o);
       d[o + 16] = col[0];
       d[o + 17] = col[1];
       d[o + 18] = col[2];
@@ -494,7 +776,11 @@
       return mesh(this.root, name, [0, 0, 0], [1, 1, 1], color, opts);
     }
     makeTerrain() {
-      const step = R => (R < 92 ? 4 : R >= 104 && R <= 150 ? 0.8 : roughness(R) > 2 || (R > 472 && R < 505) || (R > 254 && R < 282) || (R > 189 && R < 206) ? 1.4 : R >= 760 ? 26 : R >= 505 ? 8 : 5);
+      // rings at the radii the pit was laid out with, moved out S times
+      const step = R => {
+        const r = R / S;
+        return S * (r < 92 ? 4 : r >= 104 && r <= 150 ? 0.8 : roughness(R) > 2 || (r > 472 && r < 505) || (r > 254 && r < 282) || (r > 189 && r < 206) ? 1.4 : r >= 760 ? 26 : r >= 505 ? 8 : 5);
+      };
       const band = (a, b) => {
         const out = [];
         for (let R = a; R < b - 0.2; R += step(R)) out.push(R);
@@ -525,13 +811,13 @@
         [505, 1400, '#4d413a', 6, 0.35],
       ];
       this.groundParts = parts.map(([a, b, col, det, hot], i) => {
-        const n = this.ringMesh('hell-g' + i, band(a, b), b > 600 ? 160 : 200, g, col, { type: 27, detail: det, em: hot, seed: i * 1.37 });
+        const n = this.ringMesh('hell-g' + i, band(a * S, b * S), b > 600 ? 224 : 280, g, col, { type: 27, detail: det, em: hot, seed: i * 1.37 });
         n.hot = hot;
         return n;
       });
       // what lies on it: rivers that go round, the frozen lake at the bottom
       const flat = y => () => y;
-      const ring = (name, a, b, y, det, em, alpha = 1, segs = 180) =>
+      const ring = (name, a, b, y, det, em, alpha = 1, segs = 250) =>
         this.ringMesh(name, [a, (a + b) / 2, b], segs, flat(y), '#ffffff', { type: 28, detail: det, em, alpha });
       this.liquids = [
         ring('hell-acheron', ACH.r0 + 1, ACH.r1 - 1, ACH.water, 0, 0),
@@ -539,7 +825,7 @@
         ring('hell-blood', BLOOD.r0 - 0.5, BLOOD.r1 + 0.5, BLOOD.surface, 2, 1),
         ring('hell-pitch', PITCH.r - PITCH.w * 0.5 - 0.3, PITCH.r + PITCH.w * 0.5 + 0.3, PITCH.surface, 3, 0),
       ];
-      this.ice = this.ringMesh('hell-ice', [0, 30, 60, ICE_R + 0.6], 120, flat(ICE_Y), '#ffffff', { type: 27, detail: 3, em: 1, alpha: 0.8 });
+      this.ice = this.ringMesh('hell-ice', [0, 30 * S, 60 * S, ICE_R + 0.6], 160, flat(ICE_Y), '#ffffff', { type: 27, detail: 3, em: 1, alpha: 0.8 });
     }
 
     /* ---------- what was built here ---------- */
@@ -579,7 +865,7 @@
     }
     makeLimbo() {
       const a = -0.9,
-        R = 449,
+        R = 449 * S,
         cx = Math.sin(a) * R,
         cz = Math.cos(a) * R,
         y = this.height(cx, cz) - 0.6;
@@ -627,7 +913,8 @@
           mesh(node, 'box', [0, 28.5, 0], [15, 5, 6], IRON, W);
         } else mesh(node, 'box', [0, 15.5, 0], [len, 31, 6], IRON, W);
         const merl = [];
-        for (let k = 0; k < 15; k++) merl.push(mesh(node, 'box', [(k / 14 - 0.5) * (len - 3), 32.3, 0], [2.2, 2.6, 6.4], IRON, W));
+        const NM = Math.round(15 * S);
+        for (let k = 0; k < NM; k++) merl.push(mesh(node, 'box', [(k / (NM - 1) - 0.5) * (len - 3), 32.3, 0], [2.2, 2.6, 6.4], IRON, W));
         const w = {
           kind: 'wall',
           i,
@@ -698,13 +985,13 @@
       this.tombFire = F;
       const STONE = '#4a403a',
         rng = M.rand(606);
-      for (let i = 0; i < 150; i++) {
+      for (let i = 0; i < 212; i++) {
         // four rows round the inside of the walls; the ones with someone in them come first
         const row = i % 4,
           j = Math.floor(i / 4),
-          n = 38,
-          a = ((j % n) / n) * TAU + row * 0.041 + (rng() - 0.5) * 0.03,
-          R = [221, 227, 233, 239][row],
+          n = 53,
+          a = ((j % n) / n) * TAU + row * (TAU / n) * 0.25 + (rng() - 0.5) * 0.022,
+          R = [221, 227, 233, 239][row] * S,
           x = Math.sin(a) * R,
           z = Math.cos(a) * R,
           y = this.height(x, z),
@@ -732,62 +1019,62 @@
         const a = (q / 4) * TAU + 0.25,
           s = Math.sin(a),
           c = Math.cos(a),
-          L = 48,
-          mid = 128;
+          L = 48 * S,
+          mid = 128 * S;
         this.put(B, [s * mid, MALE_Y + 0.6, c * mid], [0, a, 0], [3.4, 1.3, L], '#7a6f66', 0, 27, 7, q);
         for (const sd of [-1, 1]) this.put(B, [s * mid + c * sd * 1.6, MALE_Y + 1.6, c * mid - s * sd * 1.6], [0, a, 0], [0.4, 0.9, L], '#6a5f57', 0, 27, 7, q);
         for (let k = 0; k < BOLGE.length - 1; k++) {
-          const rr = (BOLGE[k][0] - BOLGE[k][1] / 2 + BOLGE[k + 1][0] + BOLGE[k + 1][1] / 2) / 2;
-          this.put(B, [s * rr, MALE_Y - 0.6, c * rr], [0, a, 0], [3.8, 2.6, 1.4], '#6a5f57', 0, 27, 7, q + k);
+          const rr = ((BOLGE[k][0] - BOLGE[k][1] / 2 + BOLGE[k + 1][0] + BOLGE[k + 1][1] / 2) / 2) * S;
+          this.put(B, [s * rr, MALE_Y - 0.6, c * rr], [0, a, 0], [3.8, 2.6, 1.4 * S], '#6a5f57', 0, 27, 7, q + k);
         }
       }
     }
     // the fourth circle: weights rolled round half the circle and back, two crowds meeting at either end
     makeBoulders() {
-      for (let k = 0; k < 8; k++) {
+      for (let k = 0; k < 12; k++) {
         const n = group(this.root, [0, 0, 0]);
         mesh(n, 'sphere', [0, 0, 0], [5.6, 5.3, 5.6], '#7d604a', { type: 27, detail: 0, em: 0.15, seed: k });
         mesh(n, 'lowSphere', [1.1, 1.3, 0.6], [3.4, 2.6, 3.2], '#6a503e', { type: 27, detail: 0, em: 0.1, seed: k + 3 });
-        this.boulders.push({ k, side: k < 4 ? 1 : -1, j: k % 4, node: n, th: 0, R: 304, dir: 1, roll: 0, label: '돌덩이', kind: 'boulder', fixed: true, fixedNote: '굴러갈 뿐, 들리지 않습니다.', alive: true, p: [0, 0, 0], radius: 3 });
+        this.boulders.push({ k, side: k < 6 ? 1 : -1, j: k % 6, node: n, th: 0, R: 304 * S, dir: 1, roll: 0, label: '돌덩이', kind: 'boulder', fixed: true, fixedNote: '굴러갈 뿐, 들리지 않습니다.', alive: true, p: [0, 0, 0], radius: 3 });
       }
     }
     // the vestibule: a banner whirling round and round, and everyone who never chose a side running after it
     makeBanner() {
-      this.banner = group(this.root, [0, 0, 560]);
+      this.banner = group(this.root, [0, 0, 560 * S]);
       mesh(this.banner, 'cylinder', [0, 6, 0], [0.32, 12, 0.32], '#3a302a');
       this.flag = group(this.banner, [0, 10.5, 0]);
       mesh(this.flag, 'box', [1.9, 0, 0], [3.8, 2.2, 0.1], '#d9d2c4', { em: 0.1 });
-      this.bannerP = [0, 0, 560];
+      this.bannerP = [0, 0, 560 * S];
     }
     makeRocks() {
-      const S = this.stat('tinySphere', { capacity: 700 }),
-        C = this.stat('cone', { capacity: 260 }),
+      const ST = this.stat('tinySphere', { capacity: 1300 }),
+        C = this.stat('cone', { capacity: 480 }),
         K2 = this.stat('box', { capacity: 240 }),
         rng = M.rand(4242);
-      const ok = R => !(liquidAt(R) != null || roughness(R) > 2 || (R > 104 && R < 150) || R < 100);
-      for (let i = 0; i < 640; i++) {
-        const R = 100 + Math.pow(rng(), 0.8) * 640,
+      const ok = R => !(liquidAt(R) != null || roughness(R) > 2 || (R > 104 * S && R < 150 * S) || R < 100 * S);
+      for (let i = 0; i < 1250; i++) {
+        const R = (100 + Math.pow(rng(), 0.8) * 640) * S,
           a = rng() * TAU;
-        if (!ok(R) || (R > 535 && R < 560 && Math.abs(a) < 0.08)) continue;
+        if (!ok(R) || (R > 535 * S && R < 560 * S && Math.abs(a) < 0.08)) continue;
         const x = Math.sin(a) * R,
           z = Math.cos(a) * R,
           s = 0.6 + Math.pow(rng(), 2.4) * 4.2;
-        this.put(S, [x, this.ground(x, z) + s * 0.18, z], [rng(), rng() * 6, rng()], [s * 1.3, s * 0.8, s], R > 505 ? '#3a302b' : '#3a2c27', 0.3, 27, 0, rng() * 9);
+        this.put(ST, [x, this.ground(x, z) + s * 0.18, z], [rng(), rng() * 6, rng()], [s * 1.3, s * 0.8, s], R > 505 * S ? '#3a302b' : '#3a2c27', 0.3, 27, 0, rng() * 9);
       }
       // black spires on the plain outside, and up the mountain wall round the pit
-      for (let i = 0; i < 240; i++) {
-        const R = 520 + rng() * 560,
+      for (let i = 0; i < 470; i++) {
+        const R = (520 + rng() * 560) * S,
           a = rng() * TAU;
-        if (R > 535 && R < 600 && Math.abs(a) < 0.12) continue;
+        if (R > 535 * S && R < 600 * S && Math.abs(a) < 0.12) continue;
         const x = Math.sin(a) * R,
           z = Math.cos(a) * R,
-          h = 5 + Math.pow(rng(), 1.6) * (R > 760 ? 55 : 22);
+          h = 5 + Math.pow(rng(), 1.6) * (R > 760 * S ? 55 : 22);
         this.put(C, [x, this.ground(x, z) + h * 0.45, z], [(rng() - 0.5) * 0.3, rng() * 6, (rng() - 0.5) * 0.3], [h * 0.26, h, h * 0.22], '#171110', 0.9, 27, 0, rng() * 9);
       }
       // the meadow of the first circle
-      const G = this.stat('lowCone', { capacity: 420 });
-      for (let i = 0; i < 420; i++) {
-        const R = 428 + rng() * 42,
+      const G = this.stat('lowCone', { capacity: 820 });
+      for (let i = 0; i < 820; i++) {
+        const R = (428 + rng() * 42) * S,
           a = rng() * TAU,
           x = Math.sin(a) * R,
           z = Math.cos(a) * R,
@@ -795,13 +1082,49 @@
         this.put(G, [x, this.ground(x, z) + h * 0.45, z], [(rng() - 0.5) * 0.4, rng() * 6, (rng() - 0.5) * 0.4], [0.5 + rng() * 0.5, h, 0.4], rng() < 0.5 ? '#4f6a3c' : '#3f5732', 0);
       }
       // bones on the ash: the plain outside the gate is where they wait
-      for (let i = 0; i < 220; i++) {
-        const R = 506 + rng() * 240,
+      for (let i = 0; i < 430; i++) {
+        const R = (506 + rng() * 240) * S,
           a = rng() * TAU,
           x = Math.sin(a) * R,
           z = Math.cos(a) * R;
         this.put(K2, [x, this.ground(x, z) + 0.12, z], [rng() * 0.3, rng() * 6, rng() * 0.3], [0.16, 0.16, 0.7 + rng() * 0.6], '#d9d0bf', 0.05);
       }
+    }
+    // a body seen far off in the storm: a flat figure, arms and legs flung out
+    flyerGeometry() {
+      if (this.game.engine.geometries['hell-flyer']) return;
+      const P = [
+        [0, 1.0], [0.14, 0.86], [0.2, 0.62], [0.78, 0.82], [0.82, 0.7], [0.22, 0.45], [0.18, 0.05], [0.48, -0.78], [0.36, -0.82], [0, -0.12],
+        [-0.36, -0.82], [-0.48, -0.78], [-0.18, 0.05], [-0.22, 0.45], [-0.82, 0.7], [-0.78, 0.82], [-0.2, 0.62], [-0.14, 0.86],
+      ];
+      const p = [0, 0.35, 0],
+        n = [0, 0, 1],
+        idx = [];
+      for (const [x, y] of P) {
+        p.push(x, y, 0);
+        n.push(0, 0, 1);
+      }
+      for (let i = 0; i < P.length; i++) idx.push(0, 1 + i, 1 + ((i + 1) % P.length));
+      this.game.engine.addGeometry('hell-flyer', { p, n, idx });
+      this.ownedGeometries.add('hell-flyer');
+    }
+    // an open band round the axis, radius 1 and height 1, for the sheets of wind
+    tubeGeometry() {
+      if (this.game.engine.geometries['hell-tube']) return;
+      const p = [],
+        n = [],
+        idx = [],
+        N = 96;
+      for (let i = 0; i <= N; i++) {
+        const a = (i / N) * TAU;
+        for (const y of [-0.5, 0.5]) {
+          p.push(Math.sin(a), y, Math.cos(a));
+          n.push(Math.sin(a), 0, Math.cos(a));
+        }
+      }
+      for (let i = 0; i < N; i++) idx.push(i * 2, i * 2 + 1, i * 2 + 2, i * 2 + 1, i * 2 + 3, i * 2 + 2);
+      this.game.engine.addGeometry('hell-tube', { p, n, idx });
+      this.ownedGeometries.add('hell-tube');
     }
     /* ---------- the bottom: Lucifer, frozen to the chest, beating six wings ---------- */
     wingGeometry() {
@@ -849,79 +1172,96 @@
       return { root, flap };
     }
     makeRuler() {
-      const root = this.root,
+      const engine = this.game.engine,
+        root = this.root,
         base = group(root, [0, ICE_Y, 0]),
-        body = group(base);
+        body = group(base),
+        m = lucMeshes(engine);
       this.wingGeometry();
-      const HIDE2 = { em: 0 };
-      mesh(body, 'sphere', [0, 3, 0], [37, 31, 25], HIDE, HIDE2);
-      for (const sd of [-1, 1]) {
-        mesh(body, 'sphere', [sd * 15.5, 12.5, -0.5], [17, 13, 15], HIDE, HIDE2);
-        const arm = K.beam(body, [sd * 19, 11, 0], [sd * 24, -9, 5], 9, HIDE);
-        arm.geo = 'lowCyl';
+      mesh(body, 'hell-luc-body', [0, 0, 0], [1, 1, 1], HIDE, { type: 33, detail: 1, seed: 0.7 });
+      // claws dug into the ice
+      for (const sd of [-1, 1])
+        for (const k of [-1.5, -0.5, 0.5, 1.5]) {
+          const c = mesh(body, 'lowCone', [sd * (38 + k * 6.2), 0.2, 77.5 - Math.abs(k) * 2.8], [1.5, 4.4, 1.5], HORN, { type: 33, detail: 3 });
+          c.r = [1.95, 0, 0];
+        }
+      // the shag of his hide, that the poet climbed down by: on the flanks and the back
+      const rng = M.rand(19),
+        TUFT = this.stat('lowCone', { capacity: 260 });
+      for (let i = 0; i < 260; i++) {
+        const side = rng() < 0.5 ? -1 : 1,
+          a = side * (1.1 + rng() * 1.9),
+          y = 1 + Math.pow(rng(), 0.8) * 30,
+          s = surfaceOut(m.body, a, y);
+        if (!s) continue;
+        const n = s.n,
+          len = 3 + rng() * 3.5,
+          // lying down along the hide, pointing down and out
+          d = M.norm([n[0] * 0.55, -0.85, n[2] * 0.55]),
+          p = M.add(s.p, M.mul(n, 0.4));
+        const pitch = Math.acos(M.clamp(d[1], -1, 1)),
+          yaw = Math.atan2(d[0], d[2]);
+        this.put(TUFT, [p[0], ICE_Y + p[1], p[2]], [pitch, yaw, 0], [1.1 + rng() * 0.8, len, 1.1 + rng() * 0.8], rng() < 0.5 ? '#1b0c0a' : '#2a1410', 0, 33, 2, rng() * 9);
       }
-      // the shag of his hide, that the poet climbed down by
-      const rng = M.rand(19);
-      for (let i = 0; i < 70; i++) {
-        const a = rng() * TAU,
-          up = 0.25 + rng() * 0.7,
-          x = Math.sin(a) * 18.5 * Math.cos(up * 1.2),
-          z = Math.cos(a) * 12.5 * Math.cos(up * 1.2),
-          y = 3 + Math.sin(up * 1.3) * 15.5;
-        const c = mesh(body, 'lowCone', [x, y, z], [1.3, 3.6 + rng() * 2.4, 1.3], '#1b0c0a');
-        c.r = [Math.atan2(z, 14) * 0.6, 0, -Math.atan2(x, 14) * 0.6];
-      }
-      mesh(body, 'cylinder', [0, 22, -0.5], [13.5, 10, 12.5], HIDE);
-      this.stump = mesh(body, 'disc', [0, 27.1, -0.5], [13.6, 0.3, 12.6], '#4a0f0c', { em: 0.15 });
+      this.stump = mesh(body, 'disc', [0, 41.2, 0.8], [25, 0.4, 23], '#4a0f0c', { em: 0.15 });
       this.stump.visible = false;
       // the head: three faces, eyes weeping into the bloody foam of what each mouth chews
-      const head = group(base, [0, 34, 0]),
+      const head = group(base, [0, HEAD_Y, 0]),
         face = group(head);
-      face.s = [6.6, 6.6, 6.6];
-      this.lhead = luciferHead(face, true);
+      face.s = [HEAD_S, HEAD_S, HEAD_S];
+      this.lhead = luciferHead(engine, face, true);
       // in each mouth one of the three: the one in front head first, legs outside; the two at the sides head down
       this.chewed = this.lhead.mouths.map((f, k) => {
-        const g = group(f, k === 0 ? [0, -0.5, 2.05] : [0, -0.45, 1.42]);
-        const fig = K.residentFigure(g, 'damned', 7 + k * 5, 0.8);
+        const g = group(f, k === 0 ? [0, -10.6, 18.8] : [0, -11.4, 17.6]);
+        const fig = K.residentFigure(g, 'damned', 7 + k * 5, 3.0);
         if (k === 0) g.r = [-Math.PI / 2 + 0.55, 0, 0];
         else g.r = [Math.PI, 0, 0];
         fig.p = [0, 0, 0];
         return g;
       });
-      this.setupRuler(base, body, head, group(head), 34, 400, 12);
+      this.setupRuler(base, body, head, group(head), HEAD_Y, 400, 24);
+      this.ruler.p = [0, ICE_Y + HEAD_Y + 6, 0];
       this.ruler.hp = this.ruler.captured ? 0 : 400 - this.iceBroken * 100;
-      // six wings, two below each face: their wind is what freezes the lake
+      // six wings off the back, three a side, fanned out behind him: their wind is what freezes the lake
       this.wings = [];
-      [0, -Math.PI / 2, Math.PI / 2].forEach((a, k) => {
-        for (const sd of [-1, 1]) {
-          const b = a + sd * 0.48,
-            w = this.batWing(base, [Math.sin(b) * 9, 15, Math.cos(b) * 9], 56, k === 0 ? '#3c1612' : k === 1 ? '#4a3a24' : '#1a1414', 0.05);
-          w.root.r = [1.05, b - Math.PI / 2, 0];
+      const roots = [
+        [10, 33, -14, 0],
+        [19, 25, -13, 1],
+        [25, 15, -10, 2],
+      ];
+      for (const sd of [-1, 1])
+        roots.forEach(([x, y, z, j]) => {
+          const k = j === 0 ? 0 : sd < 0 ? 1 : 2,
+            b = Math.atan2(sd * x, z) + sd * (0.35 + j * 0.05),
+            w = this.batWing(base, [sd * (x + 4) , y + 2, z - 3], 74 - j * 6, k === 0 ? '#3c1612' : k === 1 ? '#4a3a24' : '#1a1414', 0.05);
+          w.root.r = [0.55, b - Math.PI / 2, 0.42 - j * 0.26];
           w.b = b;
           w.sd = sd;
           w.k = k;
+          w.j = j;
           this.wings.push(w);
-        }
-      });
-      // the ice he is held in, built up round his chest to the jaw: it has to be broken before the head comes away
+        });
+      // the ice he is held in, built up round his chest to the neck in a crust of blocks; it comes off in four layers
       this.iceStages = [];
+      const irng = M.rand(44);
       for (let s = 0; s < 4; s++) {
         const list = [],
-          n = 9,
-          y0 = 1 + s * 6.5,
-          rad = 21.5 - s * 3.1;
+          n = 10 - s;
         for (let j = 0; j < n; j++) {
-          const a = (j / n) * TAU + s * 0.55,
-            h = 12 + ((j * 7 + s * 3) % 5) * 2.2,
-            w = 7 + ((j * 3 + s) % 3) * 1.6,
-            c = mesh(base, 'hex', [Math.sin(a) * rad, y0 + h * 0.35, Math.cos(a) * rad * 0.8], [w, h, w * 0.8], '#9fd6f2', { type: 23, em: 0.35, detail: 0.85, alpha: 0.72 });
-          c.r = [Math.cos(a) * 0.5, a, -Math.sin(a) * 0.5];
+          const a = (j / n) * TAU + s * 0.61 + (irng() - 0.5) * 0.3,
+            y = 1 + s * 7 + irng() * 3,
+            hit = surfaceOut(m.body, a, y),
+            R = hit ? hit.R : 22,
+            w = 7 + irng() * 4 - s * 0.8,
+            h = 9 + irng() * 5 - s * 1.2,
+            c = mesh(base, 'hex', [Math.sin(a) * (R + w * 0.1), y + h * 0.25, Math.cos(a) * (R + w * 0.1)], [w, h, w * 0.8], '#a6dcf6', { type: 23, em: 0.14, detail: 0.85, alpha: 0.5 });
+          c.r = [Math.cos(a) * 0.62 + (irng() - 0.5) * 0.3, a + (irng() - 0.5) * 0.5, -Math.sin(a) * 0.62];
           list.push(c);
         }
         this.iceStages.push(list);
         if (s < this.iceBroken) for (const c of list) c.visible = false;
       }
-      this.lucifer = { kind: 'lucifer', fixed: true, fixedNote: '얼음에 가슴까지 박혀 있습니다.', label: '루시퍼', alive: true, p: [0, ICE_Y + 10, 0], radius: 20 };
+      this.lucifer = { kind: 'lucifer', fixed: true, fixedNote: '얼음에 가슴까지 박혀 있습니다.', label: '루시퍼', alive: true, p: [0, ICE_Y + 14, 0], radius: 34 };
       this.flapK = 1;
     }
     iceLeft() {
@@ -1012,7 +1352,7 @@
         // he cannot turn his head far: the ice holds his shoulders
         const want = M.clamp(Math.atan2(ship[0], ship[2]) * 0.18, -0.25, 0.25) * near;
         r.head.r[1] = M.damp(r.head.r[1], want, 1.5, dt);
-        r.head.p[1] = 34 + Math.sin(t * 0.9) * 0.3;
+        r.head.p[1] = HEAD_Y + Math.sin(t * 0.9) * 0.3;
       } else r.head.r[1] = Math.sin(t * 17) * 0.03 * tension;
     }
     /* ---------- the keepers of the circles ---------- */
@@ -1081,7 +1421,7 @@
     // Minos, who judges at the head of the second circle: he winds his tail round himself once for every circle
     makeMinos() {
       const a = 0.3,
-        R = 406,
+        R = 406 * S,
         x = Math.sin(a) * R,
         z = Math.cos(a) * R,
         node = group(this.root, [x, this.height(x, z), z]);
@@ -1102,7 +1442,7 @@
     // Cerberus: three throats, red eyes, a greasy black beard, hands that claw
     makeCerberus() {
       const a = -0.42,
-        R = 343,
+        R = 343 * S,
         x = Math.sin(a) * R,
         z = Math.cos(a) * R,
         node = group(this.root, [x, this.height(x, z), z]),
@@ -1137,7 +1477,7 @@
     makeMalebranche(i, k) {
       const fly = k >= 6,
         a = (k / 10) * TAU + 0.4,
-        R = fly ? PITCH.r : PITCH.r + (k % 2 ? -5.4 : 5.4),
+        R = fly ? PITCH.r : PITCH.r + (k % 2 ? -5.4 : 5.4) * S,
         x = Math.sin(a) * R,
         z = Math.cos(a) * R,
         node = group(this.root, [x, fly ? MALE_Y + 8 : this.height(x, z), z]);
@@ -1180,65 +1520,73 @@
     // the giants round the well: standing on the ice below, their heads above the eighth circle,
     // a chain wound five times round each from the neck down, one arm bound in front, the other behind
     makeGiant(i, k) {
-      const a = 0.5 + (k / 4) * TAU,
-        R = 97,
+      const engine = this.game.engine,
+        m = giantMeshes(engine),
+        a = 0.5 + (k / 4) * TAU,
+        R = 97 * S,
         x = Math.sin(a) * R,
         z = Math.cos(a) * R,
         node = group(this.root, [x, ICE_Y, z]),
         SK = ['#9a7660', '#86664f', '#a3806a', '#7a5a46'][k],
         HAIR = ['#2a1d16', '#3a2a1c', '#1c1410', '#4a3626'][k];
       node.r[1] = a;
-      for (const sd of [-1, 1]) {
-        mesh(node, 'taper', [sd * 5.2, 19, 0], [9.5, 38, 9.5], SK).r[0] = Math.PI;
-        mesh(node, 'lowSphere', [sd * 5.2, 37.5, 0.4], [10, 7, 10], SK);
-      }
-      mesh(node, 'lowSphere', [0, 40, 0], [21, 10, 13], '#3a2a20');
-      const torso = mesh(node, 'frustum', [0, 55, 0], [25, 28, 14.5], SK);
-      torso.r[0] = Math.PI;
-      mesh(node, 'sphere', [0, 61, 2.5], [21, 12, 9], SK);
-      for (const sd of [-1, 1]) mesh(node, 'sphere', [sd * 12.5, 66, 0], [11.5, 10, 11], SK);
-      // the arms, bound: the left in front, the right behind
-      const arm = (a1, b1, w) => (K.beam(node, a1, b1, w, SK).geo = 'lowCyl');
-      arm([12.5, 66, 0], [14.5, 50, -1], 7);
-      arm([14.5, 50, -1], [4, 45, -7.5], 6);
-      arm([-12.5, 66, 0], [-14.5, 50, 1], 7);
-      arm([-14.5, 50, 1], [-4, 45, 7.5], 6);
-      mesh(node, 'cylinder', [0, 70, 0.5], [8, 6, 8], SK);
-      const head = group(node, [0, 78, 1]);
-      mesh(head, 'sphere', [0, 0, 0], [12, 14, 12.5], SK);
-      mesh(head, 'lowSphere', [0, 3.6, -1.6], [13, 8, 12.4], HAIR);
-      mesh(head, 'lowSphere', [0, -3.2, -2.8], [12.6, 9, 9], HAIR);
-      mesh(head, 'lowSphere', [0, -4.8, 3.4], [9, 8, 6], HAIR);
-      mesh(head, 'box', [0, 1.8, 5.4], [8.4, 1.4, 2], SK);
-      mesh(head, 'lowCone', [0, -0.2, 6.6], [1.8, 3, 1.8], SK).r[0] = Math.PI / 2 - 0.3;
+      linkGeometry(engine);
+      mesh(node, 'hell-giant-body', [0, 0, 0], [1, 1, 1], SK, { type: 33, detail: 0, seed: k * 1.7 });
+      // a hide wrapped round the loins
+      const hide = mesh(node, 'frustum', [0, 41.6, -0.4], [20.4, 8.4, 15.2], '#3a2a20', { type: 33, detail: 1, seed: k });
+      hide.r[0] = Math.PI;
+      const head = group(node, [0, 73.4, 1.2]),
+        open = k === 0;
+      mesh(head, open ? 'hell-giant-head-open' : 'hell-giant-head', [0, 0, 0], [1, 1, 1], SK, { type: 33, detail: 0, seed: k * 1.7 + 0.5 });
+      mesh(head, 'hell-giant-hair', [0, 0, 0], [1, 1, 1], HAIR, { type: 33, detail: 2, seed: k });
+      mesh(head, open ? 'hell-giant-beard-open' : 'hell-giant-beard', [0, 0, 0], [1, 1, 1], HAIR, { type: 33, detail: 2, seed: k + 0.4 });
       const eyes = [];
-      for (const sd of [-1, 1]) eyes.push(mesh(head, 'tinySphere', [sd * 2.3, 0.7, 5.7], [1.5, 1, 0.8], '#f0c890', { em: 0.6 }));
-      if (k === 0) {
+      for (const sd of [-1, 1]) eyes.push(mesh(head, 'sphere', [sd * 1.5, 5.5, 4.35], [1.5, 1.05, 1.0], '#f0c890', { em: 0.6 }));
+      if (open) {
         // the one with a horn hung at his neck, that once blew loud enough to drown out thunder
-        const horn = mesh(node, 'cone', [7, 63, 8.2], [3, 10, 3], '#d2bd92');
+        const horn = mesh(node, 'cone', [6.4, 60.6, 8.6], [2.8, 10, 2.8], '#d2bd92', { type: 33, detail: 3 });
         horn.r = [0.4, 0, 2.5];
-        K.beam(node, [-5, 71, 3], [6.5, 60, 8], 0.5, '#4a3a2a');
+        K.beam(node, [-4.6, 71, 3.4], [6.2, 61, 8.3], 0.5, '#4a3a2a');
       }
-      // the chain: links laid along a helix, five turns from the neck to the waist
-      const C = this.chain || (this.chain = this.stat('lowCyl', { capacity: 600 }));
-      const turns = 5,
-        segs = 130,
+      // the chain: links laid on the body along a helix, five turns from the neck to the waist
+      const C = this.chain || (this.chain = this.stat('hell-link', { capacity: 700 })),
         ca = Math.cos(a),
         sa = Math.sin(a),
+        turns = 5,
+        L = 3.3,
         at = u => {
-          const ang = u * turns * TAU,
-            rr = 13.6 - u * 3.2,
-            lx = Math.sin(ang) * rr,
-            lz = Math.cos(ang) * rr * 0.66;
-          return [x + lx * ca + lz * sa, ICE_Y + 69.5 - u * 27, z - lx * sa + lz * ca];
+          const th = u * turns * TAU,
+            y = 69.5 - u * 25,
+            s = surfaceOut(m.body, th, y, 0, 40);
+          const p = s ? M.add(s.p, M.mul(s.n, 0.55)) : [Math.sin(th) * 12, y, Math.cos(th) * 12];
+          return p;
         };
-      for (let j = 0; j < segs; j++) {
-        const A = at(j / segs),
-          B = at((j + 1) / segs),
-          d = M.sub(B, A),
-          L = M.len(d),
-          w = j % 2 ? 1.25 : 1.6;
-        this.put(C, M.mul(M.add(A, B), 0.5), [Math.acos(M.clamp(d[1] / L, -1, 1)), Math.atan2(d[0], d[2]), 0], [w, L * 1.15, w], j % 2 ? '#2a2523' : '#3a3330', 0.05, 0);
+      const pts = [];
+      for (let j = 0, N = 260; j <= N; j++) pts.push(at(j / N));
+      // walk the path laying links of a fixed length, each turned a quarter from the last
+      let prev = pts[0],
+        acc = 0,
+        n = 0;
+      for (let j = 1; j < pts.length; j++) {
+        const seg = M.dist(prev, pts[j]);
+        acc += seg;
+        if (acc < L * 0.78) continue;
+        const A = prev,
+          B = pts[j],
+          d = M.norm(M.sub(B, A)),
+          mid = M.mul(M.add(A, B), 0.5),
+          out = M.norm([mid[0], 0, mid[2]]),
+          side = M.norm(M.cross(d, out)),
+          up = n % 2 ? side : M.norm(M.cross(side, d)),
+          wx = [mid[0] * ca + mid[2] * sa + x, ICE_Y + mid[1], -mid[0] * sa + mid[2] * ca + z],
+          rot = v => [v[0] * ca + v[2] * sa, v[1], -v[0] * sa + v[2] * ca],
+          X = M.mul(rot(M.cross(d, up)), 3.6),
+          Y = M.mul(rot(d), L * 1.08),
+          Z = M.mul(rot(up), 3.6);
+        this.putBasis(C, wx, X, Y, Z, n % 2 ? '#2a2523' : '#3a3330', 0.05, 33, 3, n);
+        prev = B;
+        acc = 0;
+        n++;
       }
       this.addDemon({ i, cls: 'giant', label: k === 0 ? '거인 · 뿔나팔을 목에 건' : '거인 · 사슬에 묶임', hp: 1200, node, head, eyes, radius: 14, hy: 60, fixed: true, fixedNote: '사슬에 묶여 있습니다.', k, a });
     }
@@ -1275,7 +1623,9 @@
         quiet: true,
         seed: 1919,
         center: [0, 0],
-        radius: 590,
+        radius: 590 * S,
+        maxR: 600 * S + 20,
+        cap: 1300,
         occupancy: () => 0,
         slots: () => this.soulSlots(),
         init: (r, sl) => this.initSoul(r, sl),
@@ -1297,42 +1647,43 @@
         for (let k = 0; k < n; k++) list.push(Object.assign(gen(k), { ring, k }));
         out.push(...list.slice(0, Math.max(0, n - (this.liftedBy[ring] || 0))));
       };
-      const castle = [Math.sin(-0.9) * 449, Math.cos(-0.9) * 449];
-      add('v', 46, () => polar(540 + rng() * 34, (rng() - 0.5) * 0.14));
-      add('s', 38, () => polar(507 + rng() * 9, (rng() - 0.5) * 0.6));
-      add('n', this.newcomers, () => polar(507 + rng() * 8, (rng() - 0.5) * 0.46, { sp: 'saved' }));
-      add('l', 30, () => {
+      // as many in each circle as the wider pit holds at the same crowding
+      const castle = [Math.sin(-0.9) * 449 * S, Math.cos(-0.9) * 449 * S];
+      add('v', 88, () => polar((540 + rng() * 34) * S, (rng() - 0.5) * 0.14));
+      add('s', 72, () => polar((507 + rng() * 9) * S, (rng() - 0.5) * 0.6));
+      add('n', this.newcomers, () => polar((507 + rng() * 8) * S, (rng() - 0.5) * 0.46, { sp: 'saved' }));
+      add('l', 56, () => {
         for (let g = 0; g < 30; g++) {
-          const s = polar(432 + rng() * 34, -0.9 + (rng() - 0.5) * 1.1);
+          const s = polar((432 + rng() * 34) * S, -0.9 + (rng() - 0.5) * 1.1);
           if (Math.hypot(s.x - castle[0], s.z - castle[1]) > 37) return s;
         }
-        return polar(432, -0.2);
+        return polar(432 * S, -0.2);
       });
-      add('w', 72, k => polar(374 + rng() * 34, (k / 72) * TAU + rng() * 0.05));
-      add('g', 52, () => {
+      add('w', 144, k => polar((374 + rng() * 34) * S, (k / 144) * TAU + rng() * 0.05));
+      add('g', 100, () => {
         for (let g = 0; g < 30; g++) {
-          const s = polar(332 + rng() * 22, rng() * TAU);
+          const s = polar((332 + rng() * 22) * S, rng() * TAU);
           if (Math.abs(((s.a + 0.42 + Math.PI) % TAU) - Math.PI) > 0.05) return s;
         }
-        return polar(340, 1);
+        return polar(340 * S, 1);
       });
-      add('a', 48, () => polar(304, 0));
-      add('y', 46, k => {
-        if (k % 2) return polar(this.pairBase.R + 1.4, this.pairBase.a + 0.004);
-        this.pairBase = polar(259 + rng() * 18, rng() * TAU);
+      add('a', 72, () => polar(304 * S, 0));
+      add('y', 88, k => {
+        if (k % 2) return polar(this.pairBase.R + 1.4, this.pairBase.a + 1.04 / this.pairBase.R);
+        this.pairBase = polar((259 + rng() * 18) * S, rng() * TAU);
         return this.pairBase;
       });
-      add('h', 48, k => polar(Math.hypot(this.tombs[k * 3].x, this.tombs[k * 3].z), Math.atan2(this.tombs[k * 3].x, this.tombs[k * 3].z)));
-      add('b', 42, () => polar(192 + rng() * 11, rng() * TAU));
-      add('d', 54, () => polar(162 + rng() * 20, rng() * TAU));
-      add('p', 30, () => polar(PITCH.r + (rng() - 0.5) * 4.2, rng() * TAU));
-      add('c', 22, k => polar(123.5 + ((k % 3) - 1) * 1.3, (k / 22) * TAU, { sp: 'hypocrite' }));
-      add('i', 58, () => {
+      add('h', 70, k => polar(Math.hypot(this.tombs[k * 3].x, this.tombs[k * 3].z), Math.atan2(this.tombs[k * 3].x, this.tombs[k * 3].z)));
+      add('b', 80, () => polar((192 + rng() * 11) * S, rng() * TAU));
+      add('d', 104, () => polar((162 + rng() * 20) * S, rng() * TAU));
+      add('p', 58, () => polar(PITCH.r + (rng() - 0.5) * 4.2 * S, rng() * TAU));
+      add('c', 40, k => polar(123.5 * S + ((k % 3) - 1) * 1.3, (k / 40) * TAU, { sp: 'hypocrite' }));
+      add('i', 110, () => {
         for (let g = 0; g < 40; g++) {
-          const s = polar(26 + Math.sqrt(rng()) * 60, rng() * TAU);
-          if (s.R > 28) return s;
+          const s = polar((26 + Math.sqrt(rng()) * 60) * S, rng() * TAU);
+          if (s.R > 28 * S) return s;
         }
-        return polar(60, 0);
+        return polar(60 * S, 0);
       });
       return out;
     }
@@ -1371,7 +1722,7 @@
         r.pslot = sl.k % 6;
       } else if (r.ring === 'y') {
         r.pair = Math.floor(sl.k / 2);
-        r.sullen = sl.k >= 34;
+        r.sullen = sl.k >= 66; // the last eleven pairs sulk under the water
         ((this.pairs ||= {})[r.pair] ||= []).push(r);
       } else if (r.ring === 'h') r.tomb = this.tombs[sl.k * 3];
       else if (r.ring === 'b') {
@@ -1423,14 +1774,14 @@
     }
     // the wall above each circle: where they go once the wings have stopped
     wallOf(ring) {
-      return { v: 600, s: 518, l: 470, w: 413, g: 357, a: 317, y: 281, h: 243, b: 205, d: 205, p: 134, c: 125.5, i: 88 }[ring] || 600;
+      return ({ v: 600, s: 518, l: 470, w: 413, g: 357, a: 317, y: 281, h: 243, b: 205, d: 205, p: 134, c: 125.5, i: 88 }[ring] || 600) * S;
     }
     clampSoul(p, r) {
       if (!r || !r.ring) return;
       const c = CIRCLES[r.ring];
       if (!c) return;
       const lo = c.r0,
-        hi = this.stilled && r.state === 'climb' ? this.wallOf(r.ring) - 0.5 : r.ring === 'd' && this.stilled ? 204.5 : c.r1;
+        hi = this.stilled && r.state === 'climb' ? this.wallOf(r.ring) - 0.5 : r.ring === 'd' && this.stilled ? 204.5 * S : c.r1;
       const R = Math.hypot(p[0], p[2]) || 1;
       if (R < lo) {
         p[0] *= lo / R;
@@ -1450,6 +1801,11 @@
           p[2] = cz + (dz / d) * 31;
         }
       }
+    }
+    grabCandidates() {
+      const out = super.grabCandidates();
+      for (const d of this.demons) if (d.alive && !d.dying && !d.fixed) out.push(d);
+      return out;
     }
     attach(e, ship) {
       super.attach(e, ship);
@@ -1520,7 +1876,7 @@
             T = this.game.time,
             phi = T * o.w2 + o.ph,
             th = this.flockAt(o.flock, T) + o.dth,
-            RR = 391 + o.dR + Math.cos(phi) * o.rr,
+            RR = (391 + o.dR) * S + Math.cos(phi) * o.rr,
             y = CIRCLES.w.y + 20 + o.dy + Math.sin(phi) * o.rr * 0.85,
             x = Math.sin(th) * RR,
             z = Math.cos(th) * RR;
@@ -1608,8 +1964,8 @@
           return true;
         }
         case 'c': {
-          r.ca += dt * 0.0032;
-          const rad = 123.5 + ((r.k % 3) - 1) * 1.3,
+          r.ca += (dt * 0.0032) / S;
+          const rad = 123.5 * S + ((r.k % 3) - 1) * 1.3,
             x = Math.sin(r.ca) * rad,
             z = Math.cos(r.ca) * rad;
           r.p[0] = x;
@@ -1914,7 +2270,7 @@
       return f * 2.094 + t * this.flockSpeed(f);
     }
     flockSpeed(f) {
-      return 0.05 + f * 0.012;
+      return (0.05 + f * 0.012) / S; // the same speed through the air at the wider radius
     }
     soulBroken(r) {
       this.breaks++;
@@ -1945,63 +2301,99 @@
     makeScenery() {
       const rng = M.rand(777);
       // the third circle: cold heavy rain that never stops
-      const rain = this.stat('box', { capacity: 1000, transparent: true });
-      for (let i = 0; i < 1000; i++) {
-        const R = 329 + rng() * 28,
+      const rain = this.stat('box', { capacity: 1960, transparent: true });
+      for (let i = 0; i < 1960; i++) {
+        const R = (329 + rng() * 28) * S,
           a = rng() * TAU;
         this.put(rain, [Math.sin(a) * R, CIRCLES.g.y + 38, Math.cos(a) * R], [0, 0, 0], [0.05, 1.8, 0.05], '#b3c2cf', 0.2, 30, 38, 8 + rng(), 0.5);
       }
       // the second circle: grit and smoke carried round and round by the wind that never drops
       // most of it travels with the flocks: each flock goes round in a cloud of its own grit
-      this.streaks = this.stat('box', { capacity: 900, transparent: true });
-      const dust = this.stat('lowSphere', { capacity: 80, transparent: true });
-      for (let i = 0; i < 900; i++) {
+      this.streaks = this.stat('box', { capacity: 1260, transparent: true });
+      const dust = this.stat('lowSphere', { capacity: 110, transparent: true });
+      for (let i = 0; i < 1260; i++) {
         const f = i % 3,
-          own = i < 720,
-          R = own ? 391 + (rng() - 0.5) * 30 : 372 + rng() * 40,
+          own = i < 1008,
+          R = (own ? 391 + (rng() - 0.5) * 30 : 372 + rng() * 40) * S,
           a = own ? f * 2.094 + (rng() - 0.5) * 0.15 : rng() * TAU,
           y = own ? CIRCLES.w.y + 20 + (rng() - 0.5) * 30 : CIRCLES.w.y + 1.5 + Math.pow(rng(), 1.4) * 30;
-        this.put(this.streaks, [Math.sin(a) * R, y, Math.cos(a) * R], [0, a + Math.PI / 2, (rng() - 0.5) * 0.5], [0.07, 0.07, 1.5 + rng() * 3.5], '#b08a70', 0.08, 32, own ? this.flockSpeed(f) : 0.07 + rng() * 0.05, 0, own ? 0.3 : 0.18);
+        this.put(this.streaks, [Math.sin(a) * R, y, Math.cos(a) * R], [0, a + Math.PI / 2, (rng() - 0.5) * 0.5], [0.07, 0.07, 1.5 + rng() * 3.5], '#b08a70', 0.08, 32, own ? this.flockSpeed(f) : (0.07 + rng() * 0.05) / S, 0, own ? 0.3 : 0.18);
       }
-      for (let i = 0; i < 78; i++) {
+      for (let i = 0; i < 110; i++) {
         const f = i % 3,
-          R = 391 + (rng() - 0.5) * 20,
+          R = (391 + (rng() - 0.5) * 20) * S,
           a = f * 2.094 + (rng() - 0.5) * 0.12,
           s = 8 + rng() * 10;
         this.put(dust, [Math.sin(a) * R, CIRCLES.w.y + 20 + (rng() - 0.5) * 22, Math.cos(a) * R], [0, rng() * 6, 0], [s, s * 0.6, s], '#7a5a48', 0, 32, this.flockSpeed(f), 0, 0.07);
       }
+      // seen from far off: the whole storm, bodies by the thousand rolling round like starlings in winter
+      this.flyerGeometry();
+      const flyers = (this.flyers = this.stat('hell-flyer', { capacity: 5040 }));
+      this.windSheets = [];
+      for (let i = 0; i < 5040; i++) {
+        const f = i % 6,
+          main = f < 3,
+          sp = main ? this.flockSpeed(f) : [0.045, 0.062, 0.078][f - 3] / S,
+          a0 = main ? f * 2.094 : 1.05 + (f - 3) * 2.094,
+          spread = Math.pow(rng(), 0.7),
+          a = a0 + (rng() - 0.5) * 0.26 * spread,
+          R = (391 + (rng() - 0.5) * 30 * spread) * S,
+          y = CIRCLES.w.y + (main ? 20 : 34 + (f - 3) * 7) + (rng() - 0.5) * 26 * spread,
+          s = 0.85 + rng() * 0.3;
+        this.put(flyers, [Math.sin(a) * R, y, Math.cos(a) * R], [rng() * 6, rng() * 6, rng() * 6], [s, s, s], rng() < 0.6 ? '#e2c2a8' : rng() < 0.5 ? '#c49a80' : '#8a5a46', 0.25, 34, sp, 0, rng() * 97);
+      }
+      // the wind itself, drawn round the circle in sheets of grit, faster than anything it carries
+      this.tubeGeometry();
+      [
+        [372, 52, 1.1, '#c4a284', 0.42],
+        [391, 66, 1.5, '#d2b296', 0.34],
+        [409, 50, 0.9, '#b8967a', 0.4],
+      ].forEach(([R, H, sp, c, al], k) => {
+        const n = mesh(this.root, 'hell-tube', [0, CIRCLES.w.y + H * 0.5 - 2, 0], [R * S, H, R * S], c, { type: 35, detail: sp, seed: k * 5.3, alpha: al, em: 0.35 });
+        n.alpha0 = al;
+        this.windSheets.push(n);
+      });
+      const dust2 = (this.stormDust = this.stat('lowSphere', { capacity: 280, transparent: true }));
+      for (let i = 0; i < 280; i++) {
+        const f = i % 6,
+          main = f < 3,
+          a = (main ? f * 2.094 : 1.05 + (f - 3) * 2.094) + (rng() - 0.5) * 0.3,
+          R = (391 + (rng() - 0.5) * 34) * S,
+          s = 12 + rng() * 14;
+        this.put(dust2, [Math.sin(a) * R, CIRCLES.w.y + 14 + rng() * 34, Math.cos(a) * R], [0, rng() * 6, 0], [s, s * 0.55, s], '#6a4a3a', 0, 32, main ? this.flockSpeed(f) : [0.045, 0.062, 0.078][f - 3] / S, 0, 0.06);
+      }
       // the burning sand: flakes of fire coming down slowly, like snow in the mountains when there is no wind
-      this.fireRain = this.stat('tinySphere', { capacity: 800, transparent: true });
-      for (let i = 0; i < 800; i++) {
-        const R = 157 + rng() * 30,
+      this.fireRain = this.stat('tinySphere', { capacity: 1570, transparent: true });
+      for (let i = 0; i < 1570; i++) {
+        const R = (157 + rng() * 30) * S,
           a = rng() * TAU;
         this.put(this.fireRain, [Math.sin(a) * R, -190 + 74, Math.cos(a) * R], [0, rng() * 6, 0], [0.55, 0.8, 0.55], '#ff8f2e', 2.3, 30, 74, 2 + rng(), 0.95);
       }
       // sparks going up off the river of blood and from among the tombs; steam off the blood
-      const sparks = this.stat('tinySphere', { capacity: 360, transparent: true });
-      for (let i = 0; i < 360; i++) {
+      const sparks = this.stat('tinySphere', { capacity: 700, transparent: true });
+      for (let i = 0; i < 700; i++) {
         const tombs = i % 3 === 0,
-          R = tombs ? 218 + rng() * 25 : 189 + rng() * 17,
+          R = (tombs ? 218 + rng() * 25 : 189 + rng() * 17) * S,
           a = rng() * TAU,
           y = tombs ? -132 : BLOOD.surface;
         this.put(sparks, [Math.sin(a) * R, y + 1, Math.cos(a) * R], [0, 0, 0], [0.22, 0.22, 0.22], '#ffb35c', 2.6, 30, -34, 1 + rng() * 1.5, 1);
       }
-      const steam = this.stat('lowSphere', { capacity: 100, transparent: true });
-      for (let i = 0; i < 100; i++) {
-        const R = 190 + rng() * 15,
+      const steam = this.stat('lowSphere', { capacity: 196, transparent: true });
+      for (let i = 0; i < 196; i++) {
+        const R = (190 + rng() * 15) * S,
           a = rng() * TAU;
         this.put(steam, [Math.sin(a) * R, BLOOD.surface + 1, Math.cos(a) * R], [0, 0, 0], [6, 2, 6], '#8a5450', 0.05, 30, -16, 1 + rng(), 0.08);
       }
       // ash over the plain outside; snow on the frozen lake
-      const ash = this.stat('box', { capacity: 500, transparent: true });
-      for (let i = 0; i < 500; i++) {
-        const R = 505 + rng() * 230,
+      const ash = this.stat('box', { capacity: 980, transparent: true });
+      for (let i = 0; i < 980; i++) {
+        const R = (505 + rng() * 230) * S,
           a = rng() * TAU;
         this.put(ash, [Math.sin(a) * R, 62, Math.cos(a) * R], [rng(), rng() * 6, 0], [0.3, 0.08, 0.3], '#6a625c', 0, 30, 64, 1.4 + rng() * 0.5, 0.8);
       }
-      this.snow = this.stat('tinySphere', { capacity: 500, transparent: true });
-      for (let i = 0; i < 500; i++) {
-        const R = Math.sqrt(rng()) * 100,
+      this.snow = this.stat('tinySphere', { capacity: 980, transparent: true });
+      for (let i = 0; i < 980; i++) {
+        const R = Math.sqrt(rng()) * 100 * S,
           a = rng() * TAU;
         this.put(this.snow, [Math.sin(a) * R, ICE_Y + 95, Math.cos(a) * R], [0, 0, 0], [0.32, 0.32, 0.32], '#e8f4ff', 0.4, 30, 96, 1.6 + rng() * 0.6, 0.9);
       }
@@ -2023,7 +2415,7 @@
       }
       const W = this.wasps;
       W.count = 0;
-      if (this.vest.length && Math.hypot(ship[0], ship[2] - 560) < 360) {
+      if (this.vest.length && Math.hypot(ship[0], ship[2] - 560 * S) < 360 * S) {
         const n = Math.min(110, this.vest.length * 3),
           d = e.growBatch(W, n);
         for (let i = 0; i < n; i++) {
@@ -2127,17 +2519,15 @@
         if (!d.alive || d.dying) continue;
         const p = d.node.p;
         if (d.cls === 'giant') {
-          consider(hit(p[0], p[1] + 58, p[2], 15), d);
-          consider(hit(p[0], p[1] + 78, p[2], 8), d);
-          consider(hit(p[0], p[1] + 25, p[2], 11), d);
+          consider(hit(p[0], p[1] + 60, p[2], 14), d);
+          consider(hit(p[0], p[1] + 79, p[2], 7.5), d);
+          consider(hit(p[0], p[1] + 30, p[2], 11), d);
         } else consider(hit(p[0], p[1] + d.hy, p[2], d.radius + 0.6), d);
       }
       for (const w of this.walls) if (w.alive) consider(this.rayWall(origin, dir, w), w);
       for (const b of this.gateBoxes) consider(M.rayBox(origin, dir, b.min, b.max), this.gateEnt);
       for (const b of this.boulders) consider(hit(b.node.p[0], b.node.p[1], b.node.p[2], 3), b);
-      consider(hit(0, ICE_Y + 3, 0, 18), this.lucifer);
-      consider(hit(15.5, ICE_Y + 12.5, 0, 8), this.lucifer);
-      consider(hit(-15.5, ICE_Y + 12.5, 0, 8), this.lucifer);
+      for (const [cx, cy, cz, r] of LUC_SPHERES) consider(hit(cx, ICE_Y + cy, cz, r), this.lucifer);
       return best ? { entity: best, distance: dist, point: M.add(origin, M.mul(dir, dist)) } : null;
     }
     damage(e, amount, dir, source) {
@@ -2254,15 +2644,14 @@
       this.cliffPush(ship);
       for (const b of this.gateBoxes) this.pushBox(ship, b);
       for (const w of this.walls) if (w.alive) this.pushWall(ship, w);
-      this.pushSphere(ship, [0, ICE_Y + 3, 0], 21);
-      for (const sd of [-1, 1]) this.pushSphere(ship, [sd * 15.5, ICE_Y + 12.5, 0], 11);
-      if (!this.ruler.captured) this.pushSphere(ship, [0, ICE_Y + 34, 0], 13);
+      for (const [cx, cy, cz, r] of LUC_SPHERES) this.pushSphere(ship, [cx, ICE_Y + cy, cz], r + 3);
+      if (!this.ruler.captured) this.pushSphere(ship, [0, ICE_Y + HEAD_Y + 6, 0], 25);
       const speed = M.len(ship.velocity);
       for (const d of this.demons) {
         if (!d.alive && d.cls !== 'giant') continue;
         const p = d.node.p;
         if (d.cls === 'giant') {
-          for (const [y, rr] of [[20, 12], [42, 13], [58, 16], [78, 10]]) this.pushSphere(ship, [p[0], p[1] + y, p[2]], rr);
+          for (const [y, rr] of [[14, 10], [34, 12], [50, 12], [62, 14], [79, 8]]) this.pushSphere(ship, [p[0], p[1] + y, p[2]], rr);
           continue;
         }
         const c = [p[0], p[1] + d.hy, p[2]];
@@ -2440,7 +2829,7 @@
       if (d.alive && !this.stilled) {
         if (d.wait > 0) d.wait -= dt;
         else {
-          d.cross = Math.min(1, d.cross + dt / 19);
+          d.cross = Math.min(1, d.cross + dt / 24);
           if (d.cross >= 1) {
             d.cross = 0;
             d.from = -d.from;
@@ -2561,7 +2950,7 @@
       const n = d.node,
         still = this.stilled;
       if (!d.shot && d.aim <= 0) d.th += dt * (still ? 0 : 0.045);
-      const rad = 186.6,
+      const rad = 186.6 * S,
         x = Math.sin(d.th) * rad,
         z = Math.cos(d.th) * rad;
       n.p[0] = x;
@@ -2623,7 +3012,7 @@
       const clash = tri < 0.004 || tri > 0.996;
       if (clash && !this.clashed && !this.stilled) {
         this.clashed = true;
-        const at = tri < 0.5 ? [0, CIRCLES.a.y, 304] : [0, CIRCLES.a.y, -304],
+        const at = tri < 0.5 ? [0, CIRCLES.a.y, 304 * S] : [0, CIRCLES.a.y, -304 * S],
           [pan, gain] = this.where(at);
         if (gain > 0.03) {
           this.game.audio.impact(1.2 * gain + 0.2);
@@ -2631,7 +3020,7 @@
         }
       } else if (!clash) this.clashed = false;
       for (const b of this.boulders) {
-        const th = b.side * (0.03 + b.j * 0.16 + tri * span),
+        const th = b.side * (0.03 + b.j * 0.096 + tri * span),
           x = Math.sin(th) * b.R,
           z = Math.cos(th) * b.R;
         b.roll += (b.th !== 0 ? (th - b.th) * b.R : 0) / 2.8;
@@ -2646,7 +3035,7 @@
       if (this.stilled) return;
       const t = this.time,
         a = Math.sin(t * 0.045) * 1.05 + Math.sin(t * 0.13) * 0.25,
-        R = 556 + Math.sin(t * 0.17) * 24,
+        R = (556 + Math.sin(t * 0.17) * 24) * S,
         x = Math.sin(a) * R,
         z = Math.cos(a) * R;
       this.bannerP = [x, 0, z];
@@ -2712,13 +3101,13 @@
       this.updateWalls(dt);
       this.updateTold(ship);
       const depth = M.clamp(-ship[1] / 330, 0, 1),
-        inPit = Math.hypot(ship[0], ship[2]) < 620 ? 1 : 0.45;
+        inPit = Math.hypot(ship[0], ship[2]) < 620 * S ? 1 : 0.45;
       this.game.audio.inferno(dt, (0.5 + depth * 0.5) * inPit * (this.stilled ? 0.55 : 1), this.fire, this.gust);
       this.config.wind = 0.035 + this.gust * 0.45;
       if (!this.stilled && Math.random() < dt * 0.8) {
         // the boiling, heard when close
         const Rr = Math.hypot(ship[0], ship[2]);
-        if ((Math.abs(Rr - 197) < 30 && Math.abs(ship[1] - BLOOD.surface) < 60) || (Math.abs(Rr - PITCH.r) < 25 && Math.abs(ship[1] - PITCH.surface) < 50)) {
+        if ((Math.abs(Rr - (BLOOD.r0 + BLOOD.r1) / 2) < 30 && Math.abs(ship[1] - BLOOD.surface) < 60) || (Math.abs(Rr - PITCH.r) < 25 && Math.abs(ship[1] - PITCH.surface) < 50)) {
           const a = Math.random() * TAU,
             q = [ship[0] + Math.sin(a) * 12, ship[1] - 20, ship[2] + Math.cos(a) * 12];
           this.game.audio.bubble(...this.where(q));
@@ -2728,24 +3117,34 @@
     updateEnv(dt, ship) {
       const e = this.game.engine,
         R = Math.hypot(ship[0], ship[2]),
-        kd = ss(-30, -190, ship[1]) * (R < 520 ? 1 : 0.4),
-        kc = ss(-240, -310, ship[1]) * ss(260, 140, R);
+        kd = ss(-30, -190, ship[1]) * (R < 520 * S ? 1 : 0.4),
+        kc = ss(-240, -310, ship[1]) * ss(260 * S, 140 * S, R);
       this.envMix[0] = M.damp(this.envMix[0], kd, 1.5, dt);
       this.envMix[1] = M.damp(this.envMix[1], kc, 1.5, dt);
       const [a, b] = this.envMix,
         V = (x, y, z) => x.map((q, i) => (q + (y[i] - q) * a) * (1 - b) + z[i] * b),
-        S = (x, y, z) => (x + (y - x) * a) * (1 - b) + z * b;
+        mix = (x, y, z) => (x + (y - x) * a) * (1 - b) + z * b;
       const cool = this.stilled ? 0.78 : 1;
       e.fog = V(TOP.fog, DEEP.fog, COLD.fog).map(q => q * cool);
-      e.fogD = S(TOP.fogD, DEEP.fogD, COLD.fogD);
-      e.ambient = S(TOP.ambient, DEEP.ambient, COLD.ambient) * (this.stilled ? 0.88 : 1);
+      e.fogD = mix(TOP.fogD, DEEP.fogD, COLD.fogD);
+      e.ambient = mix(TOP.ambient, DEEP.ambient, COLD.ambient) * (this.stilled ? 0.88 : 1);
       e.tint = V(TOP.tint, DEEP.tint, COLD.tint);
-      e.sunK = S(TOP.sunK, DEEP.sunK, COLD.sunK);
+      e.sunK = mix(TOP.sunK, DEEP.sunK, COLD.sunK);
       e.skyTop = TOP.skyTop.slice();
       e.skyHorizon = TOP.skyHorizon.map(q => q * cool * (1 - b * 0.4));
       e.skyCloud = TOP.skyCloud.slice();
       e.skyStyle = 4;
       e.noShadows = true;
+      // the storm drops with the wind: the sheets thin out, the far flocks come down
+      if (this.stilled && this.windSheets.length) {
+        let left = 0;
+        for (const n of this.windSheets) {
+          n.alpha = Math.max(0, n.alpha - dt * n.alpha0 * 0.2);
+          left += n.alpha;
+        }
+        if (this.time - this.stillAt > 2.5) this.flyers.count = this.stormDust.count = 0;
+        if (left <= 0) for (const n of this.windSheets) n.visible = false;
+      }
       // the pit cools once the wings have stopped
       if (this.stilled && this.fire > 0.38) {
         this.fire = Math.max(0.38, this.fire - dt * 0.12);
@@ -2780,7 +3179,7 @@
         this.told.gate = true;
         this.game.ui.toast('지옥문', '여기 들어오는 자, 모든 희망을 버려라', 6);
       }
-      if (!this.told.lucifer && !this.ruler.captured && R < 100 && ship[1] < ICE_Y + 110) {
+      if (!this.told.lucifer && !this.ruler.captured && R < 100 * S && ship[1] < ICE_Y + 110) {
         this.told.lucifer = true;
         this.game.ui.toast('루시퍼', '얼음에 가슴까지 박혀 있습니다. 날개 바람이 함선을 밀어냅니다. 목 둘레의 얼음을 깨야 머리를 붙잡을 수 있습니다.', 8);
       }
@@ -2801,6 +3200,10 @@
     }
     applyStill(onLoad) {
       this.stump.visible = true;
+      if (onLoad) {
+        for (const n of this.windSheets) n.visible = false;
+        this.flyers.count = this.stormDust.count = 0;
+      }
       for (const list of this.iceStages) for (const c of list) c.visible = false;
       for (const e of this.lhead.eyes) e.em = 0;
       if (onLoad) {

@@ -73,6 +73,7 @@
     constructor(game, def) {
       super(game, def, {
         seed: 20260817,
+        edge: 2600,
         rulerName: '태양왕 아우렐',
         areaLabel: 'EDEN / 01 · SURFACE',
         regionName: '태양왕의 정원',
@@ -99,7 +100,7 @@
       return (Math.sin(x * 0.007) * Math.cos(z * 0.005) * 36 + Math.sin(x * 0.018 + z * 0.005) * 12 + ridge) * blend;
     }
     makeTerrain() {
-      this.terrain(GREEN, 3200, 112, 5);
+      this.terrain(GREEN, 6200, 200, 5);
       mesh(this.root, 'disc', [-460, -0.3, -130], [430, 0.2, 1600], '#427879', { alpha: 0.84 });
       for (let i = 0; i < 3; i++) {
         const a = -0.7 + i * 0.23;
@@ -211,6 +212,18 @@
           1.8,
         );
       }
+      // villages out past the ridges, where the garden city never reached: a spire in the middle of each
+      this.outskirts({
+        n: 7,
+        seed: 7101,
+        rMin: 560,
+        rMax: 1500,
+        plinth: '#4f6c62',
+        build: (id, x, z, rng, i) =>
+          i === 0
+            ? this.home(id, [x, this.height(x, z), z], 9, 34 + rng() * 12, 'spire')
+            : this.home(id, [x, this.height(x, z), z], 8 + rng() * 8, 8 + rng() * 14, i % 4 === 1 ? 'temple' : 'home'),
+      });
     }
     makeRuler() {
       const base = group(this.root, [0, 0, -100]);
@@ -256,7 +269,9 @@
     residentSpec() {
       return {
         species: 'eden',
-        count: 330,
+        count: 560,
+        maxR: 1560,
+        villages: this.villages,
         seed: 2081,
         center: [0, -40],
         radius: 235,
@@ -290,6 +305,28 @@
         mesh(g, 'hex', [0, 0, 0], [22, 60, 22], '#5c8478');
         mesh(g, 'cone', [0, -38, 0], [22, 25, 22], '#4b6e66').r[2] = Math.PI;
         mesh(g, 'torus', [0, 0, 0], [24, 24, 24], GOLD);
+      }
+      // the parkland goes on further now: more of the parasol trees, and a second ring of monoliths far out
+      const r2 = M.rand(7202);
+      for (let i = 0; i < 300; i++) {
+        const a = r2() * Math.PI * 2,
+          r = 600 + Math.sqrt(r2()) * 1900,
+          x = Math.sin(a) * r,
+          z = Math.cos(a) * r;
+        if (this.villages.some(v => Math.hypot(v.x - x, v.z - z) < 90)) continue;
+        const h = 10 + r2() * 30,
+          node = group(this.root, [x, this.height(x, z), z]);
+        mesh(node, 'lowCyl', [0, h * 0.5, 0], [1.1, h, 1.1], '#405b52');
+        mesh(node, 'lowDome', [0, h, 0], [11 + r2() * 16, 8, 11 + r2() * 16], r2() < 0.5 ? '#829e83' : '#6f9a7c');
+      }
+      for (let i = 0; i < 10; i++) {
+        const a = i * 0.63 + 0.3,
+          x = Math.sin(a) * 1650,
+          z = Math.cos(a) * 1650;
+        const g = group(this.root, [x, this.height(x, z) + 110 + (i % 3) * 30, z]);
+        mesh(g, 'hex', [0, 0, 0], [26, 70, 26], '#5c8478');
+        mesh(g, 'cone', [0, -45, 0], [26, 30, 26], '#4b6e66').r[2] = Math.PI;
+        mesh(g, 'torus', [0, 0, 0], [28, 28, 28], GOLD);
       }
     }
     onCollapse() {
