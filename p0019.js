@@ -621,7 +621,7 @@
         rulerGrab: ['루시퍼의 머리를 붙잡았습니다', 'S로 뒤로 물러나 끝까지 당기세요. 날개 바람이 함선을 밀어냅니다.'],
         pullRate: 0.06,
         pullRise: 7,
-        arrival: ['전시 복도에 루시퍼의 머리가 도착했습니다.', '복도를 따라가면 새로 채워진 자리가 있습니다.'],
+        arrival: ['전시 복도에 루시퍼의 머리가 도착했습니다.', '파괴정 뒤쪽 전시 복도에 새로 채워진 자리가 있습니다.'],
       });
       this.hell = true;
       this.stilled = captured; // once the head is gone the wings stop, and stay stopped
@@ -661,7 +661,7 @@
       this.arrows = [];
       this.told = {};
       this.breaks = 0;
-      this.fire = captured ? 0.38 : 1; // how hot the pit burns; it cools once the wings stop
+      this.heat = captured ? 0.38 : 1; // how hot the pit burns; it cools once the wings stop (not "fire": that is the beam)
       this.gust = 0;
       this.wingT = 0;
       this.pullPrev = 0;
@@ -2310,7 +2310,7 @@
       // the second circle: grit and smoke carried round and round by the wind that never drops
       // most of it travels with the flocks: each flock goes round in a cloud of its own grit
       this.streaks = this.stat('box', { capacity: 1260, transparent: true });
-      const dust = this.stat('lowSphere', { capacity: 110, transparent: true });
+      const dust = this.stat('feather', { capacity: 110, transparent: true });
       for (let i = 0; i < 1260; i++) {
         const f = i % 3,
           own = i < 1008,
@@ -2353,7 +2353,7 @@
         n.alpha0 = al;
         this.windSheets.push(n);
       });
-      const dust2 = (this.stormDust = this.stat('lowSphere', { capacity: 280, transparent: true }));
+      const dust2 = (this.stormDust = this.stat('feather', { capacity: 280, transparent: true }));
       for (let i = 0; i < 280; i++) {
         const f = i % 6,
           main = f < 3,
@@ -2363,14 +2363,14 @@
         this.put(dust2, [Math.sin(a) * R, CIRCLES.w.y + 14 + rng() * 34, Math.cos(a) * R], [0, rng() * 6, 0], [s, s * 0.55, s], '#6a4a3a', 0, 32, main ? this.flockSpeed(f) : [0.045, 0.062, 0.078][f - 3] / S, 0, 0.06);
       }
       // the burning sand: flakes of fire coming down slowly, like snow in the mountains when there is no wind
-      this.fireRain = this.stat('tinySphere', { capacity: 1570, transparent: true });
+      this.fireRain = this.stat('box', { capacity: 1570, transparent: true }); // specks: a box reads as a sphere at that size
       for (let i = 0; i < 1570; i++) {
         const R = (157 + rng() * 30) * S,
           a = rng() * TAU;
         this.put(this.fireRain, [Math.sin(a) * R, -190 + 74, Math.cos(a) * R], [0, rng() * 6, 0], [0.55, 0.8, 0.55], '#ff8f2e', 2.3, 30, 74, 2 + rng(), 0.95);
       }
       // sparks going up off the river of blood and from among the tombs; steam off the blood
-      const sparks = this.stat('tinySphere', { capacity: 700, transparent: true });
+      const sparks = this.stat('box', { capacity: 700, transparent: true });
       for (let i = 0; i < 700; i++) {
         const tombs = i % 3 === 0,
           R = (tombs ? 218 + rng() * 25 : 189 + rng() * 17) * S,
@@ -2378,7 +2378,7 @@
           y = tombs ? -132 : BLOOD.surface;
         this.put(sparks, [Math.sin(a) * R, y + 1, Math.cos(a) * R], [0, 0, 0], [0.22, 0.22, 0.22], '#ffb35c', 2.6, 30, -34, 1 + rng() * 1.5, 1);
       }
-      const steam = this.stat('lowSphere', { capacity: 196, transparent: true });
+      const steam = this.stat('feather', { capacity: 196, transparent: true });
       for (let i = 0; i < 196; i++) {
         const R = (190 + rng() * 15) * S,
           a = rng() * TAU;
@@ -2391,7 +2391,7 @@
           a = rng() * TAU;
         this.put(ash, [Math.sin(a) * R, 62, Math.cos(a) * R], [rng(), rng() * 6, 0], [0.3, 0.08, 0.3], '#6a625c', 0, 30, 64, 1.4 + rng() * 0.5, 0.8);
       }
-      this.snow = this.stat('tinySphere', { capacity: 980, transparent: true });
+      this.snow = this.stat('box', { capacity: 980, transparent: true });
       for (let i = 0; i < 980; i++) {
         const R = Math.sqrt(rng()) * 100 * S,
           a = rng() * TAU;
@@ -3102,7 +3102,7 @@
       this.updateTold(ship);
       const depth = M.clamp(-ship[1] / 330, 0, 1),
         inPit = Math.hypot(ship[0], ship[2]) < 620 * S ? 1 : 0.45;
-      this.game.audio.inferno(dt, (0.5 + depth * 0.5) * inPit * (this.stilled ? 0.55 : 1), this.fire, this.gust);
+      this.game.audio.inferno(dt, (0.5 + depth * 0.5) * inPit * (this.stilled ? 0.55 : 1), this.heat, this.gust);
       this.config.wind = 0.035 + this.gust * 0.45;
       if (!this.stilled && Math.random() < dt * 0.8) {
         // the boiling, heard when close
@@ -3146,13 +3146,13 @@
         if (left <= 0) for (const n of this.windSheets) n.visible = false;
       }
       // the pit cools once the wings have stopped
-      if (this.stilled && this.fire > 0.38) {
-        this.fire = Math.max(0.38, this.fire - dt * 0.12);
+      if (this.stilled && this.heat > 0.38) {
+        this.heat = Math.max(0.38, this.heat - dt * 0.12);
         this.applyFire();
       }
     }
     applyFire() {
-      const k = this.fire;
+      const k = this.heat;
       for (const g of this.groundParts) g.em = g.hot * (0.35 + 0.65 * k);
       this.liquids[2].em = k;
       const F = this.tombFire,
@@ -3208,7 +3208,7 @@
       for (const e of this.lhead.eyes) e.em = 0;
       if (onLoad) {
         this.flapK = 0;
-        this.fire = 0.38;
+        this.heat = 0.38;
         this.applyFire();
         this.updateLucifer(0, this.spawn.p, false, 0);
       }

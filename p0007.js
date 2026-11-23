@@ -211,7 +211,7 @@
         rulerGrab: ['눈을 붙잡았습니다', 'S로 뒤로 물러나 끝까지 당기세요.'],
         pullRate: 0.05,
         pullRise: 20,
-        arrival: ['전시 복도에 눈이 도착했습니다.', '복도를 따라가면 새로 채워진 자리가 있습니다.'],
+        arrival: ['전시 복도에 눈이 도착했습니다.', '파괴정 뒤쪽 전시 복도에 새로 채워진 자리가 있습니다.'],
       });
       this.living = true;
       // what it remembers

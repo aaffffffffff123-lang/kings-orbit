@@ -158,7 +158,7 @@
         rulerGrab: ['코어를 붙잡았습니다', 'S로 뒤로 물러나 끝까지 뽑으세요.'],
         pullRate: 0.022,
         pullRise: 3,
-        arrival: ['전시 복도에 대기 처리기 코어가 도착했습니다.', '복도를 따라가면 새로 채워진 자리가 있습니다.'],
+        arrival: ['전시 복도에 대기 처리기 코어가 도착했습니다.', '파괴정 뒤쪽 전시 복도에 새로 채워진 자리가 있습니다.'],
       });
       this.edge = EDGE;
       this.off = captured; // the heating, once the core is out

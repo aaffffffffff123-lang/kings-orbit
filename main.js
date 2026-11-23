@@ -231,7 +231,7 @@
       this.audio.stop();
       const wasNew = this.planet.newCapture,
         wasBarren = this.planet.barren,
-        arrival = this.planet.config?.arrival || ['전시 복도에 새 머리가 도착했습니다.', '복도를 따라가면 새로 채워진 자리가 있습니다.'];
+        arrival = this.planet.config?.arrival || ['전시 복도에 새 머리가 도착했습니다.', '파괴정 뒤쪽 전시 복도에 새로 채워진 자리가 있습니다.'];
       try {
         await this.ui.transition('NØMAD', this.space.target.name + ' 상공 · 모선 귀환', () => {
           this.planet.snapshot();
@@ -239,7 +239,7 @@
           this.planet = null;
           this.mode = 'interior';
           this.descent = 0;
-          this.interior.spawn('hangar');
+          this.interior.spawn('hangar', wasNew);
           this.ui.mode('interior');
           this.setEnvironment();
           this.persist('checkpoint');
@@ -256,6 +256,38 @@
         this.busy = false;
         this.input.clear();
         this.input.enabled = true;
+      }
+    }
+    // A fault in one world's own code sends the craft back up to the ship instead of stopping the whole game.
+    // The message stays on screen so it can be reported. A second fault soon after is let through as fatal.
+    recover(e) {
+      const now = performance.now();
+      if (this.mode !== 'planet' || !this.planet || now - (this.lastRecover ?? -1e9) < 20000) return false;
+      this.lastRecover = now;
+      const planet = this.planet;
+      this.planet = null;
+      try {
+        planet.snapshot();
+      } catch {}
+      try {
+        planet.dispose();
+      } catch {}
+      try {
+        document.exitPointerLock?.();
+        this.busy = false;
+        this.descent = 0;
+        this.mode = 'interior';
+        this.interior.spawn('hangar');
+        this.ui.mode('interior');
+        this.setEnvironment();
+        this.audio.stop();
+        this.input.clear();
+        this.input.enabled = true;
+        this.persist('checkpoint');
+        this.ui.toast('문제가 생겨 모선으로 돌아왔습니다', '오류: ' + String(e?.message || e).slice(0, 140), 10);
+        return true;
+      } catch {
+        return false;
       }
     }
     persist(reason = 'auto') {
@@ -354,10 +386,12 @@
         if (this.debugMode) this.debugOverlay();
       } catch (e) {
         console.error(e);
-        this.paused = true;
-        this.audio.stop();
-        this.ui.fatal(e);
-        return;
+        if (!this.recover(e)) {
+          this.paused = true;
+          this.audio.stop();
+          this.ui.fatal(e);
+          return;
+        }
       }
       requestAnimationFrame(t => this.frame(t));
     }
@@ -370,10 +404,11 @@
       }
       let items = [
         { id: 'bridge', p: [0, 4.6, -13], en: '01 / BRIDGE', ko: '조종실' },
-        { id: 'gallery', p: [-7.6, 4.3, -3.5], en: '02 / ARCHIVE', ko: '트로피실' },
-        { id: 'hangar', p: [0, 4.9, 15], en: '03 / HANGAR', ko: '격납고' },
+        { id: 'hangar', p: [0, 4.9, 15], en: '02 / HANGAR', ko: '격납고' },
+        { id: 'gallery', p: [0, 5.0, 27.1], en: '03 / ARCHIVE', ko: '전시 복도' },
+        { id: 'lab', p: [0, 4.5, (this.interior.labStart || 40) - 1.6], en: '04 / LAB', ko: '실험실' },
       ];
-      if (root.childElementCount !== 3) {
+      if (root.childElementCount !== items.length || !document.getElementById('lbl-lab')) {
         root.innerHTML = items
           .map(i => `<div class="worldLabel" id="lbl-${i.id}">${i.en}<span>${i.ko}</span></div>`)
           .join('');

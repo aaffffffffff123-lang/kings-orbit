@@ -848,6 +848,19 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     return { p, n, idx };
   }
   const SCRATCH = new Float32Array(16);
+  // Coarser stand-ins for shapes small on screen: [below this many pixels of radius, use this one, ...]. Same proportions.
+  const LOD = {
+    midSphere: [70, 'sphere', 30, 'lowSphere', 9, 'tinySphere'],
+    sphere: [30, 'lowSphere', 9, 'tinySphere'],
+    lowSphere: [9, 'tinySphere'],
+    feather: [9, 'tinySphere'],
+    dome: [30, 'lowDome'],
+    cylinder: [30, 'lowCyl'],
+    cone: [24, 'lowCone'],
+    disc: [50, 'lowDisc'],
+    torus: [45, 'lowTorus', 12, 'haloRing'],
+    lowTorus: [12, 'haloRing'],
+  };
   class Node {
     constructor(geo = null, p = [0, 0, 0], s = [1, 1, 1], color = '#ffffff', props = {}) {
       this.geo = geo;
@@ -1173,7 +1186,11 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         shadowGroups = {};
       // what the camera cannot see is not drawn: a sphere round each shape against the six sides of the view
       const fr = this.frustum(),
-        geos = this.geometries;
+        geos = this.geometries,
+        cam = this.camera.p,
+        // pixels per world unit at distance 1: a shape's size on screen is its radius times this, over its distance
+        pxk = this.canvas.height / 2 / Math.tan((this.camera.fov * Math.PI) / 360),
+        lodOn = !this.noLod;
       const visit = n => {
         if (!n.visible) return;
         if (n.geo) {
@@ -1181,22 +1198,35 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
             g = geos[n.geo],
             t = n.type;
           // shapes moved by the vertex shader (orbiting, breathing) are kept whatever their resting place
-          let seen = !g || t === 32 || t === 34 || t === 9 || this.noCull;
-          if (!seen) {
+          let seen = !g || t === 32 || t === 34 || t === 9 || this.noCull,
+            geo = n.geo;
+          if (g) {
             const sx = w[0] * w[0] + w[1] * w[1] + w[2] * w[2],
               sy = w[4] * w[4] + w[5] * w[5] + w[6] * w[6],
               sz = w[8] * w[8] + w[9] * w[9] + w[10] * w[10],
-              r = g.radius * Math.sqrt(Math.max(sx, sy, sz)) + (t === 30 ? Math.abs(n.detail || 0) : 0) + 1;
-            seen = true;
-            for (let k = 0; k < 24; k += 4)
-              if (fr[k] * w[12] + fr[k + 1] * w[13] + fr[k + 2] * w[14] + fr[k + 3] < -r) {
-                seen = false;
-                break;
-              }
+              rr = g.radius * Math.sqrt(Math.max(sx, sy, sz)),
+              r = rr + (t === 30 ? Math.abs(n.detail || 0) : 0) + 1;
+            if (!seen) {
+              seen = true;
+              for (let k = 0; k < 24; k += 4)
+                if (fr[k] * w[12] + fr[k + 1] * w[13] + fr[k + 2] * w[14] + fr[k + 3] < -r) {
+                  seen = false;
+                  break;
+                }
+            }
+            // far off, the same shape is drawn with fewer facets; it looks the same at that size on screen
+            const lod = seen && lodOn && t !== 30 && t !== 32 && t !== 33 && t !== 34 && t !== 9 ? LOD[geo] : null;
+            if (lod) {
+              const dx = w[12] - cam[0],
+                dy = w[13] - cam[1],
+                dz = w[14] - cam[2],
+                px = (rr * pxk) / Math.max(0.5, Math.sqrt(dx * dx + dy * dy + dz * dz));
+              for (let k = 0; k < lod.length; k += 2) if (px < lod[k]) geo = lod[k + 1];
+            }
           }
           if (seen) {
             const coll = n.alpha < 0.995 ? transparent : groups;
-            (coll[n.geo] ??= []).push(n);
+            (coll[geo] ??= []).push(n);
           } else this.culled++;
           if (
             shadows &&
@@ -1209,7 +1239,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
             n.geo !== 'ring' &&
             n.geo !== 'torus'
           )
-            (shadowGroups[n.geo] ??= []).push(n);
+            (shadowGroups[geo] ??= []).push(n);
         }
         for (let c of n.children) visit(c);
       };
@@ -1792,6 +1822,10 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.lockPending = false;
       this.wheel = 0;
       this.rightDown = null;
+      this.lockSettle = 0; // until then a locked mouse's moves are not taken: the jump into the lock comes first
+      this.moveAvg = 0; // how far the locked mouse has lately moved per report
+      this.moveT = 0;
+      this.spikes = 0;
       this.on(window, 'keydown', e => {
         if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
         if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.code)) e.preventDefault();
@@ -1917,8 +1951,12 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
           return;
         }
         if (document.pointerLockElement === canvas) {
-          this.dx += e.movementX * 0.0021 * this.sensitivity;
-          this.dy += e.movementY * 0.0021 * this.sensitivity;
+          if (e.timeStamp < this.lockSettle) return;
+          // A locked mouse now and then reports one wild jump of hundreds of pixels among ordinary moves (more often
+          // when frames are slow): the view would be flung into the ground. Each report is weighed against how fast
+          // a hand can move in the time since the last one, and a jump past that is left out.
+          const list = (e.getCoalescedEvents && e.getCoalescedEvents()) || [];
+          this.lockedMoves(list.length ? list : [e]);
         } else if (this.drag) {
           this.dx += (e.clientX - this.drag[0]) * 0.003 * this.sensitivity;
           this.dy += (e.clientY - this.drag[1]) * 0.003 * this.sensitivity;
@@ -1926,8 +1964,13 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
           this.drag = [e.clientX, e.clientY];
         }
       });
-      this.on(document, 'pointerlockchange', () => {
+      this.on(document, 'pointerlockchange', e => {
         this.lockPending = false;
+        if (document.pointerLockElement === canvas) {
+          this.lockSettle = (e?.timeStamp || performance.now()) + 120;
+          this.moveAvg = 0;
+          this.moveT = 0;
+        }
         // the right press that asked for the lock is a tractor press already
         if (document.pointerLockElement === canvas && this.rightDown) {
           if (this.enabled) this.pressed.add('KeyQ');
@@ -1944,6 +1987,24 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.on(document, 'pointerlockerror', () => {
         this.lockPending = false;
       });
+    }
+    // moves of a locked mouse, each with its own time: [{ movementX, movementY, timeStamp }]
+    lockedMoves(list) {
+      for (const m of list) {
+        const gap = Math.min(250, Math.max(1, m.timeStamp - (this.moveT || m.timeStamp - 16)));
+        this.moveT = m.timeStamp;
+        const mx = m.movementX || 0,
+          my = m.movementY || 0,
+          big = Math.max(Math.abs(mx), Math.abs(my)),
+          plausible = 60 + gap * 9 + this.moveAvg * 3;
+        if (big > plausible) {
+          this.spikes++;
+          continue;
+        }
+        this.moveAvg = this.moveAvg * 0.85 + big * 0.15;
+        this.dx += mx * 0.0021 * this.sensitivity;
+        this.dy += my * 0.0021 * this.sensitivity;
+      }
     }
     on(el, ev, fn, opts) {
       el.addEventListener(ev, fn, opts);
@@ -4981,6 +5042,12 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       $('closeInspect').onclick = () => this.close();
     }
     fatal(err) {
+      // the mouse must come free, or the button below cannot be clicked
+      try {
+        document.exitPointerLock?.();
+        this.game.input.clear();
+        this.game.input.enabled = false;
+      } catch {}
       $('fatalText').textContent = String(err?.message || err);
       $('fatal').classList.remove('hidden');
       $('loading').classList.add('hidden');
@@ -6799,10 +6866,15 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         verb: '탑승하기',
         action: () => this.game.launch(),
       });
-      this.block([0, 3.2, 27.5], [20, 6.4, 0.5]);
-      this.block([0, 6.1, 27.16], [5.6, 2.6, 0.12], C.edge);
-      for (let x of [-7.4, -4.6, 4.6, 7.4]) this.block([x, 3.2, 27.16], [0.025, 5.8, 0.05], C.edge);
-      this.light([0, 6.3, 27.1], [14, 0.06, 0.05], C.amber);
+      // the far wall is open the width of the archive behind it: what has been brought back is seen from here
+      for (let s of [-1, 1]) {
+        this.block([s * 8.2, 3.2, 27.5], [3.6, 6.4, 0.5]);
+        this.block([s * 6.42, 2.95, 27.2], [0.07, 5.9, 0.07], C.edge);
+        this.block([s * 7.4, 3.2, 27.16], [0.025, 5.8, 0.05], C.edge);
+      }
+      this.block([0, 6.35, 27.5], [12.9, 0.8, 0.5]);
+      this.block([0, 6.3, 27.22], [4.2, 0.42, 0.06], C.edge);
+      this.light([0, 5.86, 27.18], [12.6, 0.06, 0.05], C.amber);
       for (let s of [-1, 1]) {
         this.block([s * 8.4, 0.85, 19], [1.5, 1.7, 2.2], C.panel);
         this.light([s * 8.4, 1.8, 19], [0.7, 0.04, 1], C.amber);
@@ -7033,14 +7105,15 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.outside.localMatrix = M.view([0, 0, 0], s.yaw, s.pitch, 0);
       s.applyEnvironment(true);
     }
-    spawn(where) {
+    spawn(where, faceAft = false) {
       if (where === 'hangar') {
         this.position = [0, 1.85, 13.3];
-        this.yaw = 0;
+        // back with a new head: facing the archive behind the craft
+        this.yaw = faceAft ? Math.PI : 0;
         this.pitch = 0;
       } else if (where === 'gallery') {
-        this.position = [-3.8, 1.85, -3.5];
-        this.yaw = Math.PI / 2;
+        this.position = [0, 1.85, 26.6];
+        this.yaw = Math.PI;
         this.pitch = 0.02;
       } else {
         this.position = [0, 1.85, -13.5];
@@ -8105,7 +8178,8 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       return st;
     }
     addStores(sp) {
-      for (const g of sp.geos) {
+      // 'hex' stands in for the round limbs far off
+      for (const g of sp.geos.includes('hex') ? sp.geos : sp.geos.concat(['hex'])) {
         this.batch(this.living, g, { capacity: 256 });
         this.batch(this.shade, g, { shadow: true, shadowOnly: true, capacity: 128 });
         this.batch(this.dead, g, { dynamic: false, capacity: 128 });
@@ -9624,10 +9698,15 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       for (let i = 0; i < parts.length; i++) {
         const part = parts[i];
         if (part.lod > lod || (bigOnly && !part.big)) continue;
-        if (part.dyn === 'halo' && (!alive || this.haloOff)) continue;
+        if (part.dyn === 'halo' && (!alive || this.haloOff || lod === 0)) continue;
         if (half && part.half !== half) continue;
-        // far away a round part is drawn with the coarse sphere: the same shape at a few pixels, a third of the triangles
-        const b = (lod === 0 && part.geo === 'lowSphere' && store.tinySphere) || store[part.geo];
+        // far away a round part is drawn with the coarse sphere and a limb with six sides: the same shape at a few pixels.
+        // The living past arm's length (detail 1) already have heads a few pixels across: the coarse sphere does for them too.
+        const g0 = part.geo,
+          b =
+            (g0 === 'lowSphere' && (lod === 0 || (lod === 1 && alive)) && store.tinySphere) ||
+            (g0 === 'lowCyl' && lod === 0 && store.hex) ||
+            store[g0];
         if (!b) continue;
         const d = b.data.length < (b.count + 1) * 24 ? engine.growBatch(b, b.count + 1) : b.data,
           o = b.count * 24;
@@ -9895,7 +9974,8 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
           lod = d < 60 * k ? 2 : d < 170 * k ? 1 : 0;
         this.pose(r);
         bones(BONES, r.sp, r.p[0], r.p[1], r.p[2], r.yaw, r.scale);
-        this.emit(r.sp, r.sp.colors[r.pal], BONES, live, lod, null, Q.mouth, false, false, true);
+        // a few pixels tall far off: the body and the head carry the figure; arms, eyes and halos are below a pixel there
+        this.emit(r.sp, r.sp.colors[r.pal], BONES, live, lod, null, Q.mouth, false, lod === 0 && d > 300 * k, true);
         if (shadows && d < 120 * k) this.emit(r.sp, r.sp.colors[r.pal], BONES, shade, 0, null, 0, false, true);
         if (r.kid && r.kid.carrier === r && r.kid.alive) {
           // child in arms: placed at the parent's chest

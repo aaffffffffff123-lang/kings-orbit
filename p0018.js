@@ -298,7 +298,7 @@
         rulerGrab: ['신의 머리를 붙잡았습니다', 'S로 뒤로 물러나 끝까지 당기세요.'],
         pullRate: 0.06,
         pullRise: 9,
-        arrival: ['전시 복도에 신의 머리가 도착했습니다.', '복도를 따라가면 새로 채워진 자리가 있습니다.'],
+        arrival: ['전시 복도에 신의 머리가 도착했습니다.', '파괴정 뒤쪽 전시 복도에 새로 채워진 자리가 있습니다.'],
       });
       this.heaven = true;
       this.dark = captured; // the first night, once it has come, stays
@@ -1204,8 +1204,12 @@
       // what fell before
       for (const a of this.angels) if (!a.alive && a.landed) this.feathersFor(a);
     }
+    // the trees are drawn into fixed batches; far from the craft a crown is drawn coarser and its fruit left out,
+    // and the batches are refilled when the craft has moved on far enough for that to change
     drawTrees() {
-      const S = this.treeStore;
+      const S = this.treeStore,
+        v = this.vehicle?.p || this.spawn?.p || [0, 0, 200];
+      this.treesAt = [v[0], v[2]];
       for (const k in S) this.game.engine.resetBatch(S[k]);
       const put = (b, x, y, z, rx, ry, rz, sx, sy, sz, c, em = 0) => {
         const d = this.game.engine.growBatch(b, b.count + 1),
@@ -1227,8 +1231,11 @@
         leaves = [rgb('#2f9a48'), rgb('#4cbf5a'), rgb('#237f3f'), rgb('#7ad06a')];
       for (const t of this.trees) {
         const rng = M.rand(t.seed),
-          h = t.h;
-        put(S.lowSphere, t.x, 0.3, t.z, 0, 0, 0, 3.4, 1.4, 3.4, bark);
+          h = t.h,
+          far = Math.hypot(t.x - v[0], t.z - v[2]),
+          crown = far > 110 ? S.tinySphere : S.lowSphere,
+          fruit = far < 210;
+        put(crown, t.x, 0.3, t.z, 0, 0, 0, 3.4, 1.4, 3.4, bark);
         if (!t.alive) {
           // a stump, the trunk on the ground beside it, the fruit spilled
           put(S.taper, t.x, 1.4, t.z, 0, 0, 0.08, 1.9, 2.8, 1.9, burnt);
@@ -1270,13 +1277,16 @@
           COL[0] = col[0] * k;
           COL[1] = col[1] * k;
           COL[2] = col[2] * k;
-          put(S.lowSphere, bl[0], bl[1], bl[2], 0, rng() * 3, 0, bl[3] * 2.1, bl[3] * 1.7, bl[3] * 2.1, COL, dark ? 0 : 0.06);
+          put(crown, bl[0], bl[1], bl[2], 0, rng() * 3, 0, bl[3] * 2.1, bl[3] * 1.7, bl[3] * 2.1, COL, dark ? 0 : 0.06);
         });
         for (let f = 0; f < 12; f++) {
           const a = (f / 12) * TAU + rng() * 0.3,
-            d = 3.5 + rng() * 1.1;
-          put(S.tinySphere, t.x + Math.sin(a) * d, top - 2.1 - rng() * 1.3, t.z + Math.cos(a) * d, 0, 0, 0, 1.15, 1.35, 1.15, rgb(FRUIT[f]), dark ? 0 : 0.5);
-          if (f % 2) put(S.tinySphere, t.x + Math.sin(a + 0.3) * (d - 0.6), top + 0.6 + rng() * 1.6, t.z + Math.cos(a + 0.3) * (d - 0.6), 0, 0, 0, 1.0, 1.15, 1.0, rgb(FRUIT[(f + 5) % 12]), dark ? 0 : 0.5);
+            d = 3.5 + rng() * 1.1,
+            y1 = top - 2.1 - rng() * 1.3,
+            y2 = f % 2 ? top + 0.6 + rng() * 1.6 : 0; // drawn or not, the same numbers are taken: the same tree near and far
+          if (!fruit) continue;
+          put(S.tinySphere, t.x + Math.sin(a) * d, y1, t.z + Math.cos(a) * d, 0, 0, 0, 1.15, 1.35, 1.15, rgb(FRUIT[f]), dark ? 0 : 0.5);
+          if (f % 2) put(S.tinySphere, t.x + Math.sin(a + 0.3) * (d - 0.6), y2, t.z + Math.cos(a + 0.3) * (d - 0.6), 0, 0, 0, 1.0, 1.15, 1.0, rgb(FRUIT[(f + 5) % 12]), dark ? 0 : 0.5);
         }
       }
     }
@@ -1750,6 +1760,8 @@
 
     /* ---------- life ---------- */
     updateWorld(dt) {
+      const vp = this.vehicle.p;
+      if (this.treesAt && Math.hypot(vp[0] - this.treesAt[0], vp[2] - this.treesAt[1]) > 35) this.drawTrees();
       const ship = this.vehicle.p,
         r = this.ruler,
         pulling = this.vehicle.grab === r,
