@@ -30,7 +30,7 @@
       this.cloud = new K.CloudSave(this);
       this.cloudUI = new K.CloudUI(this);
       this.input.onPause = () => {
-        if (this.busy) return;
+        if (this.busy || this.ui.starting) return;
         if (this.paused) this.ui.close();
         else this.ui.menu();
       };
@@ -74,8 +74,7 @@
       this.fps = 0;
       this.qualityTimer = 0;
       this.setEnvironment();
-      if (this.save.data.visited.length || this.save.data.trophies.length)
-        document.getElementById('startBtn').innerHTML = '항해 이어가기 <span>↗</span>';
+      this.ui.updateStartLabel();
       if (this.debugMode) this.setupDebug();
       this.ui.loading(true);
       requestAnimationFrame(t => this.frame(t));
@@ -91,7 +90,9 @@
       this.interior.position = [0, 1.85, -5];
       this.interior.yaw = 0;
       this.interior.pitch = 0;
-      this.ui.toast('NØMAD에 돌아왔습니다.', '앞쪽 조종석으로 걸어가 E · 마우스 고정이 안 되면 우클릭 드래그', 7);
+      this.ui.toast('NØMAD에 돌아왔습니다.', this.input.mobile
+        ? '앞쪽 조종석에 다가가 앉기 버튼을 누르세요.'
+        : '앞쪽 조종석으로 걸어가 E · 마우스 고정이 안 되면 우클릭 드래그', 7);
       this.input.requestLock();
       if (!this.save.available)
         setTimeout(
@@ -124,6 +125,11 @@
       this.input.clear();
       this.setEnvironment();
       this.audio.stop();
+    }
+    interact() {
+      if (!this.input.enabled) return;
+      if (this.mode === 'space') this.enterInterior('bridge');
+      else if (this.mode === 'interior') this.currentInteract?.action();
     }
     inspectTrophy(index) {
       this.ui.inspect(index);

@@ -93,6 +93,19 @@ body[data-mode=space] #targetState{color:#d4a577;font-size:9px;letter-spacing:.3
 @media(max-width:600px){#title h1{font-size:clamp(42px,10.6vw,64px);letter-spacing:-.04em;margin-bottom:29px}.contactMark{margin-bottom:25px}.surfaceLinks button{padding:8px 10px}.titleFoot{letter-spacing:.5px}}
 @media(max-height:520px){#title h1{font-size:clamp(40px,9vh,59px);margin-bottom:20px}.contactMark{margin-bottom:17px;width:33px;height:18px}.contactMark i{width:17px;height:17px}.contactMark i:last-child{left:14px}}
 
+#transition.show{pointer-events:auto}
+#hud button>*{pointer-events:none}
+#hud button.held{border-color:var(--gold)}
+body.touch .tools .iconButton{min-width:42px;height:42px}
+body.touch #titleSettings{min-width:44px;min-height:40px}
+@media(orientation:landscape) and (max-height:380px){
+  body.touch #spaceAction{top:59px;bottom:auto;right:max(200px,calc(env(safe-area-inset-right) + 200px))}
+}
+#startBtn:active{background:#e0fff4;transform:translateY(1px)}
+#startBtn[aria-busy]{opacity:1}
+#startBtn[aria-busy] .startIcon{align-self:center;width:14px;height:14px;font-size:0;border:2px solid #11212440;border-top-color:currentColor;border-radius:50%;animation:turn 1s linear infinite}
+.panel:focus{outline:none}
+.surfaceLinks{max-height:7.5rem;overflow-y:auto}
 #signal{margin-top:9px;display:flex;align-items:baseline;gap:10px;white-space:nowrap}#signal span{font-size:10px;letter-spacing:2.4px;color:#a3b4b1}#signal b{font-family:Consolas,"SFMono-Regular",monospace;font-weight:400;font-size:22px;letter-spacing:.5px;color:#ecd9b6;text-shadow:0 1px 8px rgba(0,0,0,.45)}@media(max-width:760px){#signal{margin-top:6px;gap:8px}#signal span{font-size:8px;letter-spacing:1.6px}#signal b{font-size:17px}}</style></head><body>
 <canvas id="world" tabindex="0" aria-label="FIRST CONTACTS 3D 게임"></canvas>
 <div id="ui">
@@ -120,7 +133,7 @@ body[data-mode=space] #targetState{color:#d4a577;font-size:9px;letter-spacing:.3
   <div id="titleContent">
    <div class="contactMark" aria-hidden="true"><i></i><i></i></div>
    <h1 aria-label="FIRST CONTACTS">FIRST<span>CONTACTS</span></h1>
-   <div class="titleActions"><button id="startBtn" class="primary">항해 시작 <span>↗</span></button><button id="titleHelp" class="ghost">조작 안내</button></div>
+   <div class="titleActions"><button id="startBtn" class="primary"><span id="startLabel" aria-live="polite">항해 시작</span><span class="startIcon" aria-hidden="true">↗</span></button><button id="titleHelp" class="ghost">조작 안내</button></div>
    <div class="cloudTitle"><button id="titleCloud" class="linkButton">이름으로 저장 / 이어하기</button><span id="cloudTitleStatus"></span></div>
   </div>
   <div class="titleFoot"><span>FIRST CONTACTS / <i id="buildNo" style="font-style:normal">0.4.0</i></span><span class="muted">64 SYSTEMS / 512 WORLDS</span><button class="linkButton" id="titleSettings">설정</button></div>
@@ -140,7 +153,7 @@ body[data-mode=space] #targetState{color:#d4a577;font-size:9px;letter-spacing:.3
  <div id="damageFlash"></div>
  <div id="transition"><div><strong></strong><span></span></div></div>
  <div id="loading" class="loading"><div class="loadInner"><div class="orbitMark"></div><div class="eyebrow" id="loadTitle">AWAKENING NØMAD</div><div class="loadBar"><div></div></div><div class="loadDesc" id="loadDesc">항법 장치와 선내 시스템을 깨우는 중</div></div></div>
- <div id="panelWrap" class="panelBackdrop hidden"><section id="panel" class="panel" role="dialog" aria-modal="true" aria-label="게임 메뉴"></section></div>
+ <div id="panelWrap" class="panelBackdrop hidden"><section id="panel" class="panel" tabindex="-1" role="dialog" aria-modal="true" aria-label="게임 메뉴"></section></div>
  <div id="fatal" class="panelBackdrop hidden"><section class="panel"><div class="eyebrow">SYSTEM INTERRUPTED</div><h2>항해를 시작하지 못했습니다.</h2><p class="text" id="fatalText"></p><div class="panelActions"><button class="primary" onclick="location.reload()">다시 시도 ↗</button></div></section></div>
  <div id="debug" class="hidden"></div>
 </div>

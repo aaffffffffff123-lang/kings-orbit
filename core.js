@@ -1819,6 +1819,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.movePointer = null;
       this.stickOrigin = [0, 0];
       this.holdPointers = new Map();
+      this.tapTouches = new Map();
       this.lockPending = false;
       this.wheel = 0;
       this.rightDown = null;
@@ -1828,7 +1829,6 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.spikes = 0;
       this.on(window, 'keydown', e => {
         if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
-        if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.code)) e.preventDefault();
         if (e.code === 'Escape' || e.code === 'KeyP') {
           if (!e.repeat) {
             this.clear();
@@ -1837,6 +1837,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
           return;
         }
         if (!this.enabled) return;
+        if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.code)) e.preventDefault();
         if (!this.keys.has(e.code)) this.pressed.add(e.code);
         this.keys.add(e.code);
       });
@@ -1850,6 +1851,9 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         }
       });
       this.on(canvas, 'contextmenu', e => e.preventDefault());
+      this.on(canvas, 'touchstart', e => {
+        if (this.enabled) e.preventDefault();
+      }, { passive: false });
       this.on(canvas, 'pointerdown', e => {
         if (!this.enabled) return;
         if (e.pointerType === 'touch' || e.pointerType === 'pen') {
@@ -2051,7 +2055,34 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       if (k) k.style.transform = 'translate(0,0)';
       document.getElementById('moveHint')?.classList.remove('quiet');
     }
+    bindTap(id, action) {
+      const button = document.getElementById(id);
+      const available = () => this.enabled && !button.classList.contains('hidden');
+      // Native clicks cover mouse, pen and keyboard. On touch, finish the tap ourselves:
+      // a second thumb may not generate a click, and a late click can land on the dialog just opened.
+      this.on(button, 'click', () => {
+        if (available()) action();
+      });
+      this.on(button, 'touchstart', e => {
+        e.preventDefault();
+        if (!available() || this.tapTouches.has(id)) return;
+        this.tapTouches.set(id, e.changedTouches[0].identifier);
+        button.classList.add('held');
+      }, { passive: false });
+      const finish = e => {
+        e.preventDefault();
+        const finger = Array.from(e.changedTouches).find(t => t.identifier === this.tapTouches.get(id));
+        if (!finger) return;
+        this.tapTouches.delete(id);
+        button.classList.remove('held');
+        if (e.type === 'touchend' && available() && button.contains(document.elementFromPoint(finger.clientX, finger.clientY)))
+          action();
+      };
+      this.on(button, 'touchend', finish, { passive: false });
+      this.on(button, 'touchcancel', finish, { passive: false });
+    }
     bindTouch() {
+      this.on(document.getElementById('hud'), 'contextmenu', e => e.preventDefault());
       const hold = (id, field) => {
         const b = document.getElementById(id);
         this.on(b, 'pointerdown', e => {
@@ -2077,33 +2108,18 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
           b.classList.remove('held');
           b.setAttribute('aria-pressed', 'false');
         };
-        for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) this.on(b, ev, release);
+        this.on(window, 'pointerup', release);
+        this.on(window, 'pointercancel', release);
+        this.on(b, 'lostpointercapture', release);
       };
       hold('touchFire', 'touchFire');
       hold('touchUp', 'touchUp');
       hold('touchDown', 'touchDown');
       hold('touchBoost', 'touchBoost');
-      // One press, one action. Counted when the finger lands: a browser sends no click for a tap
-      // while another finger is on the screen, and the left thumb is nearly always on the move stick.
       for (const [id, key] of [
         ['touchGrab', 'KeyQ'],
         ['touchPulse', 'KeyF'],
-        ['touchInteract', 'KeyE'],
-      ]) {
-        const b = document.getElementById(id);
-        this.on(b, 'pointerdown', e => {
-          if (!this.enabled || b.classList.contains('hidden')) return;
-          if (e.pointerType === 'mouse' && e.button !== 0) return;
-          e.preventDefault();
-          this.pressed.add(key);
-          b.classList.add('held');
-        });
-        for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) this.on(b, ev, () => b.classList.remove('held'));
-        // a keyboard on a focused button still works
-        this.on(b, 'click', e => {
-          if (e.detail === 0 && this.enabled && !b.classList.contains('hidden')) this.pressed.add(key);
-        });
-      }
+      ]) this.bindTap(id, () => this.pressed.add(key));
     }
     axes() {
       return {
@@ -2163,14 +2179,13 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.holdPointers.clear();
       for (const [id, pointer] of holds) {
         const b = document.getElementById(id);
+        b.setAttribute('aria-pressed', 'false');
         try {
-          if (b?.hasPointerCapture(pointer)) b.releasePointerCapture(pointer);
+          if (b.hasPointerCapture(pointer)) b.releasePointerCapture(pointer);
         } catch {}
       }
-      document.querySelectorAll('#touch .held').forEach(b => {
-        b.classList.remove('held');
-        b.setAttribute('aria-pressed', 'false');
-      });
+      this.tapTouches.clear();
+      document.querySelectorAll('#hud .held').forEach(b => b.classList.remove('held'));
     }
     dispose() {
       this.clear();
@@ -4167,7 +4182,9 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
             this.restore().catch(e => this.failed(e));
         }
       }, 60000);
-      if (this.meta) setTimeout(() => this.restore().catch(e => this.failed(e)), 300);
+      if (this.meta) setTimeout(() => {
+        if (!this.lastAttempt) this.restore().catch(() => {});
+      }, 300);
     }
     pack(data = this.save.data) {
       return copy({
@@ -4390,10 +4407,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         g.ui.mode('interior');
         g.currentInteract = null;
         g.input.clear();
-        const btn = document.getElementById('startBtn');
-        if (btn)
-          btn.innerHTML =
-            next.trophies.length || next.visited.length ? '항해 이어가기 <span>↗</span>' : '항해 시작 <span>↗</span>';
+        g.ui.updateStartLabel();
       } finally {
         this.suppress = false;
       }
@@ -4447,7 +4461,6 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         try {
           if (this.flight) await this.flight.catch(() => {});
           if (this.game.started) this.game.persist();
-          await this.ping();
           const r = await this.request('login', this.credentials());
           if (this.game.started) this.game.persist();
           this.failures = 0;
@@ -4467,15 +4480,12 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     }
     async begin() {
       if (this.game.started) return;
+      let localNotice = this.state === 'auth' ? this.message : '';
       if (this.meta && !this.ready && !this.conflict && this.state !== 'auth') {
         try {
           await this.restore();
-        } catch {
-          this.game.ui.toast(
-            '이 기기의 기록으로 시작합니다.',
-            '서버에 연결되면 저장 버전을 확인한 뒤 동기화합니다.',
-            5,
-          );
+        } catch (e) {
+          localNotice = e.message;
         }
       }
       if (this.conflict) {
@@ -4483,6 +4493,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         return;
       }
       this.game.start();
+      if (localNotice) this.game.ui.toast('이 기기의 기록으로 시작했습니다.', localNotice, 6);
     }
     failed(e) {
       this.failures++;
@@ -4630,43 +4641,74 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.toastUntil = 0;
       this.hitUntil = 0;
       this.cache = {};
-      this.pausedFromTitle = false;
+      this.starting = false;
       this.hud = $('hud');
-      $('startBtn').onclick = () => {
-        if (game.cloud) game.cloud.begin().catch(e => this.toast('항해 기록을 확인하지 못했습니다.', e.message));
-        else game.start();
-      };
+      $('startBtn').onclick = () => this.begin();
       $('titleHelp').onclick = () => this.help();
       $('titleSettings').onclick = () => this.menu();
-      $('menuBtn').onclick = () => this.menu();
-      $('soundBtn').onclick = () => {
+      const input = game.input;
+      input.bindTap('touchInteract', () => game.interact());
+      input.bindTap('menuBtn', () => this.menu());
+      input.bindTap('soundBtn', () => {
         game.audio.setMuted(!game.audio.muted);
         $('soundBtn').textContent = game.audio.muted ? '×♪' : '♪';
-      };
-      $('fullBtn').onclick = () => {
+        $('soundBtn').setAttribute('aria-pressed', String(game.audio.muted));
+      });
+      input.bindTap('fullBtn', () => {
+        const failed = () => this.toast('전체 화면을 지원하지 않는 환경입니다.');
         try {
-          if (document.fullscreenElement) document.exitFullscreen()?.catch(() => {});
-          else
-            document.documentElement
-              .requestFullscreen?.()
-              ?.catch(() => this.toast('전체 화면을 지원하지 않는 환경입니다.'));
-        } catch {}
-      };
-      $('spaceAction').onclick = () => game.space.toggleAuto();
-      $('navAction').onclick = () => this.navigation();
-      $('warpAction').onclick = () => game.space.toggleWarp();
-      $('returnAction').onclick = () => game.returnHome();
+          if (document.fullscreenElement) document.exitFullscreen().catch(failed);
+          else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(failed);
+          else failed();
+        } catch { failed(); }
+      });
+      input.bindTap('spaceAction', () => game.space.toggleAuto());
+      input.bindTap('navAction', () => this.navigation());
+      input.bindTap('warpAction', () => game.space.toggleWarp());
+      input.bindTap('returnAction', () => game.returnHome());
       game.input.bindTouch();
       this.mobile(game.input.mobile);
-      $('panelWrap').addEventListener('click', e => {
-        if (e.target === $('panelWrap')) this.close();
+      const wrap = $('panelWrap');
+      wrap.addEventListener('pointerdown', e => {
+        this.backdropPress = e.target === wrap ? e.pointerId : null;
       });
+      wrap.addEventListener('pointercancel', () => { this.backdropPress = null; });
+      wrap.addEventListener('click', e => {
+        if (e.target === wrap && this.backdropPress != null &&
+            (e.pointerId == null || e.pointerId === this.backdropPress)) this.close();
+        this.backdropPress = null;
+      });
+    }
+    updateStartLabel() {
+      const data = this.game.save.data;
+      // An older cached title page can still load the current manifest and scripts.
+      const label = $('startLabel') || $('startBtn').firstChild;
+      if (this.starting) label.textContent = this.game.cloud.meta ? '서버 기록 확인 중…' : '항해 준비 중…';
+      else label.textContent = data.visited.length || data.trophies.length ? '항해 이어가기' : '항해 시작';
+    }
+    async begin() {
+      if (this.starting || this.game.started || this.game.paused) return;
+      this.starting = true;
+      const buttons = $('title').querySelectorAll('button');
+      buttons.forEach(b => { b.disabled = true; });
+      $('startBtn').setAttribute('aria-busy', 'true');
+      this.updateStartLabel();
+      try {
+        await this.game.cloud.begin();
+      } catch (e) {
+        this.toast('항해 기록을 확인하지 못했습니다.', e.message);
+      } finally {
+        this.starting = false;
+        $('startBtn').removeAttribute('aria-busy');
+        this.updateStartLabel();
+        buttons.forEach(b => { b.disabled = false; });
+      }
     }
     mobile(v) {
       this.game.input.clear();
       document.body.classList.toggle('touch', v);
       this.game.input.mobile = v;
-      // a touch screen has no R key to name
+      $('navAction').textContent = v ? '성도' : 'M · 성도';
       $('returnAction').textContent = v ? '모선 귀환' : 'R · 모선 귀환';
     }
     start() {
@@ -4745,11 +4787,13 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     prompt(text, active, verb = '') {
       const p = $('prompt');
       p.classList.toggle('hidden', !text);
-      p.querySelector('span').textContent = text;
+      const label = p.querySelector('span');
+      if (label.textContent !== text) label.textContent = text;
       p.querySelector('kbd').style.display = this.game.input.mobile || !active ? 'none' : '';
       const button = $('touchInteract');
       button.classList.toggle('hidden', !active || !verb);
-      button.textContent = active ? verb : '';
+      const caption = active ? verb : '';
+      if (button.textContent !== caption) button.textContent = caption;
       button.setAttribute('aria-label', active ? text : '');
     }
     // Texts name the keyboard's keys; on a touch screen they name the buttons, and on a PC the right click.
@@ -4869,7 +4913,9 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     }
     open(html) {
       const g = this.game;
-      this.pausedFromTitle = !g.started;
+      this.backdropPress = null;
+      $('title').inert = true;
+      this.hud.inert = true;
       g.paused = true;
       g.input.clear();
       g.input.enabled = false;
@@ -4879,7 +4925,8 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       $('panel').classList.remove('atlasPanel');
       $('panel').innerHTML = html;
       $('panelWrap').classList.remove('hidden');
-      $('panel').querySelector('button')?.focus();
+      $('panel').scrollTop = 0;
+      $('panel').focus({ preventScroll: true });
     }
     close() {
       if (this.game.cloudUI?.busy) return;
@@ -4888,6 +4935,9 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.game.input.clear();
       if (!document.hidden && !this.game.contextLost) this.game.audio.hold(false);
       $('panelWrap').classList.add('hidden');
+      $('title').inert = false;
+      this.hud.inert = false;
+      (this.game.started ? this.game.engine.canvas : $('startBtn')).focus({ preventScroll: true });
     }
     menu() {
       const g = this.game,
@@ -5378,8 +5428,6 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
               selection = b.dataset.planet;
               sys = u.systems[u.get(selection).systemIndex];
               list();
-              detail();
-              draw();
             }),
         );
       detail();
@@ -5432,7 +5480,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       );
     $('atlasSearch').oninput = list;
     $('closeAtlas').onclick = () => {
-      s.select(selection);
+      if (selection !== u.selectedId) s.select(selection);
       ui.close();
     };
     list();
@@ -6619,7 +6667,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
           } else this.game.ui.toast('바라보는 행성을 찾지 못했습니다.', 'M · 성도에서 목적지를 고를 수 있습니다.');
         }
         if (input.take('KeyE')) {
-          this.game.enterInterior('bridge');
+          this.game.interact();
           return;
         }
         if (input.take('KeyX')) {
@@ -6908,6 +6956,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.solids.push({ min: [-1.9, -1, tz - 1.2], max: [1.9, 4, tz + 1.2], gallery: true });
       this.interactables.push({
         id: 'lab',
+        gallery: true,
         p: [0, 1.7, tz],
         radius: 3.4,
         label: u.cargo ? '실험대' : '실험대 · 화물칸이 비어 있습니다',
@@ -6933,6 +6982,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       });
       this.interactables.push({
         id: 'hold',
+        gallery: true,
         p: [0, 1.7, hz - 5.6],
         radius: 3.8,
         label: '화물칸 · ' + u.cargo + '/20' + (u.freeing ? ' · 내려보내기 예약됨' : ''),
@@ -6959,7 +7009,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.galleryKey = key;
       if (this.galleryRoot) this.roomRoot.remove(this.galleryRoot);
       this.solids = this.solids.filter(o => !o.gallery);
-      this.interactables = this.interactables.filter(o => !String(o.id).startsWith('slot'));
+      this.interactables = this.interactables.filter(o => !o.gallery);
       const g = group(this.roomRoot, [0, 0, 0]);
       this.galleryRoot = g;
       this.trophies = [];
@@ -7016,6 +7066,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         this.solids.push({ min: [x - 1.2, -1, z - 1.2], max: [x + 1.2, 4, z + 1.2], gallery: true });
         this.interactables.push({
           id: 'slot' + i,
+          gallery: true,
           p: [x, 2, z],
           radius: 3.1,
           label: relic ? '회수물 기록' : '전시 기록',
@@ -7096,7 +7147,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
             ? '고체 지표가 없습니다 · 궤도 탐사와 포격만 가능'
             : '행성의 구름층까지 접근한 뒤 탑승할 수 있습니다';
       this.game.ui.prompt(hint, ready, nearest?.verb || '');
-      if (input.take('KeyE') && nearest) nearest.action();
+      if (input.take('KeyE')) this.game.interact();
       this.syncOutside();
     }
     syncOutside() {
