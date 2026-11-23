@@ -479,7 +479,8 @@
       const inner = [Math.sin(D.a) * (D.R - r * 0.92), Math.cos(D.a) * (D.R - r * 0.92)],
         toward = [Math.sin(D.a) * 36, Math.cos(D.a) * 36];
       this.tunnels.push({ a: toward, b: inner, r: 4.2, y: 1 });
-      const dome = { k, kind: 'dome', alive: !this.brokenDomes.has(k), hp: 560, maxHp: 560, p: [x, 0, z], r, node, glass, frame, inside, label: '온실 돔', cold: 0, a: D.a, D };
+      // the beam cannot lift a dome; it pulls at the glass until it gives
+      const dome = { k, kind: 'dome', anchored: true, h: r * SQ, alive: !this.brokenDomes.has(k), hp: 560, maxHp: 560, p: [x, 0, z], r, node, glass, frame, inside, label: '온실 돔 · Q로 당기기', cold: 0, a: D.a, D };
       if (!dome.alive) this.shatterDome(dome, true);
       this.domes.push(dome);
       return dome;

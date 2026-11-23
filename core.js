@@ -1840,21 +1840,41 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
           try {
             canvas.setPointerCapture(e.pointerId);
           } catch {}
-          return;
         }
+      });
+      // The mouse buttons are read from mousedown/mouseup: a pointerdown comes only for the first button held,
+      // so a right press while the left is still down (cutting, then grabbing) would otherwise be lost.
+      this.on(canvas, 'mousedown', e => {
+        if (!this.enabled || e.sourceCapabilities?.firesTouchEvents) return;
+        const locked = document.pointerLockElement === canvas;
         if (e.button === 0) {
           this.mouseFire = true;
           this.pressed.add('Fire');
           this.syncFire();
-          if (document.pointerLockElement !== canvas && !this.mobile) this.requestLock();
+          if (!locked && !this.mobile) this.requestLock();
         }
         if (e.button === 2) {
-          // right button: the tractor beam. Without a locked mouse it also drags the view; a short click still grabs.
-          if (document.pointerLockElement === canvas) this.pressed.add('KeyQ');
+          // right button: the tractor beam, on the press. Without a locked mouse it also drags the view; a short click still grabs.
+          if (locked) this.pressed.add('KeyQ');
           else {
+            // event times, not the time it is handled: a slow frame must not turn a click into a drag
             this.drag = [e.clientX, e.clientY];
-            this.rightDown = { t: performance.now(), moved: 0 };
+            this.rightDown = { t: e.timeStamp, moved: 0 };
+            if (!this.mobile) this.requestLock();
           }
+        }
+      });
+      this.on(window, 'mouseup', e => {
+        if (e.sourceCapabilities?.firesTouchEvents) return;
+        if (e.button === 0) {
+          this.mouseFire = false;
+          this.syncFire();
+        }
+        if (e.button === 2) {
+          const rd = this.rightDown;
+          if (rd && rd.moved < 14 && e.timeStamp - rd.t < 800 && this.enabled) this.pressed.add('KeyQ');
+          this.rightDown = null;
+          this.drag = null;
         }
       });
       this.on(
@@ -1870,18 +1890,12 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       const release = e => {
         if (e.pointerId === this.movePointer) this.releaseStick();
         this.pointers.delete(e.pointerId);
-        // Releasing a movement/look finger must not release a different finger's weapon.
-        if (e.pointerType !== 'touch' && e.pointerType !== 'pen') {
-          if (e.button === 0 || e.type === 'pointercancel') {
-            this.mouseFire = false;
-            this.syncFire();
-          }
-          if (e.button === 2 || e.type === 'pointercancel') {
-            const rd = this.rightDown;
-            if (e.button === 2 && rd && rd.moved < 7 && performance.now() - rd.t < 400 && this.enabled) this.pressed.add('KeyQ');
-            this.rightDown = null;
-            this.drag = null;
-          }
+        // the mouse buttons are let go in mouseup; a cancelled mouse pointer lets go of both
+        if (e.pointerType !== 'touch' && e.pointerType !== 'pen' && e.type === 'pointercancel') {
+          this.mouseFire = false;
+          this.syncFire();
+          this.rightDown = null;
+          this.drag = null;
         }
       };
       this.on(window, 'pointerup', release);
@@ -1914,6 +1928,12 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       });
       this.on(document, 'pointerlockchange', () => {
         this.lockPending = false;
+        // the right press that asked for the lock is a tractor press already
+        if (document.pointerLockElement === canvas && this.rightDown) {
+          if (this.enabled) this.pressed.add('KeyQ');
+          this.rightDown = null;
+          this.drag = null;
+        }
         if (document.pointerLockElement !== canvas) {
           this.mouseFire = false;
           this.syncFire();
@@ -2002,14 +2022,27 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       hold('touchUp', 'touchUp');
       hold('touchDown', 'touchDown');
       hold('touchBoost', 'touchBoost');
+      // One press, one action. Counted when the finger lands: a browser sends no click for a tap
+      // while another finger is on the screen, and the left thumb is nearly always on the move stick.
       for (const [id, key] of [
         ['touchGrab', 'KeyQ'],
         ['touchPulse', 'KeyF'],
         ['touchInteract', 'KeyE'],
-      ])
-        this.on(document.getElementById(id), 'click', () => {
-          if (this.enabled && !document.getElementById(id).classList.contains('hidden')) this.pressed.add(key);
+      ]) {
+        const b = document.getElementById(id);
+        this.on(b, 'pointerdown', e => {
+          if (!this.enabled || b.classList.contains('hidden')) return;
+          if (e.pointerType === 'mouse' && e.button !== 0) return;
+          e.preventDefault();
+          this.pressed.add(key);
+          b.classList.add('held');
         });
+        for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) this.on(b, ev, () => b.classList.remove('held'));
+        // a keyboard on a focused button still works
+        this.on(b, 'click', e => {
+          if (e.detail === 0 && this.enabled && !b.classList.contains('hidden')) this.pressed.add(key);
+        });
+      }
     }
     axes() {
       return {
@@ -2447,6 +2480,13 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         this.noiseHit(0.24, 0.3, 1000, d, 'lowpass', 160);
         this.tone(118, 0.2, 0.3, 42, d);
         for (let i = 0; i < 3; i++) this.noiseHit(0.03, 0.08, 1900, d, 'bandpass', 900, 0.06 + i * 0.05, 3);
+      } else if (kind === 'shred') {
+        // torn apart: a wet crack, the pieces coming down a beat later
+        this.noiseHit(0.42, 0.06, 4200, d, 'highpass', 2200);
+        for (let i = 0; i < 3; i++) this.noiseHit(0.06, 0.26, 2300 - i * 420, d, 'bandpass', 1100, i * 0.018, 2.2);
+        this.tone(96, 0.3, 0.34, 34, d);
+        this.noiseHit(0.3, 0.26, 700, d, 'lowpass', 120);
+        for (let i = 0; i < 4; i++) this.noiseHit(0.035, 0.07, 1500, d, 'bandpass', 700 + i * 150, 0.22 + i * 0.07 + Math.random() * 0.04, 3);
       } else if (kind === 'thud') {
         this.tone(92, 0.22, 0.28, 38, d);
         this.noiseHit(0.16, 0.17, 420, d, 'lowpass', 90);
@@ -7158,13 +7198,16 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         firePress = input.take('Fire'),
         wheel = input.takeWheel();
       if (!input.fire) this.holdFire = false;
+      let aim = this.planet.raycast(this.p, f, 230);
       if (this.grab) {
         const e = this.grab;
         if (wheel) this.holdDist = M.clamp(this.holdDist + wheel * 2, 10, 40);
-        if (firePress && e.kind !== 'ruler' && e.kind !== 'building') this.throwHeld(f);
+        if (firePress && e.kind !== 'ruler' && !this.anchored(e)) this.throwHeld(f);
         else if (tractorPress) this.release(true);
-      } else if (tractorPress) this.tryGrab(f);
-      const aim = this.planet.raycast(this.p, f, 230);
+      } else if (tractorPress) {
+        this.tryGrab(f, aim);
+        if (this.grab) aim = this.planet.raycast(this.p, f, 230);
+      }
       this.firing = input.fire && !this.game.busy && !this.grab && !this.holdFire;
       if (this.firing) {
         this.planet.fire(this, aim, dt);
@@ -7186,15 +7229,15 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       // what the cone would catch if it were let out now, looked at a few times a second
       if (!this.grab && --this.pickFrame <= 0) {
         this.pickFrame = 4;
-        this.pick = this.findTarget(f);
-        this.bugsInCone = !this.pick && this.planet.swarm && !this.planet.swarm.ball ? this.planet.swarm.gather(this.p, f, RANGE, CONE * 1.25, 70).length : 0;
+        this.pick = this.findTarget(f, aim);
+        this.bugsInCone = !this.pick && this.planet.swarm && !this.planet.swarm.ball ? this.planet.swarm.gather(this.p, f, this.reach(aim), CONE * 1.25, 70).length : 0;
       } else if (this.grab) {
         this.pick = null;
         this.bugsInCone = 0;
       }
       this.beamFX(dt, f);
       this.hud(aim);
-      this.game.audio.tractor(this.grab ? (this.grab.kind === 'ruler' ? 1 : 0.8) : this.flash > 0 ? 0.6 * this.flash * 3 : 0, this.grab?.kind === 'ruler' ? Math.min(1, this.tension / 1.8) : this.grab?.kind === 'building' ? 0.5 : 0);
+      this.game.audio.tractor(this.grab ? (this.grab.kind === 'ruler' ? 1 : 0.8) : this.flash > 0 ? 0.6 * this.flash * 3 : 0, this.grab?.kind === 'ruler' ? Math.min(1, this.tension / 1.8) : this.grab && this.anchored(this.grab) ? 0.5 : 0);
       const speed = M.len(this.velocity),
         shake = this.shake * this.game.settings.shake,
         t = this.bob;
@@ -7237,7 +7280,8 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         if (e.kind === 'ruler') {
           context = '연결 고정 · 뒤로 물러나 당기기';
           progress = this.tension / 1.8;
-        } else if (e.kind === 'building') context = '잡아당기는 중 · ' + grabKey + ' 놓기';
+        } else if (e.tug) context = '뽑아내는 중 · 뒤로 당기세요';
+        else if (this.anchored(e)) context = '잡아당기는 중 · ' + grabKey + ' 놓기';
         else context = touch ? '광선 버튼 던지기 · 견인 버튼 내려놓기' : '좌클릭 던지기 · 우클릭 내려놓기';
         if (e.kind === 'creature' && e.beg)
           context = this.game.universe.cargoFull() ? '화물칸 가득 참 · ' + grabKey + '으로 내려놓기' : '240m 위로 올라가면 모선이 끌어올립니다';
@@ -7247,8 +7291,10 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
           if (t.kind === 'ruler')
             context = t.hp <= 0 ? this.planet.config?.rulerAim || this.planet.rulerName + ' · Q로 머리 견인' : this.planet.guardText?.() || this.planet.rulerName + ' · 왕좌를 무력화하세요';
           else if (t.label !== undefined) context = t.label;
-          else if (this.pick)
-            context = t.kind === 'creature' ? (t.beg ? 'Q · 생존자 견인' : 'Q · 생명체 견인') : t.kind === 'building' ? 'Q · 붙잡아 당기기' : '';
+          else if (this.pick) context = t.kind === 'creature' ? (t.beg ? 'Q · 생존자 견인' : 'Q · 생명체 견인') : '';
+          else if (this.anchored(t) && aim && aim.distance < RANGE) context = 'Q · 붙잡아 당기기';
+          // the crosshair on something the beam could take, but past its reach
+          if (!this.pick && aim && t === aim.entity && aim.distance >= RANGE && this.takeable(t)) context = (context.split(' · ')[0] || '대상') + ' · 더 가까이 · ' + RANGE + 'm 안';
         } else if (this.bugsInCone >= 3) context = '벌레 ' + (this.bugsInCone >= 70 ? '70마리 넘게' : this.bugsInCone + '마리') + ' · Q 견인';
       }
       this.game.ui.context(context, !!(this.pick || aim || this.bugsInCone >= 3), progress);
@@ -7271,25 +7317,40 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     }
     // how heavy a held thing is, 0 (a person) to 1 (a keeper of hell)
     weight(e) {
-      if (e.kind === 'ruler' || e.kind === 'building') return 0.6;
+      if (e.kind === 'ruler' || this.anchored(e)) return 0.6;
       return M.clamp((this.radiusOf(e) - 1.4) / 3, 0, 1);
+    }
+    // a building, a dome: stays where it stands; the beam can only pull at it until it gives
+    anchored(e) {
+      return !!e && (e.kind === 'building' || !!e.anchored);
+    }
+    // what a press could take hold of at all, near enough: carried, pulled out, or (the ruler) pulled off
+    takeable(e) {
+      return !!e && (e.kind === 'ruler' || this.grabbable(e) || (e.tug && e.alive !== false && !e.burst));
+    }
+    // where the beam takes hold of something it can only pull at
+    anchorPoint(e) {
+      return e.tug ? e.p : M.add(e.p, [0, (e.h || 0) * 0.6, 0]);
     }
     grabbable(e) {
       if (!e || !e.alive || e.dying) return false;
       if (e.kind === 'ruler') return e.hp <= 0;
-      if (e.kind === 'building') return false;
+      if (this.anchored(e)) return false;
       return !e.fixed && !e.carrier && !e.gone;
     }
-    // What a press of the tractor would catch: what the crosshair is on, or else the nearest thing inside the cone
-    // that nothing solid stands in front of. A wall or building under the crosshair is pulled at if nothing else is.
-    findTarget(f) {
-      const aim = this.planet.raycast(this.p, f, RANGE);
-      if (aim && aim.entity.kind !== 'building' && (this.grabbable(aim.entity) || aim.entity.fixed || aim.entity.kind === 'ruler')) return aim;
+    // how far the cone reaches along the crosshair: no further than what the crosshair is on (glass, a wall)
+    reach(aim) {
+      return aim && aim.distance < RANGE ? aim.distance + 1 : RANGE;
+    }
+    // What a press of the tractor carries off: what the crosshair is on, if it can be carried (or the ruler);
+    // else the nearest thing inside the cone that nothing solid stands in front of. Null if the cone holds nothing to carry.
+    findTarget(f, aim = this.planet.raycast(this.p, f, 230)) {
+      if (aim && aim.distance < RANGE && this.takeable(aim.entity)) return aim;
       const list = this.planet.grabCandidates ? this.planet.grabCandidates() : [];
       let best = null,
         bestScore = Infinity;
       for (const e of list) {
-        if (!this.grabbable(e)) continue;
+        if (!this.takeable(e)) continue;
         const c = this.centerOf(e),
           v = M.sub(c, this.p),
           d = M.len(v),
@@ -7307,23 +7368,33 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         }
       }
       if (best) {
-        // something solid in the way keeps it out of reach
-        const dir = M.norm(M.sub(best.point, this.p)),
-          block = this.planet.raycast(this.p, dir, best.distance);
-        if (!block || block.entity === best.entity || block.distance > best.distance - this.radiusOf(best.entity) - 1 || !(block.entity.kind === 'building' || block.entity.kind === 'wall' || block.entity.fixed))
-          return best;
+        // something solid in the way keeps it out of reach; a big thing is in reach if its middle or its top can be seen
+        const r = this.radiusOf(best.entity),
+          points = r > 3 ? [best.point, M.add(best.point, [0, r * 0.65, 0])] : [best.point];
+        for (const q of points) {
+          const dq = M.dist(q, this.p),
+            dir = M.norm(M.sub(q, this.p)),
+            block = this.planet.raycast(this.p, dir, dq);
+          if (!block || block.entity === best.entity || block.distance > dq - r - 1 || !(this.anchored(block.entity) || block.entity.kind === 'wall' || block.entity.fixed)) return best;
+        }
       }
-      if (aim && aim.entity.kind === 'building') return aim;
       return null;
     }
-    tryGrab(f) {
-      // nothing solid in the cone: on a world with bugs, the beam takes up a ball of them instead
-      const pick = this.findTarget(f) || this.planet.tractorFallback?.(this.p, f, RANGE, CONE) || null;
+    // what the beam can only pull at (a building, a dome) or is refused by (something fixed): under the crosshair, in reach
+    anchorAt(aim) {
+      if (!aim || aim.distance >= RANGE || aim.entity.alive === false) return null;
+      return this.anchored(aim.entity) || aim.entity.fixed ? aim : null;
+    }
+    tryGrab(f, aim = this.planet.raycast(this.p, f, 230)) {
+      // what can be carried first; then, on a world with bugs, a ball of them (only from this side of the glass);
+      // then whatever under the crosshair can only be pulled at, or refuses the beam
+      const pick = this.findTarget(f, aim) || this.planet.tractorFallback?.(this.p, f, this.reach(aim), CONE) || this.anchorAt(aim) || null;
       if (!pick) {
-        // the beam goes out and comes back empty: seen and heard, nothing more
+        // the beam goes out and comes back empty: seen and heard; if what the crosshair is on is only too far, said so
         this.flash = 0.32;
         this.flashDir = f.slice();
         this.game.audio.whiff();
+        if (aim && aim.distance >= RANGE && this.takeable(aim.entity)) this.game.ui.toast('너무 멉니다', `${Math.round(aim.distance)}m · 견인은 ${RANGE}m 안에서 닿습니다.`, 2);
         return;
       }
       const e = pick.entity;
@@ -7334,7 +7405,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         this.flashDir = f.slice();
         return;
       }
-      if (e.fixed) {
+      if (e.fixed && !this.anchored(e)) {
         this.game.ui.toast('견인이 걸리지 않습니다.', e.fixedNote || '땅과 이어져 있습니다.', 2);
         this.flash = 0.25;
         this.flashDir = f.slice();
@@ -7390,7 +7461,29 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
           this.game.ui.toast(this.planet.rulerName + ' 회수', '떠날 때가 되면 R · 모선 귀환', 7);
           this.planet.stopTether();
         }
-      } else if (e.kind === 'building') {
+      } else if (e.tug) {
+        const stretch = Math.max(0, M.dist(this.p, e.p) - this.grabStart),
+          free = this.planet.tug?.(e, stretch, dt, this);
+        if (!this.grab) return;
+        if (free) {
+          this.grab = free;
+          this.grabStart = M.dist(this.p, free.p);
+          this.tension = 0;
+          this.hv = free.velocity ? free.velocity.slice() : [0, 0, 0];
+          this.holdDist = M.clamp(9 + this.radiusOf(free) * 3.2, 13, 30);
+          this.planet.attach(free, this);
+          this.game.audio.grabSnap(this.weight(free));
+          this.shake = Math.max(this.shake, 0.3);
+          return;
+        }
+        // it holds on: the craft is held back by the stalk, more by a bigger eye
+        if (stretch > 1.5) {
+          const back = M.norm(M.sub(this.p, e.p)),
+            outward = this.velocity[0] * back[0] + this.velocity[1] * back[1] + this.velocity[2] * back[2];
+          if (outward > 0) this.velocity = M.sub(this.velocity, M.mul(back, outward * Math.min(1, dt * (0.6 + Math.min(2.4, e.radius * 0.35)))));
+        }
+        this.planet.tetherTo(this.anchorPoint(e), this);
+      } else if (this.anchored(e)) {
         const dist = M.dist(this.p, e.p),
           stretch = Math.max(0, dist - this.grabStart);
         e.node.r[2] = Math.sin(this.bob * 20) * Math.min(0.07, stretch * 0.006);
@@ -7407,8 +7500,8 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         if (sp > 150) this.hv = M.mul(this.hv, 150 / sp);
         const np = M.add(e.p, M.mul(this.hv, dt)),
           fl = this.planet.floor ? this.planet.floor(np[0], np[2], np[1]) : this.planet.height(np[0], np[2]);
-        if (np[1] < fl + 0.4) {
-          np[1] = fl + 0.4;
+        if (np[1] < fl + (e.rest ?? 0.4)) {
+          np[1] = fl + (e.rest ?? 0.4);
           this.hv[1] = Math.max(0, this.hv[1]);
         }
         e.p = np;
@@ -7428,7 +7521,8 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
           e.thrown = true;
           e.lowered = gentle && (e.kind === 'creature' || e.kind === 'loose');
         }
-        if (e.kind === 'building') e.node.r[2] = 0;
+        if (this.anchored(e) && e.node) e.node.r[2] = 0;
+        if (e.tug) this.planet.untug?.(e);
       }
       this.grab = null;
       this.tension = 0;
@@ -7461,7 +7555,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         alpha = 0;
       if (this.grab) {
         const e = this.grab,
-          c = e.kind === 'building' ? M.add(e.p, [0, e.h * 0.6, 0]) : this.centerOf(e);
+          c = this.anchored(e) ? this.anchorPoint(e) : this.centerOf(e);
         to = c;
         width = this.radiusOf(e) * (e.kind === 'ruler' ? 1.4 : 2.4) + 1;
         alpha = e.kind === 'ruler' ? 0.12 + Math.min(1, this.tension / 1.8) * 0.12 : 0.15;
@@ -7476,7 +7570,8 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         this.cone.alpha = alpha * (0.85 + Math.sin(this.bob * 31) * 0.15);
       } else this.cone.visible = false;
       // the ring: on the catch while held, on what the cone would catch while aiming
-      const ringOn = this.grab && this.grab.kind !== 'building' ? this.grab : this.pick && this.pick.entity.kind !== 'building' && this.grabbable(this.pick.entity) ? this.pick.entity : null;
+      const ringOn =
+        this.grab && (!this.anchored(this.grab) || this.grab.tug) ? this.grab : this.pick && (this.grabbable(this.pick.entity) || this.pick.entity.tug) ? this.pick.entity : null;
       if (ringOn) {
         const c = this.centerOf(ringOn),
           r = this.radiusOf(ringOn) * (ringOn.kind === 'ruler' ? 1.05 : 1.7) + 0.6,
@@ -7571,6 +7666,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     splat: 'splat',
     drop: 'splat',
     pulse: 'fling',
+    shred: 'shred', // torn apart where they stood: the craft's own shockwave
     chain: 'fling',
     fling: 'fling',
     collapse: 'rubble',
@@ -7964,8 +8060,9 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
           st[m[1]] = Number(m[2]);
           continue;
         }
-        if (t.startsWith('z.c.')) {
-          const body = t.slice(4);
+        if (t.startsWith('z.c.') || t.startsWith('z.s.')) {
+          const body = t.slice(4),
+            torn = t[2] === 's';
           for (let i = 0; i + 7 <= body.length; i += 7) {
             const q = k => B36.indexOf(body[i + k]);
             const xq = q(0) * 36 + q(1),
@@ -7977,14 +8074,15 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
             st.corpses.push({
               x: xq * 1.25 - 810,
               z: zq * 1.25 - 810,
-              type: TYPES[Math.floor(tc / 6)] || 'fling',
-              size: tc % 6,
+              type: torn ? 'shred' : TYPES[Math.floor(tc / 6)] || 'fling',
+              size: torn ? Math.min(5, tc) : tc % 6,
               yaw: (yq / 36) * TAU,
               pal: pc,
             });
           }
-        } else if (t.startsWith('z.f.')) {
-          const body = t.slice(4);
+        } else if (t.startsWith('z.f.') || t.startsWith('z.g.')) {
+          const body = t.slice(4),
+            torn = t[2] === 'g';
           for (let i = 0; i + 9 <= body.length; i += 9) {
             const q = k => B36.indexOf(body[i + k]);
             let bad = false;
@@ -7996,8 +8094,8 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
             st.corpses.push({
               x: xq / 4 - 5832,
               z: zq / 4 - 5832,
-              type: TYPES[Math.floor(tc / 6)] || 'fling',
-              size: tc % 6,
+              type: torn ? 'shred' : TYPES[Math.floor(tc / 6)] || 'fling',
+              size: torn ? Math.min(5, tc) : tc % 6,
               yaw: (q(7) / 36) * TAU,
               pal: q(8),
             });
@@ -8511,6 +8609,14 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         save: !r.freed && this.slotOf(r.sp) >= 0,
         fresh: true,
       });
+      if (type === 'shred') {
+        // the pieces go the way the blast went, further the nearer it was
+        c.away = dir ? Math.atan2(dir[0], dir[2]) : yaw;
+        c.spread = r.shredSpread || 1.6;
+        const nth = (this.shredSounds = (this.shredSounds || 0) + 1);
+        if (nth <= 6) this.sound(r, 'shred');
+        this.s.emit([r.p[0], r.p[1] + r.sp.center * r.scale, r.p[2]], nth <= 12 ? 7 : 2, r.sp.blood, 10, 1);
+      }
       if (type === 'cut') {
         this.cutGlow(r, c);
         this.sound(r, 'cut');
@@ -8518,7 +8624,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       } else if (type === 'crush') this.sound(r, 'crush');
       else if (type === 'splat') this.sound(r, 'splat');
       else if (type === 'fling') this.sound(r, 'thud');
-      this.dying.push({ c, t: 0, d: type === 'crush' ? 0.12 : type === 'cut' ? 0.55 : type === 'rubble' ? 0.05 : 0.3 });
+      this.dying.push({ c, t: 0, d: type === 'crush' ? 0.12 : type === 'cut' ? 0.55 : type === 'rubble' ? 0.05 : type === 'shred' ? 0.6 : 0.3 });
       // a few drops, no more: the body stays the thing you look at
       const drops = type === 'crush' || type === 'splat' ? 5 : type === 'rubble' ? 0 : 2;
       if (drops) this.s.emit([r.p[0], r.p[1] + r.sp.center * r.scale, r.p[2]], drops, r.sp.blood, 7, 0.9);
@@ -8636,13 +8742,29 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       }
     }
     /* ---------- weapons ---------- */
-    shock(p, radius, force) {
+    shock(p, radius, force, shred = false) {
+      this.shredSounds = 0;
       for (const r of this.list) {
         if (!r.alive || r.carrier || r.state === 'held') continue;
         const dx = r.p[0] - p[0],
           dz = r.p[2] - p[2],
           dy = r.p[1] + 1 - p[1],
           d = Math.hypot(dx, dy, dz);
+        if (d < radius && shred) {
+          // the craft's own shockwave: no one inside it stays in one piece
+          const k = 1 - d / radius,
+            h = Math.hypot(dx, dz) || 1,
+            out = [dx / h, 0, dz / h];
+          r.shredSpread = 1.1 + k * 2.2;
+          const kd = r.kid && r.kid.carrier === r ? r.kid : null;
+          this.kill(r, 'shred', out);
+          if (kd && kd.alive) {
+            kd.p = r.p.slice();
+            kd.shredSpread = r.shredSpread * 0.8;
+            this.kill(kd, 'shred', out);
+          }
+          continue;
+        }
         if (d < radius) {
           const k = 1 - d / radius,
             h = Math.hypot(dx, dz) || 1,
@@ -9389,6 +9511,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         sc = c.scale,
         y = this.s.height(c.x, c.z),
         dir = c.yaw;
+      if (c.type === 'shred') return this.drawShred(c, store, k, live);
       const halves = c.type === 'cut' ? ['u', 'l'] : [null];
       for (const half of halves) {
         corpsePose(c.type, c.seed, half);
@@ -9424,6 +9547,37 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         }
         if (half) this.cap(sp, BONES, store, half, live);
         if (c.type === 'rubble') this.rubbleOver(c, BONES, store);
+      }
+    }
+    // a body torn apart: its pieces flung out the way the blast went, lying where they came down, a dark smear under them
+    drawShred(c, store, k, live) {
+      const sp = c.sp,
+        sc = c.scale,
+        y = this.s.height(c.x, c.z),
+        e = live ? smooth(Math.min(1, k)) : 1,
+        spread = (c.spread || 1.6) * sc,
+        away = c.away ?? hash(c.seed, 41) * TAU;
+      corpsePose('splat', c.seed, null);
+      bones(BONES, sp, c.x, y, c.z, c.yaw, sc);
+      const det = !live && this.corpses.length > 320 ? 0 : 1,
+        arc = live && k < 1 ? Math.sin(Math.min(1, k) * Math.PI) * (0.8 + spread * 0.5) : 0;
+      this.emit(sp, sp.colors[c.pal], BONES, store, det, null, Q.mouth, false, false, false, Math.max(0.05, spread * e), c.seed, 0, away, arc);
+      if (!live || k > 0.6) {
+        const b = store.lowDisc || this.batch(store, 'lowDisc', { dynamic: !!live });
+        const d = this.engine.growBatch(b, b.count + 1),
+          o = b.count * 24,
+          w = (0.7 + spread * 0.5) * (live ? Math.min(1, (k - 0.6) / 0.4) : 1);
+        trs(d, o, c.x + Math.sin(away) * spread * 0.45, y + 0.03, c.z + Math.cos(away) * spread * 0.45, 0, away, 0, w, 0.04, w * 1.35);
+        const col = sp.blood || sp.capColor;
+        d[o + 16] = col[0] * 0.75;
+        d[o + 17] = col[1] * 0.75;
+        d[o + 18] = col[2] * 0.75;
+        d[o + 19] = 1;
+        d[o + 20] = 0;
+        d[o + 21] = 0;
+        d[o + 22] = 0;
+        d[o + 23] = 0;
+        b.count++;
       }
     }
     cap(sp, Bo, store, half, live) {
@@ -9464,7 +9618,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         b.count++;
       }
     }
-    emit(sp, cols, Bo, store, lod, half, mouth, dark, bigOnly = false, alive = false, scatter = 0, sseed = 0, st = 0) {
+    emit(sp, cols, Bo, store, lod, half, mouth, dark, bigOnly = false, alive = false, scatter = 0, sseed = 0, st = 0, away = null, arc = 0) {
       const parts = sp.parts,
         engine = this.engine;
       for (let i = 0; i < parts.length; i++) {
@@ -9480,12 +9634,12 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         mul(d, o, Bo, part.bone * 16, part.m, 0);
         if (scatter > 0) {
           // each piece flung its own way, twitching where it lies
-          const a = hash(sseed, i * 3) * TAU,
+          const a = away == null ? hash(sseed, i * 3) * TAU : away + (hash(sseed, i * 3) - 0.5) * 2.4,
             far = (0.5 + hash(sseed, i * 3 + 1) * 1.5) * scatter,
             tw = Math.sin(st * (7 + hash(sseed, i) * 6) + i) * 0.06 * Math.min(1, scatter);
           d[o + 12] += Math.sin(a) * far + tw;
           d[o + 14] += Math.cos(a) * far;
-          d[o + 13] = Math.max(d[o + 13] - scatter * 0.25, Bo[13] + 0.08);
+          d[o + 13] = Math.max(d[o + 13] - scatter * 0.25, Bo[13] + 0.08) + arc * (0.6 + hash(sseed, i * 3 + 2) * 0.8);
         }
         if (part.dyn === 'mouth') {
           const m = 1 + mouth * part.open;
@@ -9790,32 +9944,29 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         const step = saved.length / SAVE_CAP;
         saved = Array.from({ length: SAVE_CAP }, (_, i) => saved[Math.floor(i * step)]);
       }
-      // bodies within 808 m of the middle keep the old two-character places; the wider worlds put the rest in "z.f." with three
-      let chunk = '',
-        far = '';
+      // bodies within 808 m of the middle keep the old two-character places; the wider worlds put the rest in "z.f." with three.
+      // Bodies torn apart by the craft's shockwave go in "z.s." (near) and "z.g." (far): the type digit there is the size alone.
+      const chunks = { 'z.c.': '', 'z.f.': '', 'z.s.': '', 'z.g.': '' },
+        add = (key, part, len) => {
+          chunks[key] += part;
+          if (chunks[key].length >= len) {
+            out.push(key + chunks[key]);
+            chunks[key] = '';
+          }
+        };
       for (const c of saved) {
-        const tc = Math.max(0, TYPES.indexOf(c.type)) * 6 + (c.size ?? 3),
+        const torn = c.type === 'shred',
+          tc = torn ? (c.size ?? 3) : Math.max(0, TYPES.indexOf(c.type)) * 6 + (c.size ?? 3),
           yq = ((Math.round((((c.yaw % TAU) + TAU) % TAU) / TAU * 36) % 36) + 36) % 36;
         const code = this.mixSlots ? Math.max(0, this.slotOf(c.sp)) * 6 + Math.min(5, c.pal | 0) : c.pal | 0;
         const tail = B36[tc] + B36[yq] + B36[Math.min(35, code)];
         if (Math.abs(c.x) <= 808 && Math.abs(c.z) <= 808) {
           const xq = M.clamp(Math.round((c.x + 810) / 1.25), 0, 1295),
             zq = M.clamp(Math.round((c.z + 810) / 1.25), 0, 1295);
-          chunk += enc2(xq) + enc2(zq) + tail;
-          if (chunk.length >= 56) {
-            out.push('z.c.' + chunk);
-            chunk = '';
-          }
-        } else {
-          far += enc3(M.clamp(Math.round((c.x + 5832) * 4), 0, 46655)) + enc3(M.clamp(Math.round((c.z + 5832) * 4), 0, 46655)) + tail;
-          if (far.length >= 54) {
-            out.push('z.f.' + far);
-            far = '';
-          }
-        }
+          add(torn ? 'z.s.' : 'z.c.', enc2(xq) + enc2(zq) + tail, 56);
+        } else add(torn ? 'z.g.' : 'z.f.', enc3(M.clamp(Math.round((c.x + 5832) * 4), 0, 46655)) + enc3(M.clamp(Math.round((c.z + 5832) * 4), 0, 46655)) + tail, 54);
       }
-      if (chunk) out.push('z.c.' + chunk);
-      if (far) out.push('z.f.' + far);
+      for (const key in chunks) if (chunks[key]) out.push(key + chunks[key]);
       return out;
     }
     signal() {
@@ -10983,7 +11134,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       if (this.pending.length < 180) this.pending.push({ at: this.time + delay, fn });
     }
     // Delayed cascades are bounded and processed outside damage(): no recursive chain explosion.
-    shock(p, radius, force, { throwCreatures = true, ruler = false } = {}) {
+    shock(p, radius, force, { throwCreatures = true, ruler = false, shred = false } = {}) {
       if (this.swarm && throwCreatures) {
         const n = this.swarm.squash(p[0], p[2], radius * 0.28, 'crush', null, 400);
         if (n) this.squashed(n, p, 'blast');
@@ -11003,7 +11154,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
               e.thrown = true;
               e.panic = 8;
             }
-        this.residents.shock(p, radius, force);
+        this.residents.shock(p, radius, force, shred);
       }
       if (ruler && this.ruler.alive && M.dist(this.ruler.p, p) < radius)
         this.damage(this.ruler, force, [0, 1, 0], 'chain');
@@ -11070,8 +11221,9 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       const n = mesh(this.fxRoot, 'torus', p.slice(), [1, 1, 1], color, { em: 1, alpha: 0.65 });
       this.waves.push({ node: n, t: 0, speed, life });
     }
+    // the craft's own shockwave (F, or the hull slammed into the ground): everyone inside it is torn apart
     pulseAt(p, radius, force) {
-      this.shock(p, radius, force, { ruler: true });
+      this.shock(p, radius, force, { ruler: true, shred: true });
       this.emit(p, 20, this.config.spark, 34, 1.2, false);
     }
     collide(ship, dt) {
@@ -11154,9 +11306,14 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       e.p = M.add(e.p, M.mul(e.velocity, dt));
       e.node.r[0] += dt * 2.7;
       e.node.r[2] += dt * 1.9;
-      const floor = this.floor(e.p[0], e.p[2]) + 1;
+      const floor = this.floor(e.p[0], e.p[2]) + (e.rest ?? 1);
       if (e.p[1] < floor) {
         e.p[1] = floor;
+        // something soft thrown hard bursts where it lands (an eye pulled out of the living world)
+        if (e.splat && !e.lowered && M.len(e.velocity) > 12) {
+          e.splat(e);
+          return;
+        }
         if (e.kind === 'creature' && M.len(e.velocity) > 14 && !e.lowered) {
           this.kill(e, [0, 1, 0]);
           return;

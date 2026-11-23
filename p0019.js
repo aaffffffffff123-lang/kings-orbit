@@ -1728,7 +1728,7 @@
       else if (r.ring === 'b') {
         r.depth = 0.5 + hh(sl.k, 7) * 0.42;
         r.rise = 0;
-      } else if (r.ring === 'd') r.kind = sl.k % 3;
+      } else if (r.ring === 'd') r.sand = sl.k % 3; // lying, sitting, or running round on the sand (not r.kind: that says what the beam is holding)
       else if (r.ring === 'p') {
         r.dive = hh(sl.k, 8) * 8;
         r.up = 0;
@@ -1841,7 +1841,7 @@
         R.wander(r, dt);
         return true;
       }
-      const free = r.ring === 'v' || r.ring === 's' || r.ring === 'l' || (r.ring === 'd' && r.kind > 0);
+      const free = r.ring === 'v' || r.ring === 's' || r.ring === 'l' || (r.ring === 'd' && r.sand > 0);
       if (free && near) {
         if (r.state !== 'beg') R.begin(r, 'beg');
         return false;
@@ -1937,7 +1937,7 @@
           return true;
         }
         case 'd': {
-          if (r.kind === 2) {
+          if (r.sand === 2) {
             const a = t * 0.32 * (r.var > 0.5 ? 1 : -1) + r.var * TAU,
               tx = r.home[0] + Math.sin(a) * 9,
               tz = r.home[1] + Math.cos(a) * 9;
@@ -2185,7 +2185,7 @@
           return true;
         case 'd': {
           const sw = Math.sin(t * 7 + s);
-          if (r.kind === 0) {
+          if (r.sand === 0) {
             if (r.near) {
               Q.bob = -L * 0.82;
               Q.lLx = Q.lRx = -1.45;
@@ -2199,7 +2199,7 @@
             Q.aLx = -1.2 + Math.cos(t * 6 + s) * 0.6;
             Q.aRx = -1.2 - Math.cos(t * 6 + s) * 0.6;
             Q.lLx = Math.sin(t * 3 + s) * 0.3;
-          } else if (r.kind === 1) {
+          } else if (r.sand === 1) {
             Q.bob = -L * 0.6;
             Q.lLx = Q.lRx = -1.95;
             Q.tp = 0.5;

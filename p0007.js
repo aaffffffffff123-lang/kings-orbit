@@ -171,6 +171,7 @@
   };
   const C = {
     sac: rgb('#7a2433'),
+    nerve: rgb(NERVE),
     rim: rgb(RIM),
     base: rgb('#8a3150'),
     tip: rgb('#e4919a'),
@@ -269,6 +270,7 @@
       this.lastBreath = 0;
       this.gurgle = 4;
       this.drips = [];
+      this.eyeballs = []; // eyes pulled out whole by the beam
       this.pieces = [];
       this.mists = [];
       this.snapped = false;
@@ -413,11 +415,16 @@
       };
       const eye = cls => (x, z, r) => {
         const i = this.eyes.length;
+        let irisHex = IRIS[0]; // chosen in its old place in the draw below: every number after it stays where it was
         this.eyes.push({
           kind: 'eye',
           fixed: true,
+          // the beam cannot carry an eye off as it is; it pulls at it, and all but the great ones come out whole
+          anchored: true,
+          tug: true,
+          pull: 0,
           fixedNote: '땅에 박혀 있습니다.',
-          label: '',
+          label: cls === 'giant' ? '큰 눈 · Q로 잡아당기기' : '눈알 · Q로 뽑기',
           i,
           cls,
           c: CLS[cls],
@@ -436,7 +443,8 @@
           close: 0,
           blink: 1 + rng() * 12,
           dil: 0.4,
-          iris: rgb(IRIS[(rng() * IRIS.length) | 0]),
+          iris: rgb((irisHex = IRIS[(rng() * IRIS.length) | 0])),
+          irisHex,
           seed: rng() * 40,
           sacc: 0,
           offY: 0,
@@ -632,7 +640,7 @@
           return b;
         };
       this.store = {};
-      for (const g of ['midSphere', 'sphere', 'lowSphere', 'tinySphere', 'torus', 'lowTorus', 'taper', 'lowCone', 'lowDisc'])
+      for (const g of ['midSphere', 'sphere', 'lowSphere', 'tinySphere', 'torus', 'lowTorus', 'taper', 'lowCone', 'lowDisc', 'lowCyl'])
         this.store[g] = make(g);
       this.wet = make('lowDisc', { transparent: true, capacity: 128 });
       // settle positions once so the first frame's aim and collisions see the real shapes
@@ -732,6 +740,79 @@
       this.game.audio.squelch('slice', pan, gain);
       this.hurt(t.x, t.z, t.cls === 'giant' ? 0.75 : t.cls === 'medium' ? 0.3 : 0.06, t.cls !== 'small');
       this.drips.push({ t, until: this.time + (t.cls === 'small' ? 6 : 30), next: 0 });
+    }
+    /* ---------- an eye pulled out by the beam ---------- */
+    // what the tractor's cone may catch here: whatever any world offers, and the eyes still in the skin near the craft
+    grabCandidates() {
+      const out = super.grabCandidates(),
+        v = this.vehicle?.p;
+      for (const e of this.eyes) if (!e.burst && (!v || (Math.abs(e.x - v[0]) < 170 && Math.abs(e.z - v[2]) < 170))) out.push(e);
+      return out;
+    }
+    // Pulling at an eye: it comes up out of the skin on its stalk, and out whole when pulled far enough.
+    // The great ones are rooted too deep: pulled at, they tear open where they are.
+    tug(e, stretch, dt, ship) {
+      if (e.kind !== 'eye' || e.burst) return null;
+      const heavy = { small: 0.35, medium: 0.9, large: 2.2, giant: 5 }[e.cls] || 1;
+      e.pulled = true;
+      e.close = 0;
+      e.pull = Math.min(1.05, e.pull + (dt * (0.5 + Math.min(stretch, 30) * 0.12)) / heavy);
+      ship.shake = Math.max(ship.shake, 0.04 + Math.min(0.35, e.r * 0.03) * e.pull);
+      if (Math.random() < dt * (1.5 + e.r * 0.5)) this.hurt(e.x, e.z, Math.min(0.2, 0.01 + e.r * 0.012), e.r > 1.5);
+      if (e.pull < 1) return null;
+      if (e.cls === 'giant') {
+        this.burstEye(e);
+        return null;
+      }
+      return this.pluckEye(e);
+    }
+    untug(e) {
+      e.pulled = false;
+    }
+    pluckEye(e) {
+      const y = e.p[1],
+        r = e.r;
+      e.burst = true;
+      e.alive = false;
+      e.pulled = false;
+      e.plucked = true;
+      this.emit([e.x, y - r * 0.4, e.z], Math.min(22, 5 + r * 3), RAW, 7 + r * 2, 1.6);
+      this.addPool(e.x, e.z, r * 1.2);
+      const [pan, gain] = this.where(e.x, y, e.z);
+      this.game.audio.squelch('tear', pan, Math.min(1, 0.45 + gain * (0.5 + r * 0.1)));
+      this.hurt(e.x, e.z, e.cls === 'small' ? 0.06 : e.cls === 'medium' ? 0.18 : 0.45, r > 1);
+      if (r > 1) this.drips.push({ x: e.x, y: e.h, z: e.z, until: this.time + 18, next: 0 });
+      // the eye itself, whole, its stalk hanging from the back; it does not stop looking at the craft
+      const ball = this.prop(
+        [e.x, y + r * 0.3, e.z],
+        node => {
+          mesh(node, r > 2.5 ? 'sphere' : 'lowSphere', [0, 0, 0], [r * 2, r * 2, r * 2], e.irisHex, { type: 20, em: 1, detail: 0.95, seed: e.seed });
+          mesh(node, 'lowCyl', [0, 0, -r * 1.3], [r * 0.34, r * 1.7, r * 0.34], NERVE).r[0] = Math.PI / 2;
+          mesh(node, 'lowSphere', [0, 0, -r * 0.85], [r * 0.7, r * 0.7, r * 0.5], RAW);
+        },
+        r,
+      );
+      ball.eye = true;
+      ball.label = '뽑힌 눈알';
+      ball.rest = r * 0.9;
+      ball.velocity = [0, 3, 0];
+      ball.splat = b => this.splatEye(b);
+      this.eyeballs.push(ball);
+      return ball;
+    }
+    // an eye thrown hard: it bursts where it lands
+    splatEye(b) {
+      b.alive = false;
+      b.thrown = false;
+      b.node.visible = false;
+      const r = b.radius,
+        at = [b.p[0], b.p[1] - r * 0.5, b.p[2]];
+      this.emit(at, Math.min(26, 6 + r * 3), JELLY, 8 + r * 2, 1.6);
+      this.emit(at, Math.min(16, 4 + r * 2), RAW, 7 + r * 1.5, 1.4);
+      this.mark(b.p[0], b.p[2], r * 1.3 + 0.4, Math.random() * TAU);
+      const [pan, gain] = this.where(at[0], at[1], at[2]);
+      this.game.audio.squelch('pop', pan, Math.min(1, 0.3 + gain * (0.7 + r * 0.1)));
+      if (this.vehicle?.grab === b) this.vehicle.release();
     }
     /* ---------- weapons against it ---------- */
     groundHit(origin, dir, max) {
@@ -968,6 +1049,7 @@
       for (const g in this.store) this.store[g].count = 0;
       this.wet.count = 0;
       this.updateEyes(dt, ship, pulling);
+      this.updateEyeballs(dt, ship);
       this.updateTentacles(dt, ship, stress);
       this.drawPieces();
       this.drawPores();
@@ -1065,7 +1147,10 @@
           if (e.c.rim) this.inst(S[e.cls === 'giant' ? 'torus' : 'lowTorus'], e.x, gy + e.r * 0.05, e.z, 0, 0, 0, e.r * 1.5, e.r * 2.2, e.r * 1.5, C.rim, 0, 0, 0, 0);
           continue;
         }
-        e.p[1] = e.h + this.swell(e.x, e.z) + e.rise;
+        if (!e.pulled) e.pull = Math.max(0, e.pull - dt * 0.7);
+        const gy = e.h + this.swell(e.x, e.z),
+          lift = e.pull * e.r * 1.6;
+        e.p[1] = gy + e.rise + lift;
         const dx = ship[0] - e.x,
           dy = ship[1] - e.p[1],
           dz = ship[2] - e.z,
@@ -1092,12 +1177,33 @@
         e.open = M.damp(e.open, e.close > 0 ? 0 : squint, e.close > 0 ? 20 : 6, dt);
         e.dil = M.damp(e.dil, M.clamp(1 - dist / 240, 0.15, 0.9) + this.pain * 0.2, 2, dt);
         if (far > e.c.far * lod) continue;
-        const geo = far > 300 && e.c.geo === 'midSphere' ? 'sphere' : e.cls === 'small' && far > 90 ? 'tinySphere' : e.c.geo;
-        this.inst(S[geo], e.x, e.p[1], e.z, e.pitch, e.yaw, 0, e.r * 2, e.r * 2, e.r * 2, e.iris, e.open, 20, e.dil, e.seed);
+        const geo = far > 300 && e.c.geo === 'midSphere' ? 'sphere' : e.cls === 'small' && far > 90 ? 'tinySphere' : e.c.geo,
+          shiver = e.pulled ? Math.sin(this.time * 47 + e.i) * 0.03 * e.r * (0.4 + e.pull) : 0;
+        this.inst(S[geo], e.x + shiver, e.p[1], e.z - shiver, e.pitch, e.yaw, 0, e.r * 2, e.r * 2, e.r * 2, e.iris, e.open, 20, e.pulled ? 1 : e.dil, e.seed);
+        // pulled up out of the skin: the stalk it hangs on shows, thinning as it stretches
+        if (e.pull > 0.02) {
+          const top = e.p[1] - e.r * 0.7,
+            len = Math.max(0.05, top - gy),
+            thin = 1 - Math.min(0.5, e.pull * 0.45);
+          this.inst(S.lowCyl, e.x, gy + len / 2, e.z, 0, 0, 0, e.r * 0.42 * thin, len, e.r * 0.42 * thin, C.nerve, 0, 0, 0, 0);
+        }
         if (e.c.rim)
           this.inst(S[e.cls === 'giant' ? 'torus' : 'lowTorus'], e.x, e.p[1] - e.rise + e.r * 0.05, e.z, 0, 0, 0, e.r * 1.5, e.r * 2.2, e.r * 1.5, C.rim, 0, 0, 0, 0);
         else if (e.cls === 'medium' && far < 300)
           this.inst(S.lowDisc, e.x, e.p[1] - e.rise + 0.06, e.z, 0, 0, 0, e.r * 2.5, 0.12, e.r * 2.5, C.socket, 0, 0, 0, 0);
+      }
+    }
+    // the eyes pulled out: wherever they lie or hang, they turn to the craft
+    updateEyeballs(dt, ship) {
+      for (const b of this.eyeballs) {
+        if (!b.alive || b.thrown) continue;
+        const n = b.node,
+          dx = ship[0] - n.p[0],
+          dy = ship[1] - n.p[1],
+          dz = ship[2] - n.p[2],
+          k = Math.min(1, dt * 4);
+        n.r[1] += M.angle(n.r[1], Math.atan2(dx, dz)) * k;
+        n.r[0] += (-Math.atan2(dy, Math.hypot(dx, dz)) - n.r[0]) * k;
       }
     }
     updateTentacles(dt, ship, stress) {
