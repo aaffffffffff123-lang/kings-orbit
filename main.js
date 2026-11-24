@@ -114,7 +114,9 @@
       this.input.clear();
       this.setEnvironment();
       this.audio.metal();
-      this.ui.toast('조종 계통 연결', 'M · 성도　/　T · 선택한 행성으로 항해　/　좌클릭 유지 · 미사일', 4);
+      this.ui.toast('조종 계통 연결', this.input.mobile
+        ? '자동항해로 목적지에 접근하세요. 미사일을 누른 채 끌면 조준할 수 있습니다.'
+        : 'M · 성도　/　T · 선택한 행성으로 항해　/　좌클릭 유지 · 미사일', 4);
     }
     enterInterior(where = 'bridge') {
       if (this.busy) return;

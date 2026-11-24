@@ -1806,7 +1806,6 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.touchFire = false;
       this.mobile = matchMedia('(pointer: coarse)').matches;
       this.stick = [0, 0];
-      this.vertical = 0;
       this.touchUp = false;
       this.touchDown = false;
       this.touchBoost = false;
@@ -1815,10 +1814,11 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.drag = null;
       this.onPause = () => {};
       this.cleanup = [];
-      this.pointers = new Map();
+      this.contacts = new Map();
+      this.aimPointer = null;
       this.movePointer = null;
       this.stickOrigin = [0, 0];
-      this.holdPointers = new Map();
+      this.stickBoost = false;
       this.tapTouches = new Map();
       this.lockPending = false;
       this.wheel = 0;
@@ -1858,26 +1858,9 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         if (!this.enabled) return;
         if (e.pointerType === 'touch' || e.pointerType === 'pen') {
           e.preventDefault();
-          if (this.mobile && e.clientX < innerWidth * 0.5) {
-            // A second left thumb never steals the first thumb's movement origin.
-            if (this.movePointer !== null) return;
-            this.movePointer = e.pointerId;
-            this.stickOrigin = [e.clientX, e.clientY];
-            this.stick = [0, 0];
-            const pad = document.getElementById('joystick');
-            if (pad) {
-              pad.style.left = e.clientX + 'px';
-              pad.style.top = e.clientY + 'px';
-              pad.classList.add('active');
-            }
-            document.getElementById('moveHint')?.classList.add('quiet');
-          } else {
-            if (this.pointers.size) return;
-            this.pointers.set(e.pointerId, [e.clientX, e.clientY]);
-          }
-          try {
-            canvas.setPointerCapture(e.pointerId);
-          } catch {}
+          const move = this.mobile && e.clientX < innerWidth / 2;
+          if (move && this.movePointer !== null) return;
+          this.beginContact(e, move ? 'move' : 'aim');
         }
       });
       // The mouse buttons are read from mousedown/mouseup: a pointerdown comes only for the first button held,
@@ -1926,8 +1909,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         { passive: false },
       );
       const release = e => {
-        if (e.pointerId === this.movePointer) this.releaseStick();
-        this.pointers.delete(e.pointerId);
+        this.finishContact(e);
         // the mouse buttons are let go in mouseup; a cancelled mouse pointer lets go of both
         if (e.pointerType !== 'touch' && e.pointerType !== 'pen' && e.type === 'pointercancel') {
           this.mouseFire = false;
@@ -1938,22 +1920,15 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       };
       this.on(window, 'pointerup', release);
       this.on(window, 'pointercancel', release);
-      this.on(canvas, 'lostpointercapture', release);
+      this.on(document, 'lostpointercapture', release);
       this.on(window, 'pointermove', e => {
         if (!this.enabled) return;
-        if (e.pointerType === 'touch' || e.pointerType === 'pen') {
-          if (e.pointerId === this.movePointer) {
-            this.moveStick(e);
-            return;
-          }
-          const p = this.pointers.get(e.pointerId);
-          if (p) {
-            this.dx += (e.clientX - p[0]) * 0.0045 * this.sensitivity;
-            this.dy += (e.clientY - p[1]) * 0.0045 * this.sensitivity;
-            this.pointers.set(e.pointerId, [e.clientX, e.clientY]);
-          }
+        const contact = this.contacts.get(e.pointerId);
+        if (contact) {
+          this.moveContact(e, contact);
           return;
         }
+        if (e.pointerType === 'touch' || e.pointerType === 'pen') return;
         if (document.pointerLockElement === canvas) {
           if (e.timeStamp < this.lockSettle) return;
           // A locked mouse now and then reports one wild jump of hundreds of pixels among ordinary moves (more often
@@ -2030,6 +2005,74 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         this.lockPending = false;
       }
     }
+    beginContact(e, role, field = null, onRelease = null) {
+      const el = e.currentTarget;
+      if (el !== this.canvas && [...this.contacts.values()].some(c => c.el === el)) return;
+      // With a stick already down, a second flight control adds thrust and can steer the view.
+      if (role === 'move' && this.movePointer !== null) role = 'aim';
+      const contact = { el, role, field, onRelease, x: e.clientX, y: e.clientY, dragged: false };
+      this.contacts.set(e.pointerId, contact);
+      if (role === 'move' && this.movePointer === null) {
+        this.movePointer = e.pointerId;
+        this.stickOrigin = [e.clientX, e.clientY];
+        const pad = document.getElementById('joystick');
+        pad.style.left = e.clientX + 'px';
+        pad.style.top = e.clientY + 'px';
+        pad.classList.add('active');
+        document.getElementById('moveHint').classList.add('quiet');
+      }
+      if (field) {
+        this[field] = true;
+        if (el.dataset.action === 'beam') this.pressed.add('CutterTap');
+        el.setAttribute('aria-pressed', 'true');
+        this.syncFire();
+      }
+      if (el !== this.canvas) el.classList.add('held');
+      try { el.setPointerCapture(e.pointerId); } catch {}
+    }
+    moveContact(e, contact) {
+      if (contact.role === 'move') {
+        if (e.pointerId === this.movePointer) this.moveStick(e);
+        return;
+      }
+      const dx = e.clientX - contact.x, dy = e.clientY - contact.y;
+      if (!dx && !dy) return;
+      if (!contact.dragged) {
+        // Ignore tap jitter. A deliberate drag can take over from a resting thumb.
+        if (Math.hypot(dx, dy) < 3) return;
+        contact.dragged = true;
+        if (contact.role === 'aim') this.aimPointer = e.pointerId;
+      }
+      contact.x = e.clientX;
+      contact.y = e.clientY;
+      if (contact.role === 'distance') {
+        this.wheel -= dy / 10;
+        return;
+      }
+      if (this.aimPointer === null) this.aimPointer = e.pointerId;
+      if (this.aimPointer === e.pointerId) {
+        this.dx += dx * 0.0045 * this.sensitivity;
+        this.dy += dy * 0.0045 * this.sensitivity;
+      }
+    }
+    finishContact(e) {
+      const contact = this.contacts.get(e.pointerId);
+      if (!contact) return;
+      const completed = e.type === 'pointerup' && this.enabled;
+      if (completed) this.moveContact(e, contact);
+      this.contacts.delete(e.pointerId);
+      if (this.aimPointer === e.pointerId) this.aimPointer = null;
+      if (this.movePointer === e.pointerId) this.releaseStick();
+      if (contact.field) {
+        this[contact.field] = false;
+        if (!completed && contact.field === 'touchFire') this.pressed.delete('CutterTap');
+        contact.el.setAttribute('aria-pressed', 'false');
+        this.syncFire();
+      }
+      if (contact.el !== this.canvas) contact.el.classList.remove('held');
+      if (completed && contact.onRelease && !contact.el.classList.contains('hidden'))
+        this.pressed.add(contact.onRelease);
+    }
     moveStick(e) {
       const pad = document.getElementById('joystick'),
         knob = document.getElementById('stickKnob');
@@ -2037,6 +2080,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       let x = (e.clientX - this.stickOrigin[0]) / radius,
         y = (e.clientY - this.stickOrigin[1]) / radius;
       const length = Math.hypot(x, y);
+      this.stickBoost = length > (this.stickBoost ? 1.35 : 1.7);
       if (length > 1) {
         x /= length;
         y /= length;
@@ -2048,6 +2092,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       if (knob) knob.style.transform = `translate(${x * radius}px,${y * radius}px)`;
     }
     releaseStick() {
+      this.stickBoost = false;
       this.movePointer = null;
       this.stick = [0, 0];
       document.getElementById('joystick')?.classList.remove('active');
@@ -2057,6 +2102,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     }
     bindTap(id, action) {
       const button = document.getElementById(id);
+      if (!button) return;
       const available = () => this.enabled && !button.classList.contains('hidden');
       // Native clicks cover mouse, pen and keyboard. On touch, finish the tap ourselves:
       // a second thumb may not generate a click, and a late click can land on the dialog just opened.
@@ -2083,43 +2129,29 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     }
     bindTouch() {
       this.on(document.getElementById('hud'), 'contextmenu', e => e.preventDefault());
-      const hold = (id, field) => {
-        const b = document.getElementById(id);
-        this.on(b, 'pointerdown', e => {
-          if (!this.enabled || b.classList.contains('hidden')) return;
-          if (e.pointerType === 'mouse' && e.button !== 0) return;
+      const bind = (id, role, field = null, key = null) => {
+        const button = document.getElementById(id);
+        if (!button) return;
+        this.on(button, 'pointerdown', e => {
+          if (!this.enabled || button.classList.contains('hidden') || e.button !== 0) return;
           e.preventDefault();
-          if (this.holdPointers.has(id)) return;
-          this.holdPointers.set(id, e.pointerId);
-          this[field] = true;
-          if (field === 'touchFire') this.pressed.add('Fire');
-          this.syncFire();
-          b.classList.add('held');
-          b.setAttribute('aria-pressed', 'true');
-          try {
-            b.setPointerCapture(e.pointerId);
-          } catch {}
+          const throwing = id === 'touchFire' && button.dataset.action === 'throw';
+          this.beginContact(e, role, throwing ? null : field, throwing ? 'Throw' : key);
         });
-        const release = e => {
-          if (this.holdPointers.get(id) !== e.pointerId) return;
-          this.holdPointers.delete(id);
-          this[field] = false;
-          this.syncFire();
-          b.classList.remove('held');
-          b.setAttribute('aria-pressed', 'false');
-        };
-        this.on(window, 'pointerup', release);
-        this.on(window, 'pointercancel', release);
-        this.on(b, 'lostpointercapture', release);
+        // A keyboard or assistive click has no corresponding pointer release.
+        this.on(button, 'click', e => {
+          if (!this.enabled || e.detail !== 0 || button.classList.contains('hidden')) return;
+          if (key) this.pressed.add(key);
+          else if (button.dataset.action === 'throw') this.pressed.add('Throw');
+        });
       };
-      hold('touchFire', 'touchFire');
-      hold('touchUp', 'touchUp');
-      hold('touchDown', 'touchDown');
-      hold('touchBoost', 'touchBoost');
-      for (const [id, key] of [
-        ['touchGrab', 'KeyQ'],
-        ['touchPulse', 'KeyF'],
-      ]) this.bindTap(id, () => this.pressed.add(key));
+      bind('touchFire', 'aim', 'touchFire');
+      bind('touchGrab', 'aim', null, 'KeyQ');
+      bind('touchPulse', 'aim', null, 'KeyF');
+      bind('touchRange', 'distance');
+      bind('touchUp', 'move', 'touchUp');
+      bind('touchDown', 'move', 'touchDown');
+      bind('touchBoost', 'move', 'touchBoost');
     }
     axes() {
       return {
@@ -2131,7 +2163,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         y:
           (this.keys.has('Space') || this.touchUp ? 1 : 0) -
           (this.keys.has('KeyC') || this.keys.has('ControlLeft') || this.touchDown ? 1 : 0),
-        boost: this.keys.has('ShiftLeft') || this.keys.has('ShiftRight') || this.touchBoost,
+        boost: this.keys.has('ShiftLeft') || this.keys.has('ShiftRight') || this.touchBoost || this.stickBoost,
       };
     }
     take(key) {
@@ -2153,13 +2185,14 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.pressed.clear();
     }
     clear() {
-      const captured = [...this.pointers.keys(), this.movePointer];
+      const contacts = [...this.contacts];
+      this.contacts.clear();
+      this.aimPointer = null;
       this.keys.clear();
       this.pressed.clear();
       this.mouseFire = false;
       this.touchFire = false;
       this.fire = false;
-      this.vertical = 0;
       this.touchUp = false;
       this.touchDown = false;
       this.touchBoost = false;
@@ -2167,22 +2200,10 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.wheel = 0;
       this.drag = null;
       this.rightDown = null;
-      this.pointers.clear();
       this.releaseStick();
-      for (const id of captured)
-        if (id !== null) {
-          try {
-            if (this.canvas.hasPointerCapture(id)) this.canvas.releasePointerCapture(id);
-          } catch {}
-        }
-      const holds = [...this.holdPointers];
-      this.holdPointers.clear();
-      for (const [id, pointer] of holds) {
-        const b = document.getElementById(id);
-        b.setAttribute('aria-pressed', 'false');
-        try {
-          if (b.hasPointerCapture(pointer)) b.releasePointerCapture(pointer);
-        } catch {}
+      for (const [id, { el, field }] of contacts) {
+        if (field) el.setAttribute('aria-pressed', 'false');
+        try { if (el.hasPointerCapture(id)) el.releasePointerCapture(id); } catch {}
       }
       this.tapTouches.clear();
       document.querySelectorAll('#hud .held').forEach(b => b.classList.remove('held'));
@@ -4664,6 +4685,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       });
       input.bindTap('spaceAction', () => game.space.toggleAuto());
       input.bindTap('navAction', () => this.navigation());
+      input.bindTap('stopAction', () => input.pressed.add('KeyX'));
       input.bindTap('warpAction', () => game.space.toggleWarp());
       input.bindTap('returnAction', () => game.returnHome());
       game.input.bindTouch();
@@ -4725,7 +4747,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       $('touchFire').classList.toggle('hidden', mode === 'interior');
       $('touchGrab').classList.toggle('hidden', mode === 'interior');
       $('touchFire').innerHTML =
-        mode === 'space' ? '미사일<small>길게 눌러 발사</small>' : '광선<small>길게 누르기</small>';
+        mode === 'space' ? '미사일<small>끌어 조준</small>' : '광선<small>끌어 조준</small>';
       $('touchGrab').textContent = mode === 'space' ? '대상 선택' : '견인';
       $('navAction').classList.toggle('hidden', mode === 'planet');
       $('warpAction').classList.toggle('hidden', mode !== 'space');
@@ -4733,6 +4755,11 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       $('touchPulse').classList.toggle('hidden', mode !== 'planet');
       $('touchUp').classList.toggle('hidden', mode === 'interior');
       $('touchDown').classList.toggle('hidden', mode === 'interior');
+      $('stopAction')?.classList.toggle('hidden', mode !== 'space');
+      $('touchRange')?.classList.add('hidden');
+      $('touchFire').dataset.action = mode === 'planet' ? 'beam' : 'missile';
+      $('touchFire').classList.remove('arming');
+      this.cache.tractorState = null;
       $('worldLabels').innerHTML = '';
       this.setSignal(null);
       $('context').textContent = '';
@@ -4798,10 +4825,13 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     }
     // Texts name the keyboard's keys; on a touch screen they name the buttons, and on a PC the right click.
     keys(text) {
-      if (!text || this.cache.mode !== 'planet') return text;
+      if (!text) return text;
+      if (this.cache.mode === 'space' && this.game.input.mobile) return text
+        .replace(/M · 성도/g, '성도').replace(/J 또는 도약/g, '도약').replace(/S로 물러나/g, '뒤로 물러나');
+      if (this.cache.mode !== 'planet') return text;
       if (document.body.classList.contains('touch'))
         return text
-          .replace('좌클릭 광선 · Q 견인 · F 충격파 · R 언제든 귀환', '광선 · 견인 · 충격파 버튼 · 오른쪽 위에서 언제든 귀환')
+          .replace('좌클릭 광선 · Q 견인 · F 충격파 · R 언제든 귀환', '광선을 누른 채 끌어 조준하세요.')
           .replace(/Q로 /g, '견인 버튼으로 ')
           .replace(/ · Q 견인/g, ' · 견인 버튼')
           .replace(/Q · /g, '견인 버튼 · ')
@@ -4852,8 +4882,27 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       $('touchBoost').setAttribute('aria-pressed', String(!!boost));
       $('touchBoost').setAttribute(
         'aria-label',
-        g.mode === 'interior' ? '누르는 동안 빠르게 걷기' : '누르는 동안 가속',
+        g.mode === 'interior' ? '누른 채 끌어 빠르게 걷기' : '누른 채 끌어 가속 이동',
       );
+      if (g.mode === 'planet' && g.input.mobile) {
+        const vehicle = g.planet.vehicle, target = vehicle.grab;
+        const state = !target ? 'free' : target.kind === 'ruler' || target.tug || vehicle.anchored(target) ? 'fixed' : 'carry';
+        if (state !== this.cache.tractorState) {
+          this.cache.tractorState = state;
+          const fire = $('touchFire');
+          fire.classList.toggle('hidden', state === 'fixed');
+          fire.dataset.action = state === 'carry' ? 'throw' : 'beam';
+          fire.firstChild.textContent = state === 'carry' ? '던지기' : '광선';
+          fire.querySelector('small').textContent = state === 'carry' ? '떼면 투척' : '끌어 조준';
+          $('touchGrab').textContent = target ? '놓기' : '견인';
+          $('touchRange')?.classList.toggle('hidden', state !== 'carry');
+        }
+        if (state === 'carry' && $('touchRange')) {
+          const label = Math.round(vehicle.holdDist) + ' m';
+          const range = $('touchRange').querySelector('small');
+          if (range.textContent !== label) range.textContent = label;
+        }
+      }
       if (g.mode === 'space') {
         const s = g.space,
           def = s.target;
@@ -4876,9 +4925,11 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
               ? '상륙 가능'
               : '궤도 탐사 / 포격';
         $('spaceAction').classList.toggle('hidden', false);
-        const prefix = g.input.mobile ? '' : 'T · ';
-        $('spaceAction').textContent =
-          prefix + (s.auto ? '자동항해 해제' : def.name + (g.universe.navMode === 'sky' ? ' 상공으로' : ' 궤도로'));
+        const destination = def.name + (g.universe.navMode === 'sky' ? ' 상공으로' : ' 궤도로');
+        $('spaceAction').textContent = g.input.mobile
+          ? (s.auto ? '항해 해제' : '자동항해')
+          : 'T · ' + (s.auto ? '자동항해 해제' : destination);
+        $('spaceAction').title = s.auto ? '자동항해 해제' : destination + ' 자동항해';
         $('warpAction').textContent = (g.input.mobile ? '' : 'J · ') + (s.warp ? '도약 해제' : '도약');
         const armed = s.weapons.charge > 0;
         $('touchFire').classList.toggle('arming', armed);
@@ -4887,7 +4938,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
           ? '탄두 장전 중'
           : s.weapons.cooldown > 0
             ? '재장전'
-            : '길게 눌러 발사';
+            : '끌어 조준';
       }
     }
     async transition(title, subtitle, fn, white = false) {
@@ -5003,8 +5054,22 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       };
     }
     help() {
+      const touch = this.game.input.mobile;
+      const controls = touch ? `<div class="controlsTable">
+          <div>왼쪽 화면</div><div>누른 자리에서 끌어 이동합니다. 조이스틱 원 바깥으로 더 밀면 빠르게 움직입니다.</div>
+          <div>가속 · 상승 · 하강</div><div>누르는 동안 작동합니다. 같은 손가락을 끌면 이동 방향도 바뀝니다.</div>
+          <div>오른쪽 화면</div><div>끌어 시선을 돌립니다.</div>
+          <div>광선 · 미사일</div><div>누른 채 끌어 조준합니다. 광선은 누르는 동안 나가고, 미사일은 사거리 안의 행성을 조준한 채 장전을 마치면 발사됩니다.</div>
+          <div>견인 · 대상 선택</div><div>탭하면 현재 조준점에 적용합니다. 누른 채 조준하고 손을 떼도 됩니다.</div>
+          <div>견인 중</div><div>움직일 수 있는 물체는 거리 버튼을 위로 끌어 밀고 아래로 끌어 당깁니다. 던지기를 끌어 조준한 뒤 떼면 날아갑니다. 살며시 내려놓으려면 놓기를 누르세요.</div>
+          <div>충격파</div><div>손을 떼면 주변에 충격파가 퍼집니다. 재충전에는 3초가 걸립니다.</div>
+          <div>자동항해 · 정지</div><div>자동항해 중 직접 방향을 바꾸면 수동 비행으로 돌아옵니다. 정지는 관성과 도약까지 멈춥니다.</div>
+        </div>` : `<div class="controlsTable"><div>W A S D</div><div>걷기 / 비행 · 마우스로 시선<br>파괴정은 바라보는 곳과 상관없이 수평으로 움직입니다.</div><div>화면 클릭</div><div>마우스 고정. 안 되면 우클릭 드래그.<br>방향키 좌우로도 회전할 수 있습니다.</div><div>E</div><div>조종석 · 전시 기록 · 파괴정 탑승</div><div>Space / C</div><div>상승 / 하강 · Shift와 함께 누르면 급강하<br>땅에 세게 내리꽂으면 충격파가 터집니다.</div><div>Shift 유지</div><div>누르는 동안 빠르게 걷기 / 가속·충돌</div><div>M / T / J / X</div><div>성도 / 자동항해 / 도약 / 추진 정지</div><div>좌클릭 길게</div><div>모선: 미사일 장전·발사 / 파괴정: 절단 광선<br>견인으로 붙잡고 있을 때 좌클릭은 세게 던지기입니다.</div><div>우클릭 · Q</div><div>모선: 바라보는 행성 선택(Q) / 파괴정: 견인<br>조준점 둘레 원뿔 안에 든 대상이 붙잡힙니다. 다시 누르면 천천히 내려놓습니다. 붙잡은 동안 마우스 휠로 거리 조절.</div><div>F</div><div>근접 충격파 · 재충전 3초</div><div>R</div><div>행성에서 언제든 모선으로 귀환</div><div>Esc / P</div><div>메뉴 / 일시정지</div></div>`;
       this.open(
-        `<div class="eyebrow">FLIGHT MANUAL / 01</div><h2>가고 싶은 곳으로.</h2><div class="controlsTable"><div>W A S D</div><div>걷기 / 비행 · 마우스로 시선<br>파괴정은 바라보는 곳과 상관없이 수평으로 움직입니다.</div><div>화면 클릭</div><div>마우스 고정. 안 되면 우클릭 드래그.<br>방향키 좌우로도 회전할 수 있습니다.</div><div>E</div><div>조종석 · 전시 기록 · 파괴정 탑승</div><div>Space / C</div><div>상승 / 하강 · Shift와 함께 누르면 급강하<br>땅에 세게 내리꽂으면 충격파가 터집니다.</div><div>Shift 유지</div><div>누르는 동안 빠르게 걷기 / 가속·충돌</div><div>M / T / J / X</div><div>성도 / 자동항해 / 도약 / 추진 정지</div><div>좌클릭 길게</div><div>모선: 미사일 장전·발사 / 파괴정: 절단 광선<br>견인으로 붙잡고 있을 때 좌클릭은 세게 던지기입니다.</div><div>우클릭 · Q</div><div>모선: 바라보는 행성 선택(Q) / 파괴정: 견인<br>조준점 둘레 원뿔 안에 든 대상이 붙잡힙니다. 다시 누르면 천천히 내려놓습니다. 붙잡은 동안 마우스 휠로 거리 조절.</div><div>F</div><div>근접 충격파 · 재충전 3초</div><div>R</div><div>행성에서 언제든 모선으로 귀환</div><div>Esc / P</div><div>메뉴 / 일시정지</div></div><p class="text">처음에는 조종석에 앉아 <b>T</b>로 에덴에 접근하세요. 행성이 하늘과 구름으로 가득 보일 때까지 접근합니다. 상공에 정박하면 <b>E</b>로 일어나 뒤쪽 격납고에서 파괴정으로 갈아탑니다.</p><p class="text">행성에서는 눈앞의 건물을 부수거나 밀어버리세요. 왕좌를 무력화한 뒤 왕의 머리를 바라보고 <b>우클릭</b>(Q)으로 붙잡아 <b>S</b>로 뒤로 물러나면 회수할 수 있습니다. 왕을 잡지 않고 떠나도 됩니다.</p><p class="text">모선의 <b>M · 성도</b>에서 64개 항성계의 512개 행성을 찾아갈 수 있습니다. <b>포격 궤도로 항해</b>한 뒤 행성을 바라보고 미사일 버튼을 길게 누르세요. <b>5회 명중하면 행성이 소멸</b>하며, 아직 얻지 않은 왕의 머리는 회수할 수 없습니다. 이미 전시한 머리는 남습니다. 상륙할 수 있는 행성은 성도 상단의 바로가기에 모여 있습니다.</p><div class="finePrint">터치: 왼쪽 빈 화면 어디서든 누른 곳을 기준으로 이동 / 오른쪽 빈 화면 드래그로 시선.<br>견인 버튼: 붙잡기 / 다시 누르면 내려놓기. 붙잡은 채 광선 버튼을 누르면 던집니다.<br>오른쪽 가속 버튼은 누르는 동안만 작동합니다. 손을 떼면 가속 입력이 해제되며, 우주에서는 관성으로 잠시 더 흘러갑니다.<br>기능을 막는 연료·목숨·제한시간은 없습니다. 우주에서는 엔진을 멈추면 고요해집니다.</div><div class="panelActions"><button id="closeHelp" class="primary">알겠습니다 ↗</button></div>`,
+        `<div class="eyebrow">FLIGHT MANUAL / 01</div><h2>가고 싶은 곳으로.</h2>${controls}
+        <p class="text">처음에는 조종석에 앉아 <b>${touch ? '자동항해' : 'T'}</b>로 에덴에 접근하세요. 행성이 하늘과 구름으로 가득 보일 때까지 접근합니다. 상공에 정박하면 <b>${touch ? '일어나기' : 'E'}</b>를 눌러 뒤쪽 격납고에서 파괴정으로 갈아탑니다.</p><p class="text">행성에서는 눈앞의 건물을 부수거나 밀어버리세요. 왕좌를 무력화한 뒤 왕의 머리를 바라보고 <b>${touch ? '견인' : '우클릭(Q)'}</b>으로 붙잡아 <b>${touch ? '왼쪽 화면을 아래로 끌어' : 'S를 눌러'}</b> 뒤로 물러나면 회수할 수 있습니다. 왕을 잡지 않고 떠나도 됩니다.</p><p class="text">모선의 <b>${touch ? '성도' : 'M · 성도'}</b>에서 64개 항성계의 512개 행성을 찾아갈 수 있습니다. <b>포격 궤도로 항해</b>한 뒤 행성을 바라보고 미사일 버튼을 길게 누르세요. <b>5회 명중하면 행성이 소멸</b>하며, 아직 얻지 않은 왕의 머리는 회수할 수 없습니다. 이미 전시한 머리는 남습니다. 상륙할 수 있는 행성은 성도 상단의 바로가기에 모여 있습니다.</p>
+        <div class="finePrint">기능을 막는 연료·목숨·제한시간은 없습니다. 우주에서는 엔진을 멈추면 고요해집니다.</div>
+        <div class="panelActions"><button id="closeHelp" class="primary">알겠습니다 ↗</button></div>`,
       );
       $('closeHelp').onclick = () => this.close();
     }
@@ -5314,7 +5379,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         )
         .join(
           '',
-        )}</div><div class="atlasFilter"><strong id="systemName"></strong><input id="atlasSearch" type="search" placeholder="행성 이름 / p0008" aria-label="행성 이름 또는 ID 검색"></div><div id="planetList" class="planetList"></div><div id="atlasDetail" class="atlasDetail"></div><div class="atlasActions"><button class="primary" id="atlasOrbit">포격 궤도로 항해 ↗</button><button class="secondary" id="atlasSky">창공까지 접근</button><button class="ghost" id="atlasDrift">아무 곳으로</button></div><div class="finePrint">${u.planets.filter(p => u.surfaceReady(p.id)).length}개 행성 상륙 가능 · 나머지는 궤도 탐사 / 포격 가능. 표면은 행성별로 추가됩니다.<br>J · 도약 항해　T · 선택한 항로로 자동항해　X · 정지</div>`,
+        )}</div><div class="atlasFilter"><strong id="systemName"></strong><input id="atlasSearch" type="search" placeholder="행성 이름 / p0008" aria-label="행성 이름 또는 ID 검색"></div><div id="planetList" class="planetList"></div><div id="atlasDetail" class="atlasDetail"></div><div class="atlasActions"><button class="primary" id="atlasOrbit">포격 궤도로 항해 ↗</button><button class="secondary" id="atlasSky">창공까지 접근</button><button class="ghost" id="atlasDrift">아무 곳으로</button></div><div class="finePrint">${u.planets.filter(p => u.surfaceReady(p.id)).length}개 행성 상륙 가능 · 나머지는 궤도 탐사 / 포격 가능. 표면은 행성별로 추가됩니다.<br>${this.game.input.mobile ? '조종석의 자동항해 버튼으로 선택한 항로를 따라갑니다.' : 'J · 도약 항해　T · 선택한 항로로 자동항해　X · 정지'}</div>`,
     );
     $('panel').classList.add('atlasPanel');
     const chart = $('galaxyChart'),
@@ -6657,6 +6722,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
           this.game.ui.navigation();
           return;
         }
+        if (input.mobile && (dx || dy)) this.auto = false;
         if (input.take('KeyT')) this.toggleAuto();
         if (input.take('KeyJ')) this.toggleWarp();
         if (input.take('KeyQ')) {
@@ -7326,13 +7392,14 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       if (this.grab) {
         const e = this.grab;
         if (wheel) this.holdDist = M.clamp(this.holdDist + wheel * 2, 10, 40);
-        if (firePress && e.kind !== 'ruler' && !this.anchored(e)) this.throwHeld(f);
+        if ((firePress || input.take('Throw')) && e.kind !== 'ruler' && !this.anchored(e)) this.throwHeld(f);
         else if (tractorPress) this.release(true);
       } else if (tractorPress) {
         this.tryGrab(f, aim);
         if (this.grab) aim = this.planet.raycast(this.p, f, 230);
       }
-      this.firing = input.fire && !this.game.busy && !this.grab && !this.holdFire;
+      const beamTap = input.take('CutterTap');
+      this.firing = (input.fire || beamTap) && !this.game.busy && !this.grab && !this.holdFire;
       if (this.firing) {
         this.planet.fire(this, aim, dt);
         this.kick = 0.017;
@@ -7395,8 +7462,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.planet.slammed?.(at, k, this);
     }
     hud(aim) {
-      const touch = this.touch,
-        grabKey = touch ? '견인 버튼' : '우클릭';
+      const touch = this.touch;
       let context = '',
         progress = -1;
       const e = this.grab;
@@ -7405,10 +7471,10 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
           context = '연결 고정 · 뒤로 물러나 당기기';
           progress = this.tension / 1.8;
         } else if (e.tug) context = '뽑아내는 중 · 뒤로 당기세요';
-        else if (this.anchored(e)) context = '잡아당기는 중 · ' + grabKey + ' 놓기';
-        else context = touch ? '광선 버튼 던지기 · 견인 버튼 내려놓기' : '좌클릭 던지기 · 우클릭 내려놓기';
+        else if (this.anchored(e)) context = touch ? '잡아당기는 중 · 놓기로 해제' : '잡아당기는 중 · 우클릭 놓기';
+        else context = touch ? '던지기를 끌어 조준 · 손을 떼면 투척' : '좌클릭 던지기 · 우클릭 내려놓기';
         if (e.kind === 'creature' && e.beg)
-          context = this.game.universe.cargoFull() ? '화물칸 가득 참 · ' + grabKey + '으로 내려놓기' : '240m 위로 올라가면 모선이 끌어올립니다';
+          context = this.game.universe.cargoFull() ? (touch ? '화물칸 가득 참 · 놓기를 눌러 내려놓기' : '화물칸 가득 참 · 우클릭으로 내려놓기') : '240m 위로 올라가면 모선이 끌어올립니다';
       } else {
         const t = this.pick?.entity || aim?.entity;
         if (t) {
