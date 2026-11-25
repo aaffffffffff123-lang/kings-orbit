@@ -91,8 +91,8 @@
       this.interior.yaw = 0;
       this.interior.pitch = 0;
       this.ui.toast('NØMAD에 돌아왔습니다.', this.input.mobile
-        ? '앞쪽 조종석에 다가가 앉기 버튼을 누르세요.'
-        : '앞쪽 조종석으로 걸어가 E · 마우스 고정이 안 되면 우클릭 드래그', 7);
+        ? '앉기를 누르면 모선을 조종합니다.'
+        : 'E로 조종석에 앉기 · 마우스 고정이 안 되면 우클릭 드래그', 7);
       this.input.requestLock();
       if (!this.save.available)
         setTimeout(
@@ -122,6 +122,7 @@
       if (this.busy) return;
       this.space.save();
       this.mode = 'interior';
+      this.currentInteract = null;
       this.interior.spawn(where);
       this.ui.mode('interior');
       this.input.clear();
@@ -406,7 +407,7 @@
     labels() {
       const root = document.getElementById('worldLabels');
       if (this.mode === 'planet' && this.planet?.labels) return this.planetLabels(root, this.planet.labels());
-      if (this.mode !== 'interior') {
+      if (this.mode !== 'interior' || this.interior.labPose) {
         if (root.childElementCount) root.innerHTML = '';
         return;
       }

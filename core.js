@@ -3611,7 +3611,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
           continue;
         }
         if (t.startsWith('hold-')) {
-          this.hold = t.slice(5).split('.').filter(Boolean).slice(0, 20);
+          this.hold = t.length > 5 ? t.slice(5).split('.').slice(0, 20).map(id => id === '_' ? '' : id) : [];
           continue;
         }
         if (t === 'freeing') {
@@ -3764,32 +3764,31 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     told(id) {
       return !!this.states.get(id)?.told;
     }
-    tellNames(fromId, count) {
-      const src = this.get(fromId),
-        out = [];
-      const rank = p =>
-        src ? (p.systemIndex === src.systemIndex ? 0 : 1) * 4096 + Math.abs(p.index - src.index) : p.index;
-      for (const p of this.planets.slice().sort((a, b) => rank(a) - rank(b))) {
-        if (out.length >= count) break;
-        if (p.id === fromId || this.named(p.id)) continue;
-        this.patch(p.id, { told: true });
-        out.push(p);
-      }
-      this.flush();
-      this.save.write('checkpoint');
-      return out;
+    knownResidentWorld(id) {
+      return this.inhabited(id) && (this.told(id) || this.scan(id) >= 4 ||
+        this.save.data.visited.includes(id) || this.save.data.planetStates[id]?.visited ||
+        this.hasTrophy(id) || this.hold.includes(id));
+    }
+    residentLeads(fromId) {
+      const src = this.get(fromId);
+      const rank = p => src ? (p.systemIndex === src.systemIndex ? 0 : 4096) + Math.abs(p.index - src.index) : p.index;
+      return this.planets.filter(p => p.id !== fromId && this.inhabited(p.id) &&
+        !this.knownResidentWorld(p.id) && !this.destroyed(p.id) && this.survivors(p.id) > 0
+      ).sort((a, b) => rank(a) - rank(b));
     }
     experiment(depth) {
-      if (!this.hold.length) return null;
-      const from = this.hold.shift();
-      const count = depth === 0 ? 1 : depth === 1 ? 3 : 5;
-      const opened = this.tellNames(from, count);
+      if (!this.hold.length || ![0, 1, 2].includes(depth)) return null;
+      const from = this.hold[0];
+      const opened = this.residentLeads(from).slice(0, [1, 3, 5][depth]);
+      if (!opened.length) return null;
+      for (const p of opened) this.patch(p.id, { told: true });
+      this.hold.shift();
       const died = depth === 2;
       if (died) this.lost++;
       else this.hold.push(from);
       this.flush();
       this.save.write('checkpoint');
-      return { from, opened, died, count };
+      return { from, opened, died };
     }
     dissected(id) {
       return this.states.get(id)?.relic === 2;
@@ -3926,7 +3925,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       const destroyed = [
         'focus-' + this.selectedId,
         'nav-' + this.navMode,
-        'hold-' + this.hold.join('.'),
+        'hold-' + this.hold.map(id => id || '_').join('.'),
         'lost-' + this.lost,
         'freed-' + this.freed,
       ]
@@ -3952,7 +3951,8 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       const sc = this.scan(id) < 5 ? ` · 스캔 ${this.scan(id)}/5` : ' · 이름 확인됨';
       if (this.destroyed(id))
         return (this.hasTrophy(id) ? '행성 소멸 · 왕관 보관 중' : '행성 소멸 · 왕 회수 불가') + sc;
-      return (this.surfaceReady(id) ? '상륙 가능' : '고체 지표 없음') + sc;
+      const status = this.knownResidentWorld(id) ? '주민 행성' : this.surfaceReady(id) ? '상륙 가능' : '고체 지표 없음';
+      return status + sc;
     }
     countDestroyed() {
       let n = 0;
@@ -4981,6 +4981,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     }
     close() {
       if (this.game.cloudUI?.busy) return;
+      if ($('labX')) this.game.interior.clearLabSubject();
       this.game.paused = false;
       this.game.input.enabled = this.game.started;
       this.game.input.clear();
@@ -4994,7 +4995,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       const g = this.game,
         s = g.settings;
       this.open(
-        `<div class="eyebrow">NØMAD / SHIP SYSTEMS</div><h2>${g.started ? '잠시 정박' : '항해 설정'}</h2>${g.cloudUI?.menuRow() || ''}<div class="panelRow"><label for="quality">화면 품질</label><select id="quality"><option value="low">저사양</option><option value="balanced">균형</option><option value="high">높음</option></select></div><div class="panelRow"><label for="volume">소리</label><input id="volume" type="range" min="0" max="1" step=".05" value="${s.volume}"></div><div class="panelRow"><label for="sensitivity">시선 감도</label><input id="sensitivity" type="range" min=".3" max="2" step=".05" value="${s.sensitivity}"></div><div class="panelRow"><label for="shake">충돌 화면 흔들림</label><input id="shake" type="range" min="0" max="1" step=".05" value="${s.shake}"></div><div class="panelRow"><label for="touchSetting">화면 터치 조작 표시</label><input id="touchSetting" type="checkbox" ${g.input.mobile ? 'checked' : ''}></div><div class="panelActions"><button class="primary" id="resume">${g.started ? '항해 계속' : '닫기'} ↗</button><button class="secondary" id="helpBtn">조작 안내</button></div><div class="panelActions slim"><button class="secondary" id="exportSave">저장 내보내기</button><button class="secondary" id="importSave">저장 불러오기</button><input id="importInput" type="file" accept=".json,application/json"></div><div class="panelActions slim"><button class="ghost danger" id="resetBtn">진행 기록 초기화</button></div><div class="finePrint">자동 저장: 왕의 머리 회수 · 행성 귀환 · 주기적 항해 저장<br>로컬 파일·시크릿 모드에서는 저장이 제한될 수 있습니다. 저장 파일을 따로 보관할 수 있습니다.<br>FIRST CONTACTS ${K.BUILD || ''} · 상륙 가능한 행성 ${Object.keys(K.SurfaceMeta || {}).filter(id => !K.SurfaceMeta[id].living).length}개 / 512개 세계</div>`,
+        `<div class="eyebrow">NØMAD / SHIP SYSTEMS</div><h2>${g.started ? '잠시 정박' : '항해 설정'}</h2>${g.cloudUI?.menuRow() || ''}<div class="panelRow"><label for="quality">화면 품질</label><select id="quality"><option value="low">저사양</option><option value="balanced">균형</option><option value="high">높음</option></select></div><div class="panelRow"><label for="volume">소리</label><input id="volume" type="range" min="0" max="1" step=".05" value="${s.volume}"></div><div class="panelRow"><label for="sensitivity">시선 감도</label><input id="sensitivity" type="range" min=".3" max="2" step=".05" value="${s.sensitivity}"></div><div class="panelRow"><label for="shake">충돌 화면 흔들림</label><input id="shake" type="range" min="0" max="1" step=".05" value="${s.shake}"></div><div class="panelRow"><label for="touchSetting">화면 터치 조작 표시</label><input id="touchSetting" type="checkbox" ${g.input.mobile ? 'checked' : ''}></div><div class="panelActions"><button class="primary" id="resume">${g.started ? '항해 계속' : '닫기'} ↗</button><button class="secondary" id="helpBtn">조작 안내</button></div><div class="panelActions slim"><button class="secondary" id="exportSave">저장 내보내기</button><button class="secondary" id="importSave">저장 불러오기</button><input id="importInput" type="file" accept=".json,application/json"></div><div class="panelActions slim"><button class="ghost danger" id="resetBtn">진행 기록 초기화</button></div><div class="finePrint">자동 저장: 왕의 머리 회수 · 행성 귀환 · 주기적 항해 저장<br>로컬 파일·시크릿 모드에서는 저장이 제한될 수 있습니다. 저장 파일을 따로 보관할 수 있습니다.<br>FIRST CONTACTS ${K.BUILD || ''} · 상륙 가능한 행성 ${g.universe.planets.filter(p => g.universe.surfaceReady(p.id) && !g.universe.destroyed(p.id)).length}개 / 512개 세계</div>`,
       );
       $('quality').value = s.quality;
       $('quality').onchange = e => {
@@ -5067,7 +5068,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         </div>` : `<div class="controlsTable"><div>W A S D</div><div>걷기 / 비행 · 마우스로 시선<br>파괴정은 바라보는 곳과 상관없이 수평으로 움직입니다.</div><div>화면 클릭</div><div>마우스 고정. 안 되면 우클릭 드래그.<br>방향키 좌우로도 회전할 수 있습니다.</div><div>E</div><div>조종석 · 전시 기록 · 파괴정 탑승</div><div>Space / C</div><div>상승 / 하강 · Shift와 함께 누르면 급강하<br>땅에 세게 내리꽂으면 충격파가 터집니다.</div><div>Shift 유지</div><div>누르는 동안 빠르게 걷기 / 가속·충돌</div><div>M / T / J / X</div><div>성도 / 자동항해 / 도약 / 추진 정지</div><div>좌클릭 길게</div><div>모선: 미사일 장전·발사 / 파괴정: 절단 광선<br>견인으로 붙잡고 있을 때 좌클릭은 세게 던지기입니다.</div><div>우클릭 · Q</div><div>모선: 바라보는 행성 선택(Q) / 파괴정: 견인<br>조준점 둘레 원뿔 안에 든 대상이 붙잡힙니다. 다시 누르면 천천히 내려놓습니다. 붙잡은 동안 마우스 휠로 거리 조절.</div><div>F</div><div>근접 충격파 · 재충전 3초</div><div>R</div><div>행성에서 언제든 모선으로 귀환</div><div>Esc / P</div><div>메뉴 / 일시정지</div></div>`;
       this.open(
         `<div class="eyebrow">FLIGHT MANUAL / 01</div><h2>가고 싶은 곳으로.</h2>${controls}
-        <p class="text">처음에는 조종석에 앉아 <b>${touch ? '자동항해' : 'T'}</b>로 에덴에 접근하세요. 행성이 하늘과 구름으로 가득 보일 때까지 접근합니다. 상공에 정박하면 <b>${touch ? '일어나기' : 'E'}</b>를 눌러 뒤쪽 격납고에서 파괴정으로 갈아탑니다.</p><p class="text">행성에서는 눈앞의 건물을 부수거나 밀어버리세요. 왕좌를 무력화한 뒤 왕의 머리를 바라보고 <b>${touch ? '견인' : '우클릭(Q)'}</b>으로 붙잡아 <b>${touch ? '왼쪽 화면을 아래로 끌어' : 'S를 눌러'}</b> 뒤로 물러나면 회수할 수 있습니다. 왕을 잡지 않고 떠나도 됩니다.</p><p class="text">모선의 <b>${touch ? '성도' : 'M · 성도'}</b>에서 64개 항성계의 512개 행성을 찾아갈 수 있습니다. <b>포격 궤도로 항해</b>한 뒤 행성을 바라보고 미사일 버튼을 길게 누르세요. <b>5회 명중하면 행성이 소멸</b>하며, 아직 얻지 않은 왕의 머리는 회수할 수 없습니다. 이미 전시한 머리는 남습니다. 상륙할 수 있는 행성은 성도 상단의 바로가기에 모여 있습니다.</p>
+        <p class="text">처음에는 조종석에 앉아 <b>${touch ? '자동항해' : 'T'}</b>로 에덴에 접근하세요. 행성이 하늘과 구름으로 가득 보일 때까지 접근합니다. 상공에 정박하면 <b>${touch ? '일어나기' : 'E'}</b>를 눌러 뒤쪽 격납고에서 파괴정으로 갈아탑니다.</p><p class="text">행성에서는 눈앞의 건물을 부수거나 밀어버리세요. 왕좌를 무력화한 뒤 왕의 머리를 바라보고 <b>${touch ? '견인' : '우클릭(Q)'}</b>으로 붙잡아 <b>${touch ? '왼쪽 화면을 아래로 끌어' : 'S를 눌러'}</b> 뒤로 물러나면 회수할 수 있습니다. 왕을 잡지 않고 떠나도 됩니다.</p><p class="text">모선의 <b>${touch ? '성도' : 'M · 성도'}</b>에서 64개 항성계의 512개 행성을 찾아갈 수 있습니다. <b>포격 궤도로 항해</b>한 뒤 행성을 바라보고 미사일 버튼을 길게 누르세요. <b>5회 명중하면 행성이 소멸</b>하며, 아직 얻지 않은 왕의 머리는 회수할 수 없습니다. 이미 전시한 머리는 남습니다. 성도에서 ‘확인된 주민 행성’을 누르면 목적지를 고를 수 있습니다. ‘상륙 가능한 행성’을 펼치면 무인 행성도 볼 수 있습니다.</p>
         <div class="finePrint">기능을 막는 연료·목숨·제한시간은 없습니다. 우주에서는 엔진을 멈추면 고요해집니다.</div>
         <div class="panelActions"><button id="closeHelp" class="primary">알겠습니다 ↗</button></div>`,
       );
@@ -5097,38 +5098,36 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       $('closeHold').onclick = () => this.close();
     }
     openLab() {
-      const u = this.game.universe,
-        esc = K.escapeHTML;
-      if (!u.cargo) {
-        this.toast('화물칸이 비어 있습니다', '폐허에서 생존자를 견인해 오면 실험할 수 있습니다.', 4);
-        return;
-      }
-      const from = u.hold[0];
-      this
-        .open(`<div class="eyebrow">LABORATORY</div><h2>${esc(from ? u.displayName(from) : '출신 불명')}에서 온 개체</h2><p class="text">깊이 들어갈수록 더 많은 이웃의 이름을 말합니다.<br>어디까지 갈지는 이쪽이 정합니다.</p>
-   <div class="panelActions" style="flex-direction:column;align-items:stretch;gap:8px">
-   <button id="labA">표층 · 1곳 · 돌아감</button>
-   <button id="labB">심층 · 3곳 · 돌아가지만 성치 않음</button>
-   <button id="labC">끝까지 · 5곳 · 돌아가지 못함</button>
-   <button id="labX" class="primary">그만두기</button></div>`);
-      const run = d => {
-        const r = u.experiment(d);
-        this.close();
-        if (!r) return;
-        const names = r.opened.map(p => p.trueName).join(' · ') || '새로 밝혀진 것은 없습니다';
-        this.game.audio.success();
-        this.toast(
-          r.died ? '개체는 돌아가지 못했습니다' : '개체를 화물칸으로 돌려보냈습니다',
-          (r.opened.length ? names + ' — 성도에 이름이 올랐습니다.' : names) +
-            (r.died ? '' : r.opened.length && d === 1 ? '<br>화물칸의 나머지가 물러섰습니다.' : ''),
-          7,
-        );
-        this.game.interior.updateTrophies();
-      };
-      $('labA').onclick = () => run(0);
-      $('labB').onclick = () => run(1);
-      $('labC').onclick = () => run(2);
+      const { universe: u, interior } = this.game;
+      if (!u.cargo) return;
+      const available = u.residentLeads(u.hold[0]).length;
+      const subject = u.hold[0] ? u.get(u.hold[0])?.name : '';
+      const choices = ['표층', '심층', '끝까지'].map((label, depth) => {
+        const count = Math.min(available, [1, 3, 5][depth]);
+        return `<button class="secondary" data-depth="${depth}">${label} · ${count}곳 · ${depth === 2 ? '사망' : '화물칸 복귀'}</button>`;
+      }).join('');
+      this.open(`<div class="eyebrow">LABORATORY</div><h2>${K.escapeHTML(subject || '출신 불명')} · 실험대</h2>
+        <p class="text">${available ? '주민이 살아 있는 다른 행성의 위치를 알아냅니다.' : '이 주민에게서 새로 알아낼 거주 행성이 없습니다.'}</p>
+        <div class="labOptions">${available ? choices : ''}<button class="primary" id="labX">화물칸으로 돌려보내기</button></div>`);
       $('labX').onclick = () => this.close();
+      for (const button of $('panel').querySelectorAll('[data-depth]')) {
+        button.onclick = () => {
+          if (!button.isConnected) return;
+          const result = u.experiment(Number(button.dataset.depth));
+          interior.clearLabSubject();
+          interior.updateTrophies();
+          if (!result) { this.close(); return; }
+          const rows = result.opened.map(p =>
+            `<button class="secondary labDestination" data-world="${p.id}"><b>${K.escapeHTML(p.name)}</b><span>성도에서 보기 ↗</span></button>`
+          ).join('');
+          this.open(`<div class="eyebrow">LABORATORY</div><h2>주민 행성 ${result.opened.length}곳 확인</h2>
+            <p class="text">${result.died ? '실험 대상이 사망했습니다.' : '주민이 화물칸으로 돌아갔습니다.'} 화물칸 ${u.cargo}/20</p>
+            <div class="labOptions">${rows}<button id="labDone" class="primary">닫기</button></div>`);
+          for (const dest of $('panel').querySelectorAll('[data-world]'))
+            dest.onclick = () => this.navigation(dest.dataset.world);
+          $('labDone').onclick = () => this.close();
+        };
+      }
     }
     inspectRelic(id) {
       const u = this.game.universe,
@@ -5363,23 +5362,23 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       : d >= 1000
         ? (d / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 1 }) + ' km'
         : Math.round(d).toLocaleString() + ' m';
-  K.UI.prototype.navigation = function () {
+  K.UI.prototype.navigation = function (focusId) {
     const ui = this,
       g = this.game,
       u = g.universe,
       s = g.space;
-    let sys = u.systems[u.selected.systemIndex],
-      selection = u.selectedId;
+    let selection = u.get(focusId)?.id || u.selectedId;
+    let sys = u.systems[u.get(selection).systemIndex];
+    const residents = u.planets.filter(p => u.knownResidentWorld(p.id) && !u.destroyed(p.id) && u.survivors(p.id) > 0);
+    const landable = u.planets.filter(p => u.surfaceReady(p.id) && !u.destroyed(p.id));
+    const links = planets => planets.map(p =>
+      `<button data-surface="${p.id}">${esc(K.SurfaceMeta?.[p.id]?.shortName || p.name)}</button>`
+    ).join('');
     this.open(
-      `<div class="eyebrow">STELLAR ATLAS / 64 SYSTEMS · 512 WORLDS</div><div class="atlasHead"><h2>어디로든.</h2><button class="secondary" id="closeAtlas">닫기</button></div><p class="atlasIntro">항성계를 누르고 행성을 고르세요. 세계를 부수면 아직 회수하지 않은 왕도 사라집니다.</p><canvas id="galaxyChart" aria-label="64개 항성계의 성도"></canvas><div class="atlasLegend"><span>● 항성계　◇ 현재 위치</span><span>${u.countDestroyed()}개 행성 소멸</span></div><div class="surfaceLinks" aria-label="상륙 가능한 행성">${u.planets
-        .filter(p => u.surfaceReady(p.id))
-        .map(
-          p =>
-            `<button data-surface="${p.id}" class="${u.destroyed(p.id) ? 'lost' : ''}">${esc(K.SurfaceMeta?.[p.id]?.shortName || p.name)}</button>`,
-        )
-        .join(
-          '',
-        )}</div><div class="atlasFilter"><strong id="systemName"></strong><input id="atlasSearch" type="search" placeholder="행성 이름 / p0008" aria-label="행성 이름 또는 ID 검색"></div><div id="planetList" class="planetList"></div><div id="atlasDetail" class="atlasDetail"></div><div class="atlasActions"><button class="primary" id="atlasOrbit">포격 궤도로 항해 ↗</button><button class="secondary" id="atlasSky">창공까지 접근</button><button class="ghost" id="atlasDrift">아무 곳으로</button></div><div class="finePrint">${u.planets.filter(p => u.surfaceReady(p.id)).length}개 행성 상륙 가능 · 나머지는 궤도 탐사 / 포격 가능. 표면은 행성별로 추가됩니다.<br>${this.game.input.mobile ? '조종석의 자동항해 버튼으로 선택한 항로를 따라갑니다.' : 'J · 도약 항해　T · 선택한 항로로 자동항해　X · 정지'}</div>`,
+      `<div class="eyebrow">STELLAR ATLAS / 64 SYSTEMS · 512 WORLDS</div><div class="atlasHead"><h2>어디로든.</h2><button class="secondary" id="closeAtlas">닫기</button></div><p class="atlasIntro">항성계를 누르고 행성을 고르세요. 세계를 부수면 아직 회수하지 않은 왕도 사라집니다.</p><canvas id="galaxyChart" aria-label="64개 항성계의 성도"></canvas><div class="atlasLegend"><span>● 항성계　◇ 현재 위치</span><span>${u.countDestroyed()}개 행성 소멸</span></div><section class="residentRoutes"><h3>확인된 주민 행성</h3>${residents.length
+        ? `<div class="surfaceLinks">${links(residents)}</div>`
+        : '<p>주민 행성에 착륙하거나 정밀 스캔 4단계 또는 실험으로 거주지를 확인하세요.</p>'}</section>
+        <details class="landingRoutes"><summary>상륙 가능한 행성 ${landable.length}곳</summary><div class="surfaceLinks">${links(landable)}</div></details><div class="atlasFilter"><strong id="systemName"></strong><input id="atlasSearch" type="search" placeholder="행성 이름 / p0008" aria-label="행성 이름 또는 ID 검색"></div><div id="planetList" class="planetList"></div><div id="atlasDetail" class="atlasDetail"></div><div class="atlasActions"><button class="primary" id="atlasOrbit">포격 궤도로 항해 ↗</button><button class="secondary" id="atlasSky">창공까지 접근</button><button class="ghost" id="atlasDrift">아무 곳으로</button></div><div class="finePrint">${this.game.input.mobile ? '조종석의 자동항해 버튼으로 선택한 항로를 따라갑니다.' : 'J · 도약 항해　T · 선택한 항로로 자동항해　X · 정지'}</div>`,
     );
     $('panel').classList.add('atlasPanel');
     const chart = $('galaxyChart'),
@@ -5458,7 +5457,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
           ? def.surfaceDescription || '구름층에서 파괴정으로 갈아탈 수 있습니다.'
           : '지금은 궤도 탐사와 모선 포격만 가능합니다.';
       $('atlasDetail').innerHTML =
-        `<div><strong>${esc(u.displayName(selection))}</strong><span>${esc(def.id)} · ${esc(def.typeName)} · ${K.formatDistance(s.distance(def))}</span></div><p class="${gone ? 'lostText' : ''}">${esc(subtitle)}</p>${u.named(selection) ? `<p class="text">관측 명명 — ${esc(def.name)}</p>` : ''}${u.scan(selection) ? `<p class="text">${u.scanLines(selection).slice(0, u.scan(selection)).map(esc).join('<br>')}</p>` : ''}<div class="fractureDots" aria-label="${hits}회 명중">${[0, 1, 2, 3, 4].map(n => `<i class="${n < hits ? 'on' : ''}"></i>`).join('')}</div>`;
+        `<div><strong>${esc(u.displayName(selection))}</strong><span>${esc(def.id)} · ${esc(def.typeName)} · ${K.formatDistance(s.distance(def))}</span></div><p class="${gone ? 'lostText' : ''}">${esc(subtitle)}</p>${u.knownResidentWorld(selection) && !gone ? '<p>주민 거주 확인</p>' : ''}${u.named(selection) ? `<p class="text">관측 명명 — ${esc(def.name)}</p>` : ''}${u.scan(selection) ? `<p class="text">${u.scanLines(selection).slice(0, u.scan(selection)).map(esc).join('<br>')}</p>` : ''}<div class="fractureDots" aria-label="${hits}회 명중">${[0, 1, 2, 3, 4].map(n => `<i class="${n < hits ? 'on' : ''}"></i>`).join('')}</div>`;
       $('panel')
         .querySelectorAll('[data-surface]')
         .forEach(b => b.classList.toggle('active', b.dataset.surface === selection));
@@ -5541,6 +5540,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
             sys = u.systems[u.get(selection).systemIndex];
             $('atlasSearch').value = '';
             list();
+            $('atlasSky').scrollIntoView({ block: 'nearest' });
           }),
       );
     $('atlasSearch').oninput = list;
@@ -5549,6 +5549,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       ui.close();
     };
     list();
+    if (focusId) $('atlasSky').scrollIntoView({ block: 'nearest' });
   };
 })((window.KO ||= {}));
 
@@ -6953,8 +6954,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.obstacle([-1.05, -1, -17.5], [1.05, 3, -15.55]);
       this.interactables.push({
         id: 'pilot',
-        p: [0, 1.8, -15],
-        radius: 3.2,
+        room: '조종실',
         label: '조종석에 앉기',
         verb: '앉기',
         action: () => this.game.enterSpace(),
@@ -6974,8 +6974,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.obstacle([-3.5, -1, 17], [3.5, 4, 25.8]);
       this.interactables.push({
         id: 'launch',
-        p: [0, 1.7, 16.3],
-        radius: 3.7,
+        room: '격납고',
         label: '파괴정으로 갈아타기',
         verb: '탑승하기',
         action: () => this.game.launch(),
@@ -7027,13 +7026,18 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         radius: 3.4,
         label: u.cargo ? '실험대' : '실험대 · 화물칸이 비어 있습니다',
         verb: '실험대에 눕히기',
-        action: () => this.game.ui.openLab(),
+        action: () => {
+          if (this.labPose) {
+            if (this.labPose.time >= 0.7) this.game.ui.openLab();
+          } else this.seatLabSubject(tz);
+        },
       });
       // 화물칸 — 실린 사람들은 실험대를 보고 서 있다
       const hz = z0 + 18.5;
       mesh(g, 'box', [0, 0.02, hz], [15, 0.04, 9], C.panel);
       for (const sd of [-1, 1]) mesh(g, 'box', [sd * 7.4, 0.1, hz], [0.06, 0.05, 8.6], C.amber, { em: 1.1, type: 1 });
       const heads = this.game.save.data.trophies.length;
+      this.firstPassenger = null;
       u.hold.forEach((from, i) => {
         const col = i % 5,
           row = Math.floor(i / 5);
@@ -7045,6 +7049,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         else K.Models.subjectModel(fig, i);
         fig.r[1] = Math.PI;
         fig.s = [1.15, 1.15, 1.15];
+        if (i === 0) this.firstPassenger = fig;
       });
       this.interactables.push({
         id: 'hold',
@@ -7055,6 +7060,34 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         verb: '살펴보기',
         action: () => this.game.ui.openHold(),
       });
+    }
+    seatLabSubject(z) {
+      const fig = this.firstPassenger;
+      if (!fig) return;
+      this.labPose = { fig, z, home: fig.p.slice(), time: 0 };
+      const aim = M.aim([this.position[0], 2.6, this.position[2]], [0, 1.35, z]);
+      this.yaw = aim.yaw;
+      this.pitch = aim.pitch;
+      this.updateLabPose(0);
+    }
+    updateLabPose(dt) {
+      const pose = this.labPose;
+      if (!pose) return;
+      if (Math.hypot(this.position[0], this.position[2] - pose.z) > 4) {
+        this.clearLabSubject();
+        return;
+      }
+      pose.time = Math.min(0.7, pose.time + dt);
+      const t = M.smooth(0, 0.7, pose.time), angle = t * Math.PI / 2;
+      pose.fig.p = [-Math.sin(angle), 1.28 - Math.cos(angle), pose.z + (1 - t) * 0.85];
+      pose.fig.r = [-angle, -Math.PI / 2, 0];
+    }
+    clearLabSubject() {
+      if (!this.labPose) return;
+      const { fig, home } = this.labPose;
+      fig.p = home;
+      fig.r = [0, Math.PI, 0];
+      this.labPose = null;
     }
     slots() {
       const g = this.game,
@@ -7068,11 +7101,12 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         key =
           slots.map(x => (x.type === 'head' ? 'h' + x.t.id : 'r' + x.id)).join('|') +
           '#' +
-          this.game.universe.hold.join('.') +
+          this.game.universe.hold.map(id => id || '_').join('.') +
           '#' +
           (this.game.universe.freeing ? 1 : 0);
       if (key === this.galleryKey) return;
       this.galleryKey = key;
+      this.clearLabSubject();
       if (this.galleryRoot) this.roomRoot.remove(this.galleryRoot);
       this.solids = this.solids.filter(o => !o.gallery);
       this.interactables = this.interactables.filter(o => !o.gallery);
@@ -7155,6 +7189,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     }
     update(dt, input) {
       for (const a of this.animators || []) a(dt);
+      this.updateLabPose(dt);
       const [dx, dy] = input.look();
       this.yaw -= dx;
       this.pitch = M.clamp(this.pitch - dy, -1.25, 1.25);
@@ -7171,15 +7206,25 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       if (this.walkable([this.position[0], 1.85, next[2]])) this.position[2] = next[2];
       this.walk += M.len(v) * dt * 7;
       const bob = Math.sin(this.walk) * 0.024 * this.game.settings.shake;
+      let eye = [this.position[0], 1.85 + bob, this.position[2]];
+      if (this.labPose) {
+        const t = M.smooth(0, 0.7, this.labPose.time);
+        const center = [0, 1.35, this.labPose.z];
+        eye[1] += 0.75 * t;
+        const offset = M.sub(eye, center), distance = M.len(offset);
+        // Keep the whole table within the horizontal field of view on a narrow phone.
+        const fit = 1.65 / (Math.tan(37 * Math.PI / 180) * Math.min(1, innerWidth / innerHeight));
+        if (fit > distance) eye = M.add(eye, M.mul(offset, t * (fit / distance - 1)));
+      }
       this.game.engine.camera = {
-        p: [this.position[0], 1.85 + bob, this.position[2]],
+        p: eye,
         yaw: this.yaw,
         pitch: this.pitch,
         roll: 0,
         fov: 74,
       };
       this.zone =
-        this.position[2] < -8
+        this.position[2] <= -5
           ? '조종실'
           : this.position[2] >= this.labStart
             ? '실험실'
@@ -7196,23 +7241,39 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       let nearest = null,
         best = Infinity;
       for (const t of this.interactables) {
-        let dist = M.dist(this.position, t.p);
+        if (t.room) {
+          if (t.room === this.zone && !nearest) nearest = t;
+          continue;
+        }
+        const dist = M.dist(this.position, t.p);
         const aim = M.dot(M.norm(M.sub(t.p, this.position)), M.dir(this.yaw, this.pitch));
         if (dist < t.radius && aim > -0.1 && dist < best) {
           nearest = t;
           best = dist;
         }
       }
-      this.game.currentInteract = nearest;
       let hint = nearest?.label || '';
-      const ready = !!nearest && (nearest.id !== 'launch' || this.game.nearPlanet());
+      let ready = !!nearest;
+      let verb = nearest?.verb || '';
+      if (nearest?.id === 'lab') {
+        ready = this.game.universe.cargo > 0;
+        if (!ready) hint = '실험대 · 화물칸이 비어 있습니다';
+        else if (this.labPose) {
+          ready = this.labPose.time >= 0.7;
+          hint = ready ? '실험대 · 주민 행성 위치 조사' : '주민을 실험대에 눕히는 중';
+          verb = '실험하기';
+        }
+      }
+      if (nearest?.id === 'launch') ready = this.game.nearPlanet() && !this.game.space.weapons.inFlight(this.game.space.target.id);
       if (nearest?.id === 'launch' && !ready)
         hint = this.game.universe.destroyed(this.game.space.target.id)
           ? '목표 행성이 소멸했습니다 · 성도에서 다른 행성을 선택하세요'
           : !this.game.universe.surfaceReady(this.game.space.target.id)
             ? '고체 지표가 없습니다 · 궤도 탐사와 포격만 가능'
+            : this.game.space.weapons.inFlight(this.game.space.target.id) ? '발사한 미사일이 도착하면 탑승할 수 있습니다'
             : '행성의 구름층까지 접근한 뒤 탑승할 수 있습니다';
-      this.game.ui.prompt(hint, ready, nearest?.verb || '');
+      this.game.currentInteract = ready ? nearest : null;
+      this.game.ui.prompt(hint, ready, verb);
       if (input.take('KeyE')) this.game.interact();
       this.syncOutside();
     }
