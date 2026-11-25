@@ -1643,9 +1643,10 @@
         out = [];
       const polar = (R, a, extra) => Object.assign({ x: Math.sin(a) * R, z: Math.cos(a) * R, a, R }, extra);
       const add = (ring, n, gen) => {
-        const list = [];
-        for (let k = 0; k < n; k++) list.push(Object.assign(gen(k), { ring, k }));
-        out.push(...list.slice(0, Math.max(0, n - (this.liftedBy[ring] || 0))));
+        // Keep the complete slot sequence for deterministic appearance. The
+        // district omits known departures and enforces older per-ring totals.
+        const remaining = Math.max(0, n - (this.liftedBy[ring] || 0));
+        for (let k = 0; k < n; k++) out.push(Object.assign(gen(k), { ring, k, remaining }));
       };
       // as many in each circle as the wider pit holds at the same crowding
       const castle = [Math.sin(-0.9) * 449 * S, Math.cos(-0.9) * 449 * S];

@@ -312,6 +312,9 @@
       }
     }
     persist(reason = 'auto') {
+      // The file import has committed the replacement. Old scene snapshots
+      // from visibilitychange, beforeunload and pagehide must leave it intact.
+      if (this.reloadingSave) return;
       this.space?.save();
       if (this.planet) this.planet.snapshot();
       this.save.data.settings = this.settings;

@@ -5078,6 +5078,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
           const file = e.target.files[0];
           if (!file) return;
           g.save.import(await file.text());
+          g.reloadingSave = true;
           location.reload();
         } catch (err) {
           this.toast('저장 파일을 읽지 못했습니다.', err.message);
@@ -7938,21 +7939,22 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         return;
       }
       const p = e.p.slice();
+      this.planet.residents?.lifted(e);
+      e.alive = false;
+      e.node.visible = false;
+      this.grab = null;
+      this.tension = 0;
+      // Commit both ledgers before optional rendering or audio can interrupt the transfer.
+      this.game.persist('checkpoint');
+      this.planet.stopTether();
+      this.planet.residents?.alarm(p[0], p[2], 48, 'beam');
       const fx = K.group(this.planet.root, p);
       const column = K.beam(fx, [0, -1, 0], [0, 200, 0], 1.8, '#a6ffe4', 1.4);
       column.alpha = 0.23;
       const figure = K.residentFigure(fx, person.species, person.pal, null, person.scale);
       figure.r[1] = e.yaw || 0;
       (this.recoveries ||= []).push({ fx, column, figure, age: 0 });
-      this.planet.residents?.lifted(e);
-      this.planet.residents?.alarm(p[0], p[2], 48, 'beam');
-      e.alive = false;
-      e.node.visible = false;
-      this.grab = null;
-      this.tension = 0;
-      this.planet.stopTether();
       this.game.audio.success();
-      this.game.persist('checkpoint');
       this.game.ui.toast('모선 회수 · 화물칸 ' + u.cargo + '/20', '', 2);
     }
     animateRecovery(dt) {
@@ -8390,6 +8392,8 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.soundClock = 0;
       this.murmur = 0;
       this.nextId = 0;
+      this.departed = new Set();
+      this.nextStreetSlot = 0;
       this.saved = this.parse(tokens);
       this.living = {};
       this.shade = {};
@@ -8408,6 +8412,12 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       const st = { corpses: [] };
       for (const t of tokens) {
         if (typeof t !== 'string' || !t.startsWith('z.')) continue;
+        if (t.startsWith('z.left.')) {
+          for (const key of t.slice(7).split('.')) {
+            if (/^(?:[a-z]-)?[0-9]{1,7}$/.test(key)) this.departed.add(key);
+          }
+          continue;
+        }
         const m = /^z\.(d0|al|vi|at|ki)\.(\d+)$/.exec(t);
         if (m) {
           st[m[1]] = Number(m[2]);
@@ -8553,16 +8563,36 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       }
       this.alive = vi + inside;
       // the living outside
-      const slots = preset || this.slots(Math.max(this.v0, vi), spec.seed || 1);
-      const made = [];
-      // a world that places every one of its people itself may keep more of them outside (hell: every circle full)
       this.outsideCap = spec.cap || OUTSIDE_CAP;
-      for (let i = 0; i < vi && i < this.outsideCap && slots[i]; i++) {
-        const sl = slots[i],
-          r = this.make(sl.x, sl.z, { child: sl.child, sp: sl.sp ? SPECIES[sl.sp] : null });
+      const limit = Math.min(vi, this.outsideCap);
+      // Before source slots were recorded, a profile on the ship is the only
+      // surviving evidence of which member of a seeded crowd was recovered.
+      const oldCrew = this.departed.size ? [] : this.game.universe.hold.filter(p => p.from === s.id);
+      const slots = preset || this.slots(Math.max(this.v0, limit + this.departed.size + oldCrew.length), spec.seed || 1);
+      const made = [], perRing = new Map();
+      for (let i = 0; i < slots.length && made.length < limit; i++) {
+        const sl = slots[i];
+        // Advance the original random stream even for absent residents. Otherwise
+        // the next person in line inherits the missing passenger's appearance.
+        const r = this.make(sl.x, sl.z, { child: sl.child, sp: sl.sp ? SPECIES[sl.sp] : null });
         r.slot = sl;
+        r.sourceSlot = sl.ring ? sl.ring + '-' + sl.k : String(this.nextStreetSlot++);
+        if (this.departed.has(r.sourceSlot)) continue;
+        const legacy = oldCrew.findIndex(p => p.seed === r.seed && p.species === r.sp.key &&
+          p.pal === r.pal && p.child === r.child && p.scale === Math.round(r.scale * 1000) / 1000);
+        if (legacy >= 0) {
+          this.departed.add(r.sourceSlot);
+          oldCrew.splice(legacy, 1);
+          continue;
+        }
+        if (sl.ring) {
+          const used = perRing.get(sl.ring) || 0;
+          if (used >= sl.remaining) continue;
+          perRing.set(sl.ring, used + 1);
+        }
         made.push(r);
       }
+      if (preset) this.alive = this.v0 = this.d0 = made.length;
       this.family(made);
       for (const r of made) this.list.push(r);
       if (this.mode === 'first') this.prepareWelcome(made);
@@ -9032,6 +9062,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     }
     lifted(r) {
       if (!r.res || r.gone) return;
+      if (!r.freed && r.sourceSlot != null) this.departed.add(r.sourceSlot);
       this.spec?.lifted?.(r);
       r.gone = true;
       r.alive = false;
@@ -9696,6 +9727,8 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         const x = b.p[0] + Math.sin(a) * d,
           z = b.p[2] + Math.cos(a) * d;
         const r = this.make(x, z, { child: Math.random() < 0.15 });
+        while (this.departed.has(String(this.nextStreetSlot))) this.nextStreetSlot++;
+        r.sourceSlot = String(this.nextStreetSlot++);
         r.yaw = a;
         r.home = [x, z];
         this.list.push(r);
@@ -10295,14 +10328,25 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       return n;
     }
     tokens() {
-      if (!this.sp || !this.d0) return [];
-      const out = [
+      // Keep the last departure even when an exact-count district is empty.
+      const out = [];
+      let keys = [];
+      for (const slot of this.departed) {
+        keys.push(slot);
+        if (keys.join('.').length >= 46) {
+          out.push('z.left.' + keys.join('.'));
+          keys = [];
+        }
+      }
+      if (keys.length) out.push('z.left.' + keys.join('.'));
+      if (!this.sp || !this.d0) return out;
+      out.push(
         'z.d0.' + this.d0,
         'z.al.' + Math.max(0, Math.round(this.alive)),
         'z.vi.' + this.outside(),
         'z.at.' + Math.min(5, this.s.ruin),
         'z.ki.' + this.kills,
-      ];
+      );
       let saved = this.corpses.filter(c => c.save);
       for (const d of this.dying) if (d.c.save) saved.push(d.c);
       if (saved.length > SAVE_CAP) {
