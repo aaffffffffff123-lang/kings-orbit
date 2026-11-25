@@ -180,6 +180,8 @@
     for (const [base, key, recolor] of ROBED) if (!K.Species?.[key] && K.Species?.[base]) withHalo(K.respecies(base, key, recolor));
   }
 
+  robedSpecies();
+
   /* ---------- shapes shared by every winged thing ---------- */
   // A wing in its own frame: root at the origin, reaching +X, long feathers fanning from up-and-out to down-and-out.
   function wing(parent, p, len, n, color, tip, em = 0) {
@@ -336,7 +338,6 @@
           }
         else if (t === 'h.r.1') this.rainbowBroken = true;
       }
-      robedSpecies();
       this.angels = [];
       this.trees = [];
       this.walls = [];

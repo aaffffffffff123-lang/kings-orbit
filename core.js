@@ -1804,6 +1804,8 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.fire = false;
       this.mouseFire = false;
       this.touchFire = false;
+      this.idle = { keys: new Set(), look: () => [0, 0], axes: () => ({ x: 0, y: 0, z: 0, boost: false }),
+        take: () => false, takeWheel: () => 0, fire: false };
       this.mobile = matchMedia('(pointer: coarse)').matches;
       this.stick = [0, 0];
       this.touchUp = false;
@@ -1990,7 +1992,9 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.cleanup.push(() => el.removeEventListener(ev, fn, opts));
     }
     syncFire() {
-      this.fire = this.mouseFire || this.touchFire;
+      const down = this.mouseFire || this.touchFire;
+      if (down && !this.fire) this.fireGesture = (this.fireGesture || 0) + 1;
+      this.fire = down;
     }
     requestLock() {
       if (!this.enabled || this.mobile || this.lockPending || !this.canvas.requestPointerLock) return;
@@ -3594,6 +3598,9 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.selectedId = 'eden';
       this.navMode = 'sky';
       this.hold = [];
+      this.sites = new Set();
+      this.landingTarget = '';
+      const profiles = new Map();
       this.lost = 0;
       this.freeing = false;
       this.freed = 0;
@@ -3601,6 +3608,17 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       const tokens = this.save.data.planetStates[LEDGER]?.destroyed || [];
       for (const t of tokens) {
         if (typeof t !== 'string') continue;
+        if (t.startsWith('pass.')) {
+          const [, slot, from, species, pal, size, child, seed, lead, result] = t.split('.');
+          if (Number(slot) >= 0 && Number(slot) < 20 && /^[a-z0-9_-]+$/.test(species || '')) {
+            profiles.set(Number(slot), { from: this.get(from)?.id || '', species, pal: Math.max(0, Number(pal) | 0),
+              scale: Math.max(0.2, Math.min(4, Number(size) / 1000 || 1)), child: child === '1',
+              seed: Number(seed) >>> 0, lead: this.get(lead)?.id || '', result: ['world','site','lost'].includes(result) ? result : '' });
+          }
+          continue;
+        }
+        if (t.startsWith('site-')) { if (this.get(t.slice(5))) this.sites.add(t.slice(5)); continue; }
+        if (t.startsWith('approach-')) { this.landingTarget = this.get(t.slice(9))?.id || ''; continue; }
         if (t.startsWith('focus-')) {
           const id = t.slice(6);
           if (this.catalog.byId[id]) this.selectedId = id;
@@ -3645,6 +3663,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
             told: !!m[6],
           });
       }
+      this.hold = this.hold.map((from, i) => profiles.get(i) || this.passenger(from, { seed: i + 1, pal: i }));
       this.revision++;
     }
     get planets() {
@@ -3681,6 +3700,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     select(id, navMode) {
       if (!this.get(id)) return false;
       this.selectedId = id;
+      if (this.landingTarget !== id || navMode === 'orbit') this.landingTarget = '';
       if (navMode) this.navMode = navMode === 'sky' ? 'sky' : 'orbit';
       this.flush();
       return true;
@@ -3714,12 +3734,21 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     cargoFull() {
       return this.hold.length >= 20;
     }
-    loadSurvivor(from = '') {
-      if (this.hold.length >= 20) return false;
-      this.hold.push(from || '');
+    passenger(from, resident) {
+      if (resident.passenger) return resident.passenger;
+      const seed = Math.abs(Math.floor(resident.seed || 0));
+      const worlds = this.planets.filter(p => p.id !== from && this.inhabited(p.id) && !this.destroyed(p.id) && this.survivors(p.id) > 0);
+      const lead = worlds.length ? worlds[hash32(from + '/' + seed) % worlds.length].id :
+        this.inhabited(from) ? from : '';
+      return { from, seed, lead, result: '', species: resident.sp?.key || K.SurfaceMeta[from]?.species || 'subject',
+        pal: resident.pal || 0, scale: Math.round((resident.scale || 1) * 1000) / 1000, child: !!resident.child };
+    }
+    loadSurvivor(from = '', resident = {}) {
+      if (this.cargoFull()) return null;
+      const person = this.passenger(from, resident);
+      this.hold.push(person);
       this.flush();
-      this.save.write('checkpoint');
-      return true;
+      return person;
     }
     patch(id, extra) {
       const st = this.states.get(id) || {};
@@ -3767,28 +3796,21 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     knownResidentWorld(id) {
       return this.inhabited(id) && (this.told(id) || this.scan(id) >= 4 ||
         this.save.data.visited.includes(id) || this.save.data.planetStates[id]?.visited ||
-        this.hasTrophy(id) || this.hold.includes(id));
+        this.hasTrophy(id) || this.hold.some(person => person.from === id));
     }
-    residentLeads(fromId) {
-      const src = this.get(fromId);
-      const rank = p => src ? (p.systemIndex === src.systemIndex ? 0 : 4096) + Math.abs(p.index - src.index) : p.index;
-      return this.planets.filter(p => p.id !== fromId && this.inhabited(p.id) &&
-        !this.knownResidentWorld(p.id) && !this.destroyed(p.id) && this.survivors(p.id) > 0
-      ).sort((a, b) => rank(a) - rank(b));
-    }
-    experiment(depth) {
-      if (!this.hold.length || ![0, 1, 2].includes(depth)) return null;
-      const from = this.hold[0];
-      const opened = this.residentLeads(from).slice(0, [1, 3, 5][depth]);
-      if (!opened.length) return null;
-      for (const p of opened) this.patch(p.id, { told: true });
-      this.hold.shift();
-      const died = depth === 2;
-      if (died) this.lost++;
-      else this.hold.push(from);
+    readRoute(person) {
+      if (!this.hold.includes(person) || person.result) return;
+      const id = person.lead;
+      if (!id || this.destroyed(id) || this.survivors(id) <= 0) person.result = 'lost';
+      else if (this.knownResidentWorld(id)) {
+        person.result = 'site';
+        this.sites.add(id);
+      } else {
+        person.result = 'world';
+        this.patch(id, { told: true });
+      }
       this.flush();
       this.save.write('checkpoint');
-      return { from, opened, died };
     }
     dissected(id) {
       return this.states.get(id)?.relic === 2;
@@ -3925,7 +3947,11 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       const destroyed = [
         'focus-' + this.selectedId,
         'nav-' + this.navMode,
-        'hold-' + this.hold.map(id => id || '_').join('.'),
+        'hold-' + this.hold.map(p => p.from || '_').join('.'),
+        ...this.hold.map((p, i) => ['pass', i, p.from || '_', p.species, p.pal, Math.round(p.scale * 1000),
+          +p.child, p.seed, p.lead || '_', p.result || '_'].join('.')),
+        ...[...this.sites].map(id => 'site-' + id),
+        ...(this.landingTarget ? ['approach-' + this.landingTarget] : []),
         'lost-' + this.lost,
         'freed-' + this.freed,
       ]
@@ -4683,10 +4709,22 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
           else failed();
         } catch { failed(); }
       });
-      input.bindTap('spaceAction', () => game.space.toggleAuto());
+      input.bindTap('spaceAction', () => game.flightAction());
       input.bindTap('navAction', () => this.navigation());
       input.bindTap('stopAction', () => input.pressed.add('KeyX'));
       input.bindTap('warpAction', () => game.space.toggleWarp());
+      // Support a cached title page loading this build's fresh manifest.
+      if (!$('recoverAction')) $('returnAction').insertAdjacentHTML('beforebegin',
+        '<button id="recoverAction" class="iconButton hidden">모선 회수</button>');
+      if (!$('labMonitor')) this.hud.insertAdjacentHTML('beforeend',
+        '<section id="labMonitor" class="hidden"><strong id="labReadout"></strong><svg viewBox="0 0 168 28" aria-hidden="true"><path id="labTrace" pathLength="1" fill="none" stroke="currentColor" stroke-dasharray="1" d="M4 23 L42 17 L72 21 L116 5 L164 7"/></svg><button id="labMap" class="hidden">성도에서 보기 ↗</button></section>');
+      input.bindTap('labMap', () => {
+        const person = game.interior.labPose?.person;
+        if (person?.result && person.result !== 'lost') this.navigation(person.lead);
+      });
+      input.bindTap('recoverAction', () => {
+        if (game.mode === 'planet' && !game.descent) game.planet.vehicle.recoverPassenger();
+      });
       input.bindTap('returnAction', () => game.returnHome());
       game.input.bindTouch();
       this.mobile(game.input.mobile);
@@ -4744,6 +4782,8 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       $('spaceAction').classList.toggle('hidden', mode !== 'space');
       $('returnAction').classList.toggle('hidden', mode !== 'planet');
       $('spaceTarget').classList.toggle('hidden', mode !== 'space');
+      $('recoverAction').classList.add('hidden');
+      this.labMonitor(null);
       $('touchFire').classList.toggle('hidden', mode === 'interior');
       $('touchGrab').classList.toggle('hidden', mode === 'interior');
       $('touchFire').innerHTML =
@@ -4884,6 +4924,12 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         'aria-label',
         g.mode === 'interior' ? '누른 채 끌어 빠르게 걷기' : '누른 채 끌어 가속 이동',
       );
+      if (g.mode === 'planet') {
+        const btn = $('recoverAction'), full = g.universe.cargoFull();
+        btn.classList.toggle('hidden', !g.planet.vehicle.canRecover() || !!g.descent);
+        btn.disabled = full;
+        btn.textContent = full ? '화물칸 20/20' : g.input.mobile ? '모선 회수' : 'G · 모선 회수';
+      }
       if (g.mode === 'planet' && g.input.mobile) {
         const vehicle = g.planet.vehicle, target = vehicle.grab;
         const state = !target ? 'free' : target.kind === 'ruler' || target.tug || vehicle.anchored(target) ? 'fixed' : 'carry';
@@ -4929,7 +4975,8 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         $('spaceAction').textContent = g.input.mobile
           ? (s.auto ? '항해 해제' : '자동항해')
           : 'T · ' + (s.auto ? '자동항해 해제' : destination);
-        $('spaceAction').title = s.auto ? '자동항해 해제' : destination + ' 자동항해';
+        if (g.canDeploy()) $('spaceAction').textContent = g.input.mobile ? '파괴정 출격' : 'T · 파괴정 출격';
+        $('spaceAction').title = g.canDeploy() ? '현재 창공에서 바로 출격' : s.auto ? '자동항해 해제' : destination + ' 자동항해';
         $('warpAction').textContent = (g.input.mobile ? '' : 'J · ') + (s.warp ? '도약 해제' : '도약');
         const armed = s.weapons.charge > 0;
         $('touchFire').classList.toggle('arming', armed);
@@ -4981,7 +5028,6 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     }
     close() {
       if (this.game.cloudUI?.busy) return;
-      if ($('labX')) this.game.interior.clearLabSubject();
       this.game.paused = false;
       this.game.input.enabled = this.game.started;
       this.game.input.clear();
@@ -5060,15 +5106,15 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
           <div>왼쪽 화면</div><div>누른 자리에서 끌어 이동합니다. 조이스틱 원 바깥으로 더 밀면 빠르게 움직입니다.</div>
           <div>가속 · 상승 · 하강</div><div>누르는 동안 작동합니다. 같은 손가락을 끌면 이동 방향도 바뀝니다.</div>
           <div>오른쪽 화면</div><div>끌어 시선을 돌립니다.</div>
-          <div>광선 · 미사일</div><div>누른 채 끌어 조준합니다. 광선은 누르는 동안 나가고, 미사일은 사거리 안의 행성을 조준한 채 장전을 마치면 발사됩니다.</div>
+          <div>광선 · 미사일</div><div>누른 채 끌어 조준합니다. 광선은 누르는 동안 나가고, 미사일은 사거리 안의 행성을 조준한 채 장전을 마치면 발사됩니다. 최종 탄두는 손을 뗐다가 다시 눌러 발사합니다.</div>
           <div>견인 · 대상 선택</div><div>탭하면 현재 조준점에 적용합니다. 누른 채 조준하고 손을 떼도 됩니다.</div>
-          <div>견인 중</div><div>움직일 수 있는 물체는 거리 버튼을 위로 끌어 밀고 아래로 끌어 당깁니다. 던지기를 끌어 조준한 뒤 떼면 날아갑니다. 살며시 내려놓으려면 놓기를 누르세요.</div>
+          <div>견인 중</div><div>움직일 수 있는 물체는 거리 버튼을 위로 끌어 밀고 아래로 끌어 당깁니다. 던지기를 끌어 조준한 뒤 떼면 날아갑니다. 놓기를 누르면 내려놓습니다. 주민을 붙잡은 채 모선 회수를 누르면 모선이 끌어올립니다.</div>
           <div>충격파</div><div>손을 떼면 주변에 충격파가 퍼집니다. 재충전에는 3초가 걸립니다.</div>
           <div>자동항해 · 정지</div><div>자동항해 중 직접 방향을 바꾸면 수동 비행으로 돌아옵니다. 정지는 관성과 도약까지 멈춥니다.</div>
-        </div>` : `<div class="controlsTable"><div>W A S D</div><div>걷기 / 비행 · 마우스로 시선<br>파괴정은 바라보는 곳과 상관없이 수평으로 움직입니다.</div><div>화면 클릭</div><div>마우스 고정. 안 되면 우클릭 드래그.<br>방향키 좌우로도 회전할 수 있습니다.</div><div>E</div><div>조종석 · 전시 기록 · 파괴정 탑승</div><div>Space / C</div><div>상승 / 하강 · Shift와 함께 누르면 급강하<br>땅에 세게 내리꽂으면 충격파가 터집니다.</div><div>Shift 유지</div><div>누르는 동안 빠르게 걷기 / 가속·충돌</div><div>M / T / J / X</div><div>성도 / 자동항해 / 도약 / 추진 정지</div><div>좌클릭 길게</div><div>모선: 미사일 장전·발사 / 파괴정: 절단 광선<br>견인으로 붙잡고 있을 때 좌클릭은 세게 던지기입니다.</div><div>우클릭 · Q</div><div>모선: 바라보는 행성 선택(Q) / 파괴정: 견인<br>조준점 둘레 원뿔 안에 든 대상이 붙잡힙니다. 다시 누르면 천천히 내려놓습니다. 붙잡은 동안 마우스 휠로 거리 조절.</div><div>F</div><div>근접 충격파 · 재충전 3초</div><div>R</div><div>행성에서 언제든 모선으로 귀환</div><div>Esc / P</div><div>메뉴 / 일시정지</div></div>`;
+        </div>` : `<div class="controlsTable"><div>W A S D</div><div>걷기 / 비행 · 마우스로 시선<br>파괴정은 바라보는 곳과 상관없이 수평으로 움직입니다.</div><div>화면 클릭</div><div>마우스 고정. 안 되면 우클릭 드래그.<br>방향키 좌우로도 회전할 수 있습니다.</div><div>E</div><div>조종석 · 전시 기록 · 파괴정 탑승</div><div>Space / C</div><div>상승 / 하강 · Shift와 함께 누르면 급강하<br>땅에 세게 내리꽂으면 충격파가 터집니다.</div><div>Shift 유지</div><div>누르는 동안 빠르게 걷기 / 가속·충돌</div><div>M / T / J / X</div><div>성도 / 자동항해 / 도약 / 추진 정지</div><div>좌클릭 길게</div><div>모선: 미사일 장전·발사 / 파괴정: 절단 광선<br>견인으로 붙잡고 있을 때 좌클릭은 세게 던지기입니다.</div><div>우클릭 · Q</div><div>모선: 바라보는 행성 선택(Q) / 파괴정: 견인<br>조준점 둘레 원뿔 안에 든 대상이 붙잡힙니다. 다시 누르면 천천히 내려놓습니다. 붙잡은 동안 마우스 휠로 거리 조절.</div><div>G</div><div>견인한 주민을 모선에서 회수합니다.</div><div>F</div><div>근접 충격파 · 재충전 3초</div><div>R</div><div>행성에서 언제든 모선으로 귀환</div><div>Esc / P</div><div>메뉴 / 일시정지</div></div>`;
       this.open(
         `<div class="eyebrow">FLIGHT MANUAL / 01</div><h2>가고 싶은 곳으로.</h2>${controls}
-        <p class="text">처음에는 조종석에 앉아 <b>${touch ? '자동항해' : 'T'}</b>로 에덴에 접근하세요. 행성이 하늘과 구름으로 가득 보일 때까지 접근합니다. 상공에 정박하면 <b>${touch ? '일어나기' : 'E'}</b>를 눌러 뒤쪽 격납고에서 파괴정으로 갈아탑니다.</p><p class="text">행성에서는 눈앞의 건물을 부수거나 밀어버리세요. 왕좌를 무력화한 뒤 왕의 머리를 바라보고 <b>${touch ? '견인' : '우클릭(Q)'}</b>으로 붙잡아 <b>${touch ? '왼쪽 화면을 아래로 끌어' : 'S를 눌러'}</b> 뒤로 물러나면 회수할 수 있습니다. 왕을 잡지 않고 떠나도 됩니다.</p><p class="text">모선의 <b>${touch ? '성도' : 'M · 성도'}</b>에서 64개 항성계의 512개 행성을 찾아갈 수 있습니다. <b>포격 궤도로 항해</b>한 뒤 행성을 바라보고 미사일 버튼을 길게 누르세요. <b>5회 명중하면 행성이 소멸</b>하며, 아직 얻지 않은 왕의 머리는 회수할 수 없습니다. 이미 전시한 머리는 남습니다. 성도에서 ‘확인된 주민 행성’을 누르면 목적지를 고를 수 있습니다. ‘상륙 가능한 행성’을 펼치면 무인 행성도 볼 수 있습니다.</p>
+        <p class="text">처음에는 조종석에 앉아 <b>${touch ? '자동항해' : 'T'}</b>로 에덴에 접근하세요. 행성이 하늘과 구름으로 가득 보일 때까지 접근합니다. 창공에서 <b>${touch ? '파괴정 출격' : 'T'}</b>을 누르거나, 조종석에서 일어나 격납고에서 탑승하세요.</p><p class="text">행성에서는 눈앞의 건물을 부수거나 밀어버리세요. 왕좌를 무력화한 뒤 왕의 머리를 바라보고 <b>${touch ? '견인' : '우클릭(Q)'}</b>으로 붙잡아 <b>${touch ? '왼쪽 화면을 아래로 끌어' : 'S를 눌러'}</b> 뒤로 물러나면 회수할 수 있습니다. 왕을 잡지 않고 떠나도 됩니다.</p><p class="text">모선의 <b>${touch ? '성도' : 'M · 성도'}</b>에서 64개 항성계의 512개 행성을 찾아갈 수 있습니다. <b>포격 궤도로 항해</b>한 뒤 행성을 바라보고 미사일 버튼을 길게 누르세요. <b>마지막 탄두는 다시 눌러 발사합니다. 5회 명중하면 행성이 소멸</b>하며, 아직 얻지 않은 왕의 머리는 회수할 수 없습니다. 이미 전시한 머리는 남습니다. 성도에서 ‘확인된 주민 행성’을 누르면 목적지를 고를 수 있습니다. ‘상륙 가능한 행성’을 펼치면 무인 행성도 볼 수 있습니다.</p>
         <div class="finePrint">기능을 막는 연료·목숨·제한시간은 없습니다. 우주에서는 엔진을 멈추면 고요해집니다.</div>
         <div class="panelActions"><button id="closeHelp" class="primary">알겠습니다 ↗</button></div>`,
       );
@@ -5078,8 +5124,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       const u = this.game.universe,
         esc = K.escapeHTML;
       const rows = u.hold
-        .map(id => esc(id ? u.displayName(id) : '출신 불명'))
-        .map(n => `<div class="panelRow"><span>${n}</span><span>생존</span></div>`)
+        .map(p => `<div class="panelRow"><span>${esc(p.from ? u.displayName(p.from) : '출신 불명')}</span><span>${p.result ? '항로 조사 완료' : '생존'}</span></div>`)
         .join('');
       const heads = this.game.save.data.trophies.length;
       this.open(
@@ -5097,37 +5142,17 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         };
       $('closeHold').onclick = () => this.close();
     }
-    openLab() {
-      const { universe: u, interior } = this.game;
-      if (!u.cargo) return;
-      const available = u.residentLeads(u.hold[0]).length;
-      const subject = u.hold[0] ? u.get(u.hold[0])?.name : '';
-      const choices = ['표층', '심층', '끝까지'].map((label, depth) => {
-        const count = Math.min(available, [1, 3, 5][depth]);
-        return `<button class="secondary" data-depth="${depth}">${label} · ${count}곳 · ${depth === 2 ? '사망' : '화물칸 복귀'}</button>`;
-      }).join('');
-      this.open(`<div class="eyebrow">LABORATORY</div><h2>${K.escapeHTML(subject || '출신 불명')} · 실험대</h2>
-        <p class="text">${available ? '주민이 살아 있는 다른 행성의 위치를 알아냅니다.' : '이 주민에게서 새로 알아낼 거주 행성이 없습니다.'}</p>
-        <div class="labOptions">${available ? choices : ''}<button class="primary" id="labX">화물칸으로 돌려보내기</button></div>`);
-      $('labX').onclick = () => this.close();
-      for (const button of $('panel').querySelectorAll('[data-depth]')) {
-        button.onclick = () => {
-          if (!button.isConnected) return;
-          const result = u.experiment(Number(button.dataset.depth));
-          interior.clearLabSubject();
-          interior.updateTrophies();
-          if (!result) { this.close(); return; }
-          const rows = result.opened.map(p =>
-            `<button class="secondary labDestination" data-world="${p.id}"><b>${K.escapeHTML(p.name)}</b><span>성도에서 보기 ↗</span></button>`
-          ).join('');
-          this.open(`<div class="eyebrow">LABORATORY</div><h2>주민 행성 ${result.opened.length}곳 확인</h2>
-            <p class="text">${result.died ? '실험 대상이 사망했습니다.' : '주민이 화물칸으로 돌아갔습니다.'} 화물칸 ${u.cargo}/20</p>
-            <div class="labOptions">${rows}<button id="labDone" class="primary">닫기</button></div>`);
-          for (const dest of $('panel').querySelectorAll('[data-world]'))
-            dest.onclick = () => this.navigation(dest.dataset.world);
-          $('labDone').onclick = () => this.close();
-        };
-      }
+    labMonitor(pose) {
+      const el = $('labMonitor');
+      if (!pose || pose.scan == null) { el.classList.add('hidden'); return; }
+      const p = pose.person, done = !!p.result;
+      const dest = this.game.universe.get(p.lead);
+      const usable = done && p.result !== 'lost' && dest && !this.game.universe.destroyed(dest.id);
+      el.classList.remove('hidden');
+      const field = p.result === 'site' ? ' · 거주지 착륙 좌표' : '';
+      $('labReadout').textContent = done ? usable ? dest.name + field : '끊어진 항로' : '항적 복원 중';
+      $('labTrace').style.strokeDashoffset = String(1 - Math.min(1, pose.scan / 2.2));
+      $('labMap').classList.toggle('hidden', !usable);
     }
     inspectRelic(id) {
       const u = this.game.universe,
@@ -5463,6 +5488,14 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         .forEach(b => b.classList.toggle('active', b.dataset.surface === selection));
       $('atlasOrbit').textContent = gone ? '잔해 지대로 항해 ↗' : '포격 궤도로 항해 ↗';
       $('atlasSky').classList.toggle('hidden', gone);
+      if (u.sites.has(selection) && !gone) {
+        const site = document.createElement('button');
+        site.className = 'secondary';
+        site.id = 'atlasSite';
+        site.textContent = '거주지 착륙 지점으로 항해 ↗';
+        site.onclick = () => go('sky', true);
+        $('atlasDetail').append(site);
+      }
     };
     const list = () => {
       const query = $('atlasSearch').value.trim().toLowerCase();
@@ -5518,7 +5551,8 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         list();
       }
     };
-    const go = mode => {
+    const go = (mode, settlement = false) => {
+      u.landingTarget = settlement ? selection : '';
       s.select(selection, mode);
       s.toggleAuto(mode);
       ui.close();
@@ -5807,22 +5841,22 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       planet.residents.release(ids);
       game.ui.toast(
         ids.length + '명을 내려놓았습니다',
-        (planet.id === ids[0] ? '고향입니다.' : '이곳은 그들의 고향이 아닙니다.') + ' 화물칸이 비었습니다.',
+        (ids.every(p => p.from === planet.id) ? '고향입니다.' : '이곳은 그들의 고향이 아닙니다.') + ' 화물칸이 비었습니다.',
         7,
       );
       return;
     }
-    ids.forEach((from, i) => {
+    ids.forEach((person, i) => {
       const a = (i / ids.length) * Math.PI * 2,
         r = 11 + (i % 4) * 3.5;
       const x = Math.sin(a) * r,
         z = Math.cos(a) * r,
         y = planet.height(x, z);
       const node = group(planet.root, [x, y, z]);
-      subjectModel(node, i);
+      K.residentFigure(node, person.species, person.pal, null, person.scale);
       node.r[1] = Math.atan2(-x, -z);
       planet.creatures.push({
-        id: 'freed-' + i,
+        id: 'freed-' + i, passenger: person,
         kind: 'creature',
         node,
         p: [x, y + 1.4, z],
@@ -5840,7 +5874,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     });
     game.ui.toast(
       ids.length + '명을 내려놓았습니다',
-      (planet.id === ids[0] ? '고향입니다.' : '이곳은 그들의 고향이 아닙니다.') + ' 화물칸이 비었습니다.',
+      (ids.every(p => p.from === planet.id) ? '고향입니다.' : '이곳은 그들의 고향이 아닙니다.') + ' 화물칸이 비었습니다.',
       7,
     );
   };
@@ -5927,6 +5961,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.bursts = [];
       this.charge = 0;
       this.chargeId = null;
+      this.finalGate = new Map();
       this.cooldown = 0;
       this.lastSide = -1;
       this.shake = 0;
@@ -5936,6 +5971,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.shardDefs = [];
     }
     reset() {
+      this.finalGate.clear();
       this.root.children.length = 0;
       this.missiles.length = 0;
       this.bursts.length = 0;
@@ -5972,14 +6008,20 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       if (d < def.radius * 0.45 + 120)
         return { ok: false, message: '너무 가깝습니다 · S로 물러나거나 성도에서 포격 궤도를 선택하세요.' };
       if (def.living) return { ok: true, def, message: def.name + ' · 탄두 조준' };
-      if (this.missiles.filter(m => m.def.id === def.id).length + u.hits(def.id) >= 5)
-        return { ok: false, message: '최종 탄두 비행 중' };
+      const hits = u.hits(def.id), committed = hits + this.missiles.filter(m => m.def.id === def.id).length;
+      if (committed >= 5) return { ok: false, message: '최종 탄두 비행 중' };
+      if (committed === 4 && hits < 4) return { ok: false, message: '네 번째 탄두 비행 중' };
       return { ok: true, def, message: u.hits(def.id) >= 4 ? '다음 명중으로 행성 소멸' : def.name + ' · 탄두 조준' };
     }
     update(dt, input, active) {
       this.cooldown = Math.max(0, this.cooldown - dt);
       this.shake = M.damp(this.shake, 0, 3, dt);
       const ready = active ? this.readiness() : { ok: false };
+      if (ready.ok && !ready.def.living && input.fire &&
+          this.finalGate.has(ready.def.id) && this.finalGate.get(ready.def.id) === input.fireGesture) {
+        ready.ok = false;
+        ready.message = '최종 탄두 · 손을 뗀 뒤 다시 눌러 발사';
+      }
       if (active && input.fire && ready.ok && this.cooldown <= 0) {
         if (this.chargeId !== ready.def.id) {
           this.chargeId = ready.def.id;
@@ -6067,7 +6109,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       }
       if (active) {
         const d = ready.def || this.lock;
-        let text = ready.message || '';
+        let text = this.game.canDeploy() && !input.fire ? '창공 정박 · 파괴정 출격 가능' : ready.message || '';
         if (this.charge > 0)
           text = d.living
             ? '탄두 장전'
@@ -6119,6 +6161,8 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         return;
       }
       if (!u.hit(def.id)) return;
+      if (u.hits(def.id) === 4 && this.game.input.fire)
+        this.finalGate.set(def.id, this.game.input.fireGesture);
       const final = u.destroyed(def.id);
       this.createBurst(def, normal, final);
       this.shake = final ? 1 : 0.35;
@@ -6512,6 +6556,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         this.game.ui.toast('자동항해 해제');
         return;
       }
+      this.arrivalAxes = null;
       if (mode) this.universe.select(this.target.id, mode);
       this.auto = true;
       this.warp = false;
@@ -6593,7 +6638,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
           def.name + (sky ? ' 상공에 정박했습니다.' : ' · 궤도 정박'),
           sky
             ? this.universe.surfaceReady(def.id)
-              ? '일어나서 격납고의 파괴정으로 갈아타세요.'
+              ? '파괴정 출격을 누르거나 격납고에서 탑승하세요.'
               : '이 행성의 표면은 아직 미개방입니다. 다른 곳으로 떠나거나 궤도에서 포격할 수 있습니다.'
             : '행성을 바라보고 미사일을 길게 누르세요. 쏘지 않고 지나쳐도 됩니다.',
           6,
@@ -6724,7 +6769,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
           return;
         }
         if (input.mobile && (dx || dy)) this.auto = false;
-        if (input.take('KeyT')) this.toggleAuto();
+        if (input.take('KeyT')) { this.game.flightAction(); if (this.game.busy) return; }
         if (input.take('KeyJ')) this.toggleWarp();
         if (input.take('KeyQ')) {
           const def = this.aimedPlanet();
@@ -6744,7 +6789,13 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
           this.game.ui.toast('추진 정지', '다시 고요.');
         }
       }
-      const axes = background ? { x: 0, y: 0, z: 0, boost: false } : input.axes();
+      let axes = background ? { x: 0, y: 0, z: 0, boost: false } : input.axes();
+      if (this.arrivalAxes) {
+        const held = this.arrivalAxes;
+        if (Math.hypot(axes.x - held.x, axes.y - held.y, axes.z - held.z) < 0.35)
+          axes = { x: 0, y: 0, z: 0, boost: false };
+        else this.arrivalAxes = null;
+      }
       if (!background && Math.abs(axes.x) + Math.abs(axes.y) + Math.abs(axes.z) > 0.05) this.auto = false;
       if (this.auto) this.flyAuto(dt);
       else if (this.warp) {
@@ -6770,17 +6821,23 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         if (M.len(force) > 1) force = M.norm(force);
         const top = axes.boost ? 330 : 125;
         if (M.len(force) > 0.01) this.velocity = this.velocity.map((v, i) => M.damp(v, force[i] * top, 1.8, dt));
+        else if (this.game.nearPlanet()) this.velocity = [0, 0, 0];
         else this.velocity = this.velocity.map(v => M.damp(v, 0, 0.07, dt));
       }
       this.move(dt);
       if (this.nearestDef) this.nearestAltitude = this.distance(this.nearestDef);
       const inSky = this.nearestAltitude <= this.deployAltitude && !this.universe.destroyed(this.nearestDef?.id);
       if (inSky && !this.wasInSky && !this.auto) {
+        if (this.universe.surfaceReady(this.nearestDef.id)) {
+          this.velocity = [0, 0, 0];
+          this.warp = false;
+          this.arrivalAxes = Math.hypot(axes.x, axes.y, axes.z) > 0.05 ? axes : null;
+        }
         this.universe.select(this.nearestDef.id, 'sky');
         this.game.ui.toast(
           this.nearestDef.name + ' · 구름 위의 창공',
           this.universe.surfaceReady(this.nearestDef.id)
-            ? '일어나서 격납고의 파괴정에 탑승하세요.'
+            ? '모선 정박 · 파괴정 출격 또는 격납고에서 탑승'
             : '표면은 아직 미개방입니다. 궤도 탐사와 모선 포격은 가능합니다.',
           5,
         );
@@ -7018,6 +7075,8 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         mesh(t, 'box', [sd * 0.62, 3.03, 0], [0.9, 0.06, 0.4], C.light, { em: 1.4, type: 1 });
       }
       mesh(g, 'box', [0, 4.4, tz], [3.4, 0.05, 1.2], C.light, { em: 1.25, type: 1 });
+      this.labScanner = mesh(t, 'box', [0, 1.6, 0], [0.035, 0.85, 1.35], '#83f9da', { alpha: 0.42, em: 1.4 });
+      this.labScanner.visible = false;
       this.solids.push({ min: [-1.9, -1, tz - 1.2], max: [1.9, 4, tz + 1.2], gallery: true });
       this.interactables.push({
         id: 'lab',
@@ -7028,7 +7087,14 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         verb: '실험대에 눕히기',
         action: () => {
           if (this.labPose) {
-            if (this.labPose.time >= 0.7) this.game.ui.openLab();
+            const pose = this.labPose;
+            if (pose.person.result) {
+              this.clearLabSubject();
+              this.updateTrophies();
+            } else if (pose.time >= 0.7 && pose.scan == null) {
+              pose.scan = 0;
+              this.game.audio.metal();
+            }
           } else this.seatLabSubject(tz);
         },
       });
@@ -7038,18 +7104,17 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       for (const sd of [-1, 1]) mesh(g, 'box', [sd * 7.4, 0.1, hz], [0.06, 0.05, 8.6], C.amber, { em: 1.1, type: 1 });
       const heads = this.game.save.data.trophies.length;
       this.firstPassenger = null;
-      u.hold.forEach((from, i) => {
+      const subject = u.hold.find(p => !p.result) || u.hold[0];
+      u.hold.forEach((person, i) => {
         const col = i % 5,
           row = Math.floor(i / 5);
         const fig = heads
           ? group(g, [-3.5 + col * 1.75, 0, hz - 4.1 + row * 1.15])
           : group(g, [-4.4 + col * 2.2, 0, hz - 2.6 + row * 2.1]);
-        const key = K.SurfaceMeta?.[from]?.species;
-        if (key && K.residentFigure) K.residentFigure(fig, key, i, 1.75);
-        else K.Models.subjectModel(fig, i);
+        K.residentFigure(fig, person.species, person.pal, 1.75, person.scale);
         fig.r[1] = Math.PI;
         fig.s = [1.15, 1.15, 1.15];
-        if (i === 0) this.firstPassenger = fig;
+        if (person === subject) this.firstPassenger = { fig, person };
       });
       this.interactables.push({
         id: 'hold',
@@ -7062,9 +7127,13 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       });
     }
     seatLabSubject(z) {
-      const fig = this.firstPassenger;
-      if (!fig) return;
-      this.labPose = { fig, z, home: fig.p.slice(), time: 0 };
+      if (!this.firstPassenger) return;
+      const { fig, person } = this.firstPassenger;
+      this.labPose = { fig, person, z, home: fig.p.slice(), time: 0, scan: person.result ? 2.2 : null };
+      const trace = document.getElementById('labTrace');
+      // A passenger's route always draws the same trace on the receiver.
+      trace?.setAttribute('d', 'M4 22 L43 ' + (7 + person.seed % 17) + ' L87 ' +
+        (4 + (person.seed >>> 3) % 18) + ' L125 ' + (6 + (person.seed >>> 7) % 16) + ' L164 6');
       const aim = M.aim([this.position[0], 2.6, this.position[2]], [0, 1.35, z]);
       this.yaw = aim.yaw;
       this.pitch = aim.pitch;
@@ -7075,12 +7144,26 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       if (!pose) return;
       if (Math.hypot(this.position[0], this.position[2] - pose.z) > 4) {
         this.clearLabSubject();
+        if (pose.person.result) this.updateTrophies();
         return;
       }
       pose.time = Math.min(0.7, pose.time + dt);
       const t = M.smooth(0, 0.7, pose.time), angle = t * Math.PI / 2;
       pose.fig.p = [-Math.sin(angle), 1.28 - Math.cos(angle), pose.z + (1 - t) * 0.85];
       pose.fig.r = [-angle, -Math.PI / 2, 0];
+      if (pose.scan != null) {
+        if (!pose.person.result) {
+          pose.scan = Math.min(2.2, pose.scan + dt);
+          this.labScanner.visible = true;
+          this.labScanner.p[0] = -1.1 + pose.scan;
+          if (pose.scan >= 2.2) {
+            this.game.universe.readRoute(pose.person);
+            this.game.audio.success();
+          }
+        }
+        if (pose.person.result) this.labScanner.visible = false;
+        this.game.ui.labMonitor(pose);
+      }
     }
     clearLabSubject() {
       if (!this.labPose) return;
@@ -7088,6 +7171,8 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       fig.p = home;
       fig.r = [0, Math.PI, 0];
       this.labPose = null;
+      this.labScanner.visible = false;
+      this.game.ui.labMonitor(null);
     }
     slots() {
       const g = this.game,
@@ -7101,7 +7186,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         key =
           slots.map(x => (x.type === 'head' ? 'h' + x.t.id : 'r' + x.id)).join('|') +
           '#' +
-          this.game.universe.hold.map(id => id || '_').join('.') +
+          this.game.universe.hold.map(p => [p.from, p.species, p.seed, p.result].join('-')).join('.') +
           '#' +
           (this.game.universe.freeing ? 1 : 0);
       if (key === this.galleryKey) return;
@@ -7235,7 +7320,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
                 : '중앙 통로';
       this.game.ui.setArea('MOTHERSHIP · NØMAD', this.zone);
       if (input.take('KeyM')) {
-        this.game.ui.navigation();
+        this.game.ui.navigation(this.labPose?.person.result ? this.labPose.person.lead : undefined);
         return;
       }
       let nearest = null,
@@ -7259,9 +7344,11 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         ready = this.game.universe.cargo > 0;
         if (!ready) hint = '실험대 · 화물칸이 비어 있습니다';
         else if (this.labPose) {
-          ready = this.labPose.time >= 0.7;
-          hint = ready ? '실험대 · 주민 행성 위치 조사' : '주민을 실험대에 눕히는 중';
-          verb = '실험하기';
+          const pose = this.labPose;
+          ready = pose.time >= 0.7 && (pose.scan == null || !!pose.person.result);
+          hint = pose.time < 0.7 ? '주민을 실험대에 눕히는 중' : pose.person.result ? '항로 조사 완료' :
+            pose.scan == null ? '실험대 · 주민의 항로 조사' : '실험대 작동 중';
+          verb = pose.person.result ? '화물칸 복귀' : '실험하기';
         }
       }
       if (nearest?.id === 'launch') ready = this.game.nearPlanet() && !this.game.space.weapons.inFlight(this.game.space.target.id);
@@ -7466,7 +7553,8 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         this.kick = 0.017;
       } else this.planet.stopFire();
       if (this.grab) this.updateGrab(dt, f);
-      this.liftSurvivor(dt);
+      if (input.take('KeyG')) this.recoverPassenger();
+      this.animateRecovery(dt);
       if (input.take('KeyF')) {
         if (this.pulseCooldown <= 0) {
           this.pulseCooldown = 3;
@@ -7534,8 +7622,9 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         } else if (e.tug) context = '뽑아내는 중 · 뒤로 당기세요';
         else if (this.anchored(e)) context = touch ? '잡아당기는 중 · 놓기로 해제' : '잡아당기는 중 · 우클릭 놓기';
         else context = touch ? '던지기를 끌어 조준 · 손을 떼면 투척' : '좌클릭 던지기 · 우클릭 내려놓기';
-        if (e.kind === 'creature' && e.beg)
-          context = this.game.universe.cargoFull() ? (touch ? '화물칸 가득 참 · 놓기를 눌러 내려놓기' : '화물칸 가득 참 · 우클릭으로 내려놓기') : '240m 위로 올라가면 모선이 끌어올립니다';
+        if (this.canRecover()) context = this.game.universe.cargoFull()
+          ? '화물칸 20/20 · 던지기 또는 놓기'
+          : touch ? '주민 견인 중' : 'G · 모선 회수　좌클릭 · 던지기　Q · 놓기';
       } else {
         const t = this.pick?.entity || aim?.entity;
         if (t) {
@@ -7836,33 +7925,46 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         this.lock.em = this.grab ? 0.5 : 1.2;
       } else this.lock.visible = false;
     }
-    liftSurvivor(dt) {
-      const e = this.grab,
-        u = this.game.universe;
-      this.liftHint = Math.max(0, (this.liftHint || 0) - dt);
-      if (!e || e.kind !== 'creature' || !e.alive || !e.beg) return;
-      const alt = this.p[1] - this.floorAt(this.p);
-      if (alt < 240) return;
-      if (u.cargoFull()) {
-        if (this.liftHint <= 0) {
-          this.liftHint = 6;
-          this.game.ui.toast('화물칸이 가득 찼습니다', '20명이 한계입니다. 더는 태울 수 없습니다.', 4);
-        }
+    canRecover() {
+      const e = this.grab;
+      return !!(e?.alive && e.kind === 'creature' && (e.res || e.freed || e.beg));
+    }
+    recoverPassenger() {
+      if (!this.canRecover()) return;
+      const u = this.game.universe, e = this.grab;
+      const person = u.loadSurvivor(this.planet.id, e);
+      if (!person) {
+        this.game.ui.toast('화물칸이 가득 찼습니다', '20/20 · 견인 중인 주민은 그대로 있습니다.', 3);
         return;
       }
-      u.loadSurvivor(this.planet.id);
+      const p = e.p.slice();
+      const fx = K.group(this.planet.root, p);
+      const column = K.beam(fx, [0, -1, 0], [0, 200, 0], 1.8, '#a6ffe4', 1.4);
+      column.alpha = 0.23;
+      const figure = K.residentFigure(fx, person.species, person.pal, null, person.scale);
+      figure.r[1] = e.yaw || 0;
+      (this.recoveries ||= []).push({ fx, column, figure, age: 0 });
       this.planet.residents?.lifted(e);
+      this.planet.residents?.alarm(p[0], p[2], 48, 'beam');
       e.alive = false;
       e.node.visible = false;
       this.grab = null;
       this.tension = 0;
       this.planet.stopTether();
       this.game.audio.success();
-      this.game.ui.toast(
-        '모선이 끌어올렸습니다 · ' + u.cargo + '/20',
-        u.cargo >= 20 ? '화물칸이 찼습니다. 남은 사람들은 여기 남습니다.' : '견인한 채로 240m 위까지 올라오면 됩니다.',
-        5,
-      );
+      this.game.persist('checkpoint');
+      this.game.ui.toast('모선 회수 · 화물칸 ' + u.cargo + '/20', '', 2);
+    }
+    animateRecovery(dt) {
+      if (!this.recoveries) return;
+      for (let i = this.recoveries.length - 1; i >= 0; i--) {
+        const r = this.recoveries[i];
+        r.age += dt;
+        const t = Math.min(1, r.age / 1.15);
+        r.figure.p[1] = 100 * t * t * t;
+        r.column.alpha = 0.23 * Math.min(1, t * 12, (1 - t) * 6);
+        if (t >= 1) { this.planet.root.remove(r.fx); this.recoveries.splice(i, 1); }
+      }
     }
     // kept for worlds that call it directly (a test, a scripted grab): same as a tractor press on what is aimed at
     toggleGrab(aim) {
@@ -9109,19 +9211,24 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         sp0 = s.spawn || { p: [0, 12, 215] };
       if (!this.rng) this.rng = M.rand(911);
       const out = [];
-      ids.forEach((from, i) => {
-        const key = K.SurfaceMeta?.[from]?.species || 'subject',
+      ids.forEach((person, i) => {
+        const key = person.species,
           sp = SPECIES[key] || SPECIES.subject;
         const a = (i / ids.length) * TAU,
           d = 9 + (i % 4) * 3;
         const x = sp0.p[0] + Math.sin(a) * d,
           z = sp0.p[2] - 34 + Math.cos(a) * d;
-        const r = this.make(x, z, { sp, freed: true });
+        const r = this.make(x, z, { sp, freed: true, child: person.child });
+        r.passenger = person;
+        r.pal = person.pal % sp.palettes.length;
+        r.scale = person.scale;
+        r.radius = sp.radius * r.scale;
+        r.seed = person.seed;
         r.home = [x, z];
         r.yaw = Math.atan2(-Math.sin(a), -Math.cos(a));
         r.state = 'freed';
         r.st = 6 + Math.random() * 7;
-        r.native = from === s.id;
+        r.native = person.from === s.id;
         this.list.push(r);
         out.push(r);
         this.addStores(sp);
@@ -10243,7 +10350,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
   }
   K.Residents = Residents;
   /* A standing figure as ordinary scene nodes (the mothership's hold). height = metres tall in that room. */
-  K.residentFigure = function (root, key, seed = 0, height = 1.75) {
+  K.residentFigure = function (root, key, seed = 0, height = 1.75, scale = 1) {
     const sp = SPECIES[key] || SPECIES.subject;
     resetQ();
     Q.aLx = Q.aRx = -0.55;
@@ -10253,7 +10360,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     Q.mouth = 0.05;
     bones(BONES, sp, 0, 0, 0, 0, 1);
     const g = K.group(root),
-      k = height / sp.height,
+      k = height == null ? scale : height * scale / sp.height,
       pal = seed % sp.palettes.length;
     g.s = [k, k, k];
     sp.parts.forEach((part, i) => {
@@ -10993,6 +11100,17 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.vehicle.pitch = this.spawn.pitch;
       this.createFX();
       return this;
+    }
+    useSettlementApproach() {
+      const spec = this.residents?.spec;
+      if (!spec) return;
+      const center = spec.center || [0, 0], village = this.villages[0];
+      const x = village?.x ?? center[0] + 50, z = village?.z ?? center[1] + 90;
+      const at = [x, 0, z + 35];
+      // Hover above the actual settlement, including elevated surfaces and roofs.
+      const nearby = this.buildings.filter(b => b.alive && Math.hypot(b.p[0] - x, b.p[2] - at[2]) < (b.w || 0) + 28);
+      at[1] = Math.max(this.height(x, at[2]), this.floor(x, at[2], 10000), ...nearby.map(b => b.p[1] + b.h)) + 26;
+      this.spawn = { p: at, yaw: 0, pitch: -0.37 };
     }
     height(x, z) {
       const m = M.smooth(270, 620, Math.hypot(x, z));

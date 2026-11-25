@@ -107,6 +107,14 @@
         this.space.distance() <= this.space.deployAltitude
       );
     }
+    canDeploy() {
+      return this.nearPlanet() && !this.space.auto && !this.space.weapons.inFlight(this.space.target.id);
+    }
+    flightAction() {
+      if (this.mode !== 'space' || this.busy) return;
+      if (this.canDeploy()) this.launch();
+      else this.space.toggleAuto();
+    }
     enterSpace() {
       if (this.busy) return;
       this.mode = 'space';
@@ -120,6 +128,11 @@
     }
     enterInterior(where = 'bridge') {
       if (this.busy) return;
+      // A manually piloted ship holds station when the pilot leaves the chair.
+      if (!this.space.auto && (!this.space.warp || this.nearPlanet())) {
+        this.space.velocity = [0, 0, 0];
+        this.space.warp = false;
+      }
       this.space.save();
       this.mode = 'interior';
       this.currentInteract = null;
@@ -214,21 +227,20 @@
             const Planet = await K.loadPlanet(id);
             this.activePlanetId = id;
             this.planet = new Planet(this, def);
+            if (this.universe.landingTarget === id) this.planet.useSettlementApproach?.();
             K.releaseSurvivors(this);
             this.mode = 'planet';
             this.ui.mode('planet');
             this.setEnvironment();
             this.descent = 3.6;
+            this.input.enabled = true;
           },
           true,
         );
-        if (!this.planet?.barren)
-          this.ui.toast(def.name + ' · 강하 완료', '좌클릭 광선 · Q 견인 · F 충격파 · R 언제든 귀환', 7);
       } catch (e) {
         this.ui.fatal(e);
       } finally {
         this.busy = false;
-        this.input.clear();
         this.input.enabled = true;
       }
     }
@@ -338,7 +350,6 @@
           } else if (this.mode === 'planet' && this.planet) {
             this.space.weapons.update(dt, this.input, false);
             if (this.descent > 0) {
-              this.input.clear();
               this.descent = Math.max(0, this.descent - dt);
               const t = 1 - this.descent / 3.6,
                 q = t * t * (3 - 2 * t);
@@ -347,7 +358,9 @@
               v.p = [spawn.p[0] + 25 * (1 - q), spawn.p[1] + 113 * (1 - q), spawn.p[2] + 125 * (1 - q)];
               v.yaw = spawn.yaw;
               v.pitch = M.lerp(-0.36, spawn.pitch, q);
-              this.planet.update(dt, this.input);
+              this.planet.update(dt, this.descent > 0 ? this.input.idle : this.input);
+              if (!this.descent && !this.planet.barren && this.ui.toastUntil < performance.now())
+                this.ui.toast(this.space.target.name + ' · 강하 완료');
             } else if (!this.busy) this.planet.update(dt, this.input);
           }
           if (this.started && !this.busy) {

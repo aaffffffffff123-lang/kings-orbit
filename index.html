@@ -93,7 +93,7 @@ body.touch #titleSettings{min-width:44px;min-height:40px}
 /* Touch HUD. Each thumb has its own group; gaps pass input through to the world. */
 #flightActions{display:contents}
 #stopAction{display:none}
-#touch{
+#hud{
   --primary-size:clamp(64px,15vmin,84px);
   --aux-size:clamp(48px,10vmin,60px);
   --pad-gap:clamp(7px,1.7vmin,11px);
@@ -166,10 +166,16 @@ body.touch .toast{top:calc(env(safe-area-inset-top) + 114px);padding:5px 12px;wi
 .residentRoutes button,.landingRoutes button{min-width:44px;min-height:44px}
 .landingRoutes{margin-bottom:12px}
 .landingRoutes summary{min-height:44px;padding:12px 0;cursor:pointer;font-size:12px;color:#b5c8c3;pointer-events:auto}
-.labOptions{display:grid;gap:8px}
-.labOptions button{min-height:44px}
-.labDestination{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.labDestination span{color:var(--mint);font-size:11px}
+body[data-mode=planet] #transition.white.show{pointer-events:none}
+#recoverAction{position:absolute;top:146px;right:30px;border-color:#83c8b4}
+#recoverAction:disabled{opacity:.65}
+body.touch #flightActions #recoverAction{position:fixed;top:auto;right:calc(env(safe-area-inset-right) + var(--pad-edge));bottom:calc(var(--pad-bottom) + var(--primary-size) + var(--aux-size) + var(--pad-gap) * 2);min-width:calc(var(--primary-size) + var(--pad-gap) + var(--aux-size));color:var(--mint);border-color:#78aca0}
+#labMonitor{position:absolute;left:50%;top:clamp(88px,21%,180px);transform:translateX(-50%);width:min(232px,58vw);padding:8px 12px;background:#0a1c20ef;border:1px solid #56867a;color:var(--mint);text-align:center}
+#labMonitor strong{display:block;font-size:13px;font-weight:500}
+#labMonitor svg{display:block;width:100%;height:24px;color:#8deacf}
+#labMap{min-height:40px;width:100%;background:#1d3836;border:1px solid #50796c;color:var(--mint);font-size:12px}
+@media(max-height:480px){#labMonitor{left:12px;top:76px;transform:none;width:152px}#labMonitor svg{height:15px}}
+
 </style></head><body>
 <canvas id="world" tabindex="0" aria-label="FIRST CONTACTS 3D 게임"></canvas>
 <div id="ui">
@@ -213,6 +219,7 @@ body.touch .toast{top:calc(env(safe-area-inset-top) + 114px);padding:5px 12px;wi
     <button id="warpAction" class="iconButton hidden">J · 도약</button>
     <button id="stopAction" class="iconButton hidden">정지</button>
     <button id="spaceAction" class="hidden">T · 에덴으로 자동항해</button>
+    <button id="recoverAction" class="iconButton hidden">모선 회수</button>
     <button id="returnAction" class="iconButton hidden">R · 모선 귀환</button>
   </div>
   <div id="worldLabels"></div>
