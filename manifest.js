@@ -1,7 +1,7 @@
 /* Planet manifest — loaded first. Worlds with a surface file of their own, and what the atlas knows of them.
  * Release layout: every file sits next to index.html. Bump BUILD whenever any file changes. */
 window.KO = Object.assign(window.KO || {}, {
-  BUILD: '0.6.10',
+  BUILD: '0.6.11',
   BUNDLED: false,
   SurfaceFiles: {
     eden: 'eden.js',

@@ -5160,22 +5160,47 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       $('closeHelp').onclick = () => this.close();
     }
     openHold() {
-      const u = this.game.universe,
-        esc = K.escapeHTML;
-      const rows = u.hold.map((p, i) => {
-        const species = K.Species[p.species]?.name || '주민';
+      this.passengerPanel(false);
+    }
+    openLab() {
+      this.passengerPanel(true);
+    }
+    passengerPanel(atTable) {
+      // Finish the preceding tray before reading its subject or building fresh rows.
+      this.leaveSpecimen?.();
+      const { universe: u, interior } = this.game;
+      const seated = interior.labPose?.person;
+      const passengers = u.hold.slice();
+      if (atTable && seated && passengers.includes(seated)) {
+        passengers.splice(passengers.indexOf(seated), 1);
+        passengers.unshift(seated);
+      }
+      const rows = passengers.map(p => {
+        const i = u.hold.indexOf(p);
+        const species = K.escapeHTML(K.Species[p.species]?.name || '주민');
+        const origin = K.escapeHTML(p.from ? u.displayName(p.from) : '출신 불명');
         const status = p.pieces ? '분리한 부위 ' + Object.keys(p.pieces).length + '개' : p.result ? '항로 조사 완료' : '생존';
-        return `<div class="panelRow"><span>${String(i + 1).padStart(2, '0')} · ${esc(species)}<small class="holdOrigin">${esc(p.from ? u.displayName(p.from) : '출신 불명')} · ${status}</small></span><button class="secondary specimenEntry" data-slot="${i}">${p.pieces ? '표본 보기' : '해부대'}</button></div>`;
+        const route = atTable && !p.pieces ? `<button class="secondary" data-task="route">${p.result ? '조사 결과' : '항로 조사'}</button>` : '';
+        const dissect = atTable ? (p.pieces ? '해부 계속' : '해부') : (p.pieces ? '실험대에서 계속' : '실험대에서 해부');
+        return `<div class="panelRow labPassenger" data-slot="${i}"><span>${String(i + 1).padStart(2, '0')} · ${species}<small class="holdOrigin">${origin} · ${status}${p === seated ? ' · 실험대 위' : ''}</small></span><div class="labChoices">${route}<button class="secondary" data-task="dissect">${dissect}</button></div></div>`;
       }).join('');
       const specimens = u.cargo - u.liveCargo;
       const holdDescription = specimens ? '생존 ' + u.liveCargo + '명 · 표본 ' + specimens + '점' :
         u.cargo ? (this.game.save.data.trophies.length ? '모두 전시 복도 쪽을 보고 서 있습니다.' : '모두 실험대 쪽을 보고 서 있습니다.') : '비어 있습니다.';
+      const holdInfo = `<p class="text">${holdDescription}${u.lost ? '<br>지금까지 ' + u.lost + '명이 돌아가지 못했습니다.' : ''}${u.freed ? '<br>' + u.freed + '명을 내려놓았습니다.' : ''}</p>`;
       this.open(
-        `<div class="eyebrow">CARGO HOLD</div><h2>화물칸 ${u.cargo}/20</h2><p class="text">${holdDescription}${u.lost ? '<br>지금까지 ' + u.lost + '명이 돌아가지 못했습니다.' : ''}${u.freed ? '<br>' + u.freed + '명을 내려놓았습니다.' : ''}</p>${rows}<div class="panelActions">${u.liveCargo ? `<button id="freeHold">${u.freeing ? '내려보내기 취소' : '다음 착륙지에서 내려보내기'}</button>` : ''}<button id="closeHold" class="primary">닫기 ↗</button></div>`,
+        `<div class="eyebrow">${atTable ? 'NØMAD / LAB' : 'CARGO HOLD'}</div><h2>${atTable ? '실험대' : '화물칸 ' + u.cargo + '/20'}</h2>${atTable ? (rows ? '' : '<p class="text">화물칸이 비어 있습니다.</p>') : holdInfo}${rows}<div class="panelActions">${!atTable && u.liveCargo ? `<button id="freeHold">${u.freeing ? '내려보내기 취소' : '다음 착륙지에서 내려보내기'}</button>` : ''}${atTable && seated ? '<button id="clearTable">주민 돌려보내기</button>' : ''}<button id="closeHold" class="primary">닫기 ↗</button></div>`,
       );
-      for (const b of $('panel').querySelectorAll('.specimenEntry'))
-        b.onclick = () => K.openSpecimen(this, u.hold[Number(b.dataset.slot)]);
-      if (u.liveCargo)
+      for (const row of $('panel').querySelectorAll('.labPassenger')) {
+        const person = u.hold[Number(row.dataset.slot)];
+        for (const button of row.querySelectorAll('[data-task]'))
+          button.onclick = () => interior.useLab(person, button.dataset.task);
+      }
+      if ($('clearTable')) $('clearTable').onclick = () => {
+        interior.clearLabSubject();
+        this.close();
+      };
+      if ($('freeHold'))
         $('freeHold').onclick = () => {
           const on = u.setFreeing(!u.freeing);
           this.close();
@@ -7129,28 +7154,17 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         gallery: true,
         p: [0, 1.7, tz],
         radius: 3.4,
-        label: u.liveCargo ? '실험대' : '실험대 · 조사할 주민이 없습니다',
-        verb: '실험대에 눕히기',
-        action: () => {
-          if (this.labPose) {
-            const pose = this.labPose;
-            if (pose.person.result) {
-              this.clearLabSubject();
-              this.updateTrophies();
-            } else if (pose.time >= 0.7 && pose.scan == null) {
-              pose.scan = 0;
-              this.game.audio.metal();
-            }
-          } else this.seatLabSubject(tz);
-        },
+        label: '실험대',
+        verb: '실험대 사용',
+        action: () => this.game.ui.openLab(),
       });
       // 화물칸 — 실린 사람들은 실험대를 보고 서 있다
       const hz = z0 + 18.5;
       mesh(g, 'box', [0, 0.02, hz], [15, 0.04, 9], C.panel);
       for (const sd of [-1, 1]) mesh(g, 'box', [sd * 7.4, 0.1, hz], [0.06, 0.05, 8.6], C.amber, { em: 1.1, type: 1 });
       const heads = this.game.save.data.trophies.length;
-      this.firstPassenger = null;
-      const subject = u.hold.find(p => !p.pieces && !p.result) || u.hold.find(p => !p.pieces);
+      this.labZ = tz;
+      this.passengerFigures = new Map();
       u.hold.forEach((person, i) => {
         const col = i % 5,
           row = Math.floor(i / 5);
@@ -7164,7 +7178,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         } else K.residentFigure(fig, person.species, person.pal, 1.75, person.scale);
         fig.r[1] = Math.PI;
         fig.s = [1.15, 1.15, 1.15];
-        if (person === subject) this.firstPassenger = { fig, person };
+        this.passengerFigures.set(person, fig);
       });
       this.interactables.push({
         id: 'hold',
@@ -7176,10 +7190,17 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         action: () => this.game.ui.openHold(),
       });
     }
-    seatLabSubject(z) {
-      if (!this.firstPassenger) return;
-      const { fig, person } = this.firstPassenger;
-      this.labPose = { fig, person, z, home: fig.p.slice(), time: 0, scan: person.result ? 2.2 : null };
+    useLab(person, task) {
+      const { ui, universe } = this.game;
+      if (!universe.hold.includes(person) || (person.pieces && task === 'route')) return ui.openLab();
+      // The cargo shortcut brings the player and the selected passenger to this same physical bench.
+      this.updateTrophies();
+      const z = this.labZ, fig = this.passengerFigures.get(person);
+      const seatedTime = this.labPose?.person === person ? this.labPose.time : 0;
+      this.clearLabSubject();
+      ui.close();
+      if (Math.hypot(this.position[0], this.position[2] - z) > 3.35) this.position = [0, 1.85, z + 2.65];
+      this.labPose = { fig, person, z, home: fig.p.slice(), time: seatedTime, task, scan: null };
       const trace = document.getElementById('labTrace');
       // A passenger's route always draws the same trace on the receiver.
       trace?.setAttribute('d', 'M4 22 L43 ' + (7 + person.seed % 17) + ' L87 ' +
@@ -7187,6 +7208,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       const aim = M.aim([this.position[0], 2.6, this.position[2]], [0, 1.35, z]);
       this.yaw = aim.yaw;
       this.pitch = aim.pitch;
+      this.game.currentInteract = null;
       this.updateLabPose(0);
     }
     updateLabPose(dt) {
@@ -7201,6 +7223,17 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       const t = M.smooth(0, 0.7, pose.time), angle = t * Math.PI / 2;
       pose.fig.p = [-Math.sin(angle), 1.28 - Math.cos(angle), pose.z + (1 - t) * 0.85];
       pose.fig.r = [-angle, -Math.PI / 2, 0];
+      if (pose.time < 0.7) return;
+      if (pose.task === 'dissect') {
+        pose.task = null;
+        K.openSpecimen(this.game.ui, pose.person);
+        return;
+      }
+      if (pose.task === 'route') {
+        pose.task = null;
+        pose.scan = pose.person.result ? 2.2 : 0;
+        if (!pose.person.result) this.game.audio.metal();
+      }
       if (pose.scan != null) {
         if (!pose.person.result) {
           pose.scan = Math.min(2.2, pose.scan + dt);
@@ -7325,6 +7358,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     update(dt, input) {
       for (const a of this.animators || []) a(dt);
       this.updateLabPose(dt);
+      if (this.game.paused) return;
       const [dx, dy] = input.look();
       this.yaw -= dx;
       this.pitch = M.clamp(this.pitch - dy, -1.25, 1.25);
@@ -7391,14 +7425,12 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       let ready = !!nearest;
       let verb = nearest?.verb || '';
       if (nearest?.id === 'lab') {
-        ready = this.game.universe.liveCargo > 0;
-        if (!ready) hint = '실험대 · 조사할 주민이 없습니다';
+        ready = this.game.universe.cargo > 0;
+        if (!ready) hint = '실험대 · 화물칸이 비어 있습니다';
         else if (this.labPose) {
           const pose = this.labPose;
           ready = pose.time >= 0.7 && (pose.scan == null || !!pose.person.result);
-          hint = pose.time < 0.7 ? '주민을 실험대에 눕히는 중' : pose.person.result ? '항로 조사 완료' :
-            pose.scan == null ? '실험대 · 주민의 항로 조사' : '실험대 작동 중';
-          verb = pose.person.result ? '화물칸 복귀' : '실험하기';
+          hint = pose.time < 0.7 ? '실험대에 올리는 중' : pose.person.result ? '항로 조사 완료 · 실험대' : '항로 조사 중';
         }
       }
       if (nearest?.id === 'launch') ready = this.game.nearPlanet() && !this.game.space.weapons.inFlight(this.game.space.target.id);
@@ -12270,7 +12302,10 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
   style.textContent = `
 /* Cargo workbench */
 .holdOrigin{display:block;margin-top:4px;color:#9bb4b0;font-size:11px}
-.specimenEntry{min-height:42px;min-width:72px}
+.labPassenger{flex-wrap:wrap;gap:6px}
+.labPassenger>span{flex:1 1 105px}
+.labChoices{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.labChoices button{min-height:44px;padding:6px 10px;white-space:nowrap}
 .panel.specimenPanel{width:min(96vw,515px);padding:clamp(12px,3vw,25px);text-align:left}
 .specimenPanel h2{margin:6px 0 10px}.specimenPanel h2 small{font-size:.46em;margin-left:6px;color:#a2bcb5}
 #specimenTray{display:block;width:auto;height:auto;max-width:100%;max-height:56dvh;aspect-ratio:360/326;margin:0 auto;touch-action:none;cursor:crosshair;border:1px solid #47655e;border-radius:9px;background:linear-gradient(90deg,#9fc8b50b 1px,transparent 1px) 0 0/22px 22px,linear-gradient(#9fc8b50b 1px,transparent 1px) 0 0/22px 22px,radial-gradient(ellipse at 42% 36%,#526b63,#263c36 72%,#192b27);box-shadow:inset 0 0 0 4px #243c35,inset 0 0 0 5px #597169}
@@ -12380,13 +12415,13 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     const game = ui.game,
       u = game.universe,
       slot = u.hold.indexOf(person);
-    if (slot < 0) return ui.openHold();
+    if (slot < 0) return ui.openLab();
     const sp = K.Species[person.species] || K.Species.subject;
-    ui.open(`<div class="eyebrow">NØMAD / CARGO · ${String(slot + 1).padStart(2, '0')}</div>
-      <h2>해부대 <small>${K.escapeHTML(sp.name)}</small></h2>
-      <canvas id="specimenTray" width="720" height="652" aria-label="주민 해부대. 머리와 팔다리를 잡아당겨 분리하세요."></canvas>
+    ui.open(`<div class="eyebrow">NØMAD / LAB · ${String(slot + 1).padStart(2, '0')}</div>
+      <h2>해부 <small>${K.escapeHTML(sp.name)}</small></h2>
+      <canvas id="specimenTray" width="720" height="652" aria-label="실험대 위의 주민. 머리와 팔다리를 잡아당겨 분리하세요."></canvas>
       <div id="specimenStatus" role="status"></div>
-      <div class="panelActions"><button class="secondary danger" id="discardSpecimen">표본 폐기</button><button class="primary" id="backToHold">화물칸 ↗</button></div>`);
+      <div class="panelActions"><button class="secondary danger" id="discardSpecimen">표본 폐기</button><button class="primary" id="backToLab">실험대로</button></div>`);
     const panel = document.getElementById('panel'),
       canvas = document.getElementById('specimenTray');
     const status = document.getElementById('specimenStatus'),
@@ -12615,11 +12650,11 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     canvas.onpointerup = end;
     canvas.onpointercancel = end;
     canvas.onlostpointercapture = end;
-    document.getElementById('backToHold').onclick = () => ui.openHold();
+    document.getElementById('backToLab').onclick = () => ui.openLab();
     discard.onclick = () => {
       end();
       u.discardSpecimen(person);
-      ui.openHold();
+      ui.openLab();
     };
     ui.leaveSpecimen = () => {
       closed = true;
@@ -12627,6 +12662,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       cancelAnimationFrame(frame);
       panel.classList.remove('specimenPanel');
       ui.leaveSpecimen = null;
+      game.interior.clearLabSubject();
       game.interior.updateTrophies();
     };
     caption();
