@@ -4776,6 +4776,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       game.input.bindTouch();
       this.mobile(game.input.mobile);
       const wrap = $('panelWrap');
+      K.bindLabTouch(wrap, '.labPassenger button, #closeHold, #freeHold');
       wrap.addEventListener('pointerdown', e => {
         this.backdropPress = e.target === wrap ? e.pointerId : null;
       });
@@ -12334,11 +12335,36 @@ body.tableWork #world{cursor:grab;touch-action:none}body.tableWork #world:active
 #tableTools header{top:max(12px,env(safe-area-inset-top));justify-content:space-between}
 #tableTools footer{bottom:max(12px,env(safe-area-inset-bottom));justify-content:center}
 #tableTools output,#tableTools strong{padding:5px 9px;background:#102023da;font-size:13px;border-radius:3px}
-#tableTools button{min-height:44px;padding:6px 14px;background:#15292de8;border:1px solid #7d9790;color:#e9f5ef;pointer-events:auto}
+#tableTools button{touch-action:manipulation;min-height:44px;padding:6px 14px;background:#15292de8;border:1px solid #7d9790;color:#e9f5ef;pointer-events:auto}
 #tableTools output{position:absolute;top:64px;left:12px}
 #tableTools button[hidden]{display:none}body.tableWork #labMonitor{top:62px;pointer-events:auto}
 `;
   document.head.appendChild(style);
+
+  // A quick follow-up tap or a second thumb may receive touchend without a browser click.
+  // Mouse and keyboard keep their native activation, and a finger dragged off a button cancels.
+  K.bindLabTouch = function (root, selector, signal) {
+    const options = { passive: false, signal };
+    let press = null;
+    root.addEventListener('touchstart', e => {
+      const button = e.target.closest(selector);
+      if (!button || press) return;
+      e.preventDefault();
+      press = { button, id: e.changedTouches[0].identifier };
+    }, options);
+    const finish = e => {
+      if (!press) return;
+      const finger = Array.from(e.changedTouches).find(t => t.identifier === press.id);
+      if (!finger) return;
+      e.preventDefault();
+      const { button } = press;
+      press = null;
+      if (e.type === 'touchend' && button.contains(document.elementFromPoint(finger.clientX, finger.clientY)))
+        button.click();
+    };
+    root.addEventListener('touchend', finish, options);
+    root.addEventListener('touchcancel', finish, options);
+  };
 
   // A bevel catches the work light on the edges of the foundry workers' armour.
   function roundedBox() {
@@ -12474,6 +12500,7 @@ body.tableWork #world{cursor:grab;touch-action:none}body.tableWork #world:active
       this.game.input.enabled = false;
       document.exitPointerLock?.();
       this.events = new AbortController();
+      K.bindLabTouch(this.game.ui.hud, '#tableTools button, #labMap', this.events.signal);
       const on = (name, fn) =>
         this.canvas.addEventListener(name, (e) => fn.call(this, e), { signal: this.events.signal });
       on('pointerdown', this.down);
