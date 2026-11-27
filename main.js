@@ -31,7 +31,8 @@
       this.cloudUI = new K.CloudUI(this);
       this.input.onPause = () => {
         if (this.busy || this.ui.starting) return;
-        if (this.paused) this.ui.close();
+        if (this.interior.labPose?.table) this.interior.leaveTable();
+        else if (this.paused) this.ui.close();
         else this.ui.menu();
       };
       this.input.onBlur = () => {

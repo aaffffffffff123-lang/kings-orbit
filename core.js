@@ -3600,7 +3600,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.hold = [];
       this.sites = new Set();
       this.landingTarget = '';
-      const profiles = new Map(), specimens = new Map();
+      const profiles = new Map(), specimens = new Map(), turns = new Map();
       this.lost = 0;
       this.freeing = false;
       this.freed = 0;
@@ -3608,6 +3608,15 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       const tokens = this.save.data.planetStates[LEDGER]?.destroyed || [];
       for (const t of tokens) {
         if (typeof t !== 'string') continue;
+        if (t.startsWith('turn.')) {
+          const [, slot, layout] = t.split('.');
+          if (/^\d{1,2}$/.test(slot) && +slot < 20 && /^(?:[1-7][0-9a-z]{3}){1,7}$/.test(layout)) {
+            const angles = {};
+            for (let i = 0; i < layout.length; i += 4) angles[layout[i]] = layout.slice(i + 1, i + 4);
+            turns.set(+slot, angles);
+          }
+          continue;
+        }
         if (t.startsWith('cut.')) {
           const [, slot, layout] = t.split('.');
           if (/^\d{1,2}$/.test(slot) && +slot < 20 && /^(?:[1-7][0-9a-z]{4}){1,7}$/.test(layout)) {
@@ -3674,7 +3683,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
           });
       }
       this.hold = this.hold.map((from, i) => profiles.get(i) || this.passenger(from, { seed: i + 1, pal: i }));
-      this.hold.forEach((person, i) => { if (specimens.has(i)) person.pieces = specimens.get(i); });
+      this.hold.forEach((person, i) => { if (specimens.has(i)) { person.pieces = specimens.get(i); person.turns = turns.get(i) || {}; } });
       if (!this.liveCargo) this.freeing = false;
       this.revision++;
     }
@@ -3731,13 +3740,14 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     get liveCargo() {
       return this.hold.reduce((n, p) => n + !p.pieces, 0);
     }
-    placePiece(person, id, offset) {
+    placePiece(person, id, offset, turn) {
       if (!this.hold.includes(person)) return;
       if (!person.pieces) {
         person.pieces = {};
         this.lost++;
         if (!this.liveCargo) this.freeing = false;
       }
+      if (turn) (person.turns ||= {})[id] = turn;
       person.pieces[id] = offset.map(v => Math.round(K.M.clamp(v, -400, 400)));
       this.flush();
       this.save.write('checkpoint');
@@ -3985,6 +3995,8 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
           +p.child, p.seed, p.lead || '_', p.result || '_'].join('.')),
         ...this.hold.flatMap((p, i) => p.pieces ? ['cut.' + i + '.' + Object.entries(p.pieces)
           .map(([id, offset]) => id + offset.map(v => (v + 400).toString(36).padStart(2, '0')).join('')).join('')] : []),
+        ...this.hold.flatMap((p, i) => p.turns && Object.keys(p.turns).length ? ['turn.' + i + '.' +
+          Object.entries(p.turns).map(([id, r]) => id + r).join('')] : []),
         ...[...this.sites].map(id => 'site-' + id),
         ...(this.landingTarget ? ['approach-' + this.landingTarget] : []),
         'lost-' + this.lost,
@@ -4753,10 +4765,10 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         '<button id="recoverAction" class="iconButton hidden">모선 회수</button>');
       if (!$('labMonitor')) this.hud.insertAdjacentHTML('beforeend',
         '<section id="labMonitor" class="hidden"><strong id="labReadout"></strong><svg viewBox="0 0 168 28" aria-hidden="true"><path id="labTrace" pathLength="1" fill="none" stroke="currentColor" stroke-dasharray="1" d="M4 23 L42 17 L72 21 L116 5 L164 7"/></svg><button id="labMap" class="hidden">성도에서 보기 ↗</button></section>');
-      input.bindTap('labMap', () => {
+      $('labMap').onclick = () => {
         const person = game.interior.labPose?.person;
         if (person?.result && person.result !== 'lost') this.navigation(person.lead);
-      });
+      };
       input.bindTap('recoverAction', () => {
         if (game.mode === 'planet' && !game.descent) game.planet.vehicle.recoverHeld();
       });
@@ -5045,7 +5057,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       }
     }
     open(html) {
-      this.leaveSpecimen?.();
+      this.game.interior.leaveTable();
       const g = this.game;
       this.backdropPress = null;
       $('title').inert = true;
@@ -5064,7 +5076,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     }
     close() {
       if (this.game.cloudUI?.busy) return;
-      this.leaveSpecimen?.();
+      this.game.interior.leaveTable();
       this.game.paused = false;
       this.game.input.enabled = this.game.started;
       this.game.input.clear();
@@ -5166,10 +5178,9 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.passengerPanel(true);
     }
     passengerPanel(atTable) {
-      // Finish the preceding tray before reading its subject or building fresh rows.
-      this.leaveSpecimen?.();
       const { universe: u, interior } = this.game;
       const seated = interior.labPose?.person;
+      interior.leaveTable();
       const passengers = u.hold.slice();
       if (atTable && seated && passengers.includes(seated)) {
         passengers.splice(passengers.indexOf(seated), 1);
@@ -5182,24 +5193,20 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         const status = p.pieces ? '분리한 부위 ' + Object.keys(p.pieces).length + '개' : p.result ? '항로 조사 완료' : '생존';
         const route = atTable && !p.pieces ? `<button class="secondary" data-task="route">${p.result ? '조사 결과' : '항로 조사'}</button>` : '';
         const dissect = atTable ? (p.pieces ? '해부 계속' : '해부') : (p.pieces ? '실험대에서 계속' : '실험대에서 해부');
-        return `<div class="panelRow labPassenger" data-slot="${i}"><span>${String(i + 1).padStart(2, '0')} · ${species}<small class="holdOrigin">${origin} · ${status}${p === seated ? ' · 실험대 위' : ''}</small></span><div class="labChoices">${route}<button class="secondary" data-task="dissect">${dissect}</button></div></div>`;
+        return `<div class="panelRow labPassenger" data-slot="${i}"><span>${String(i + 1).padStart(2, '0')} · ${species}<small class="holdOrigin">${origin} · ${status}${p === seated ? ' · 방금 선택한 주민' : ''}</small></span><div class="labChoices">${route}<button class="secondary" data-task="dissect">${dissect}</button></div></div>`;
       }).join('');
       const specimens = u.cargo - u.liveCargo;
       const holdDescription = specimens ? '생존 ' + u.liveCargo + '명 · 표본 ' + specimens + '점' :
         u.cargo ? (this.game.save.data.trophies.length ? '모두 전시 복도 쪽을 보고 서 있습니다.' : '모두 실험대 쪽을 보고 서 있습니다.') : '비어 있습니다.';
       const holdInfo = `<p class="text">${holdDescription}${u.lost ? '<br>지금까지 ' + u.lost + '명이 돌아가지 못했습니다.' : ''}${u.freed ? '<br>' + u.freed + '명을 내려놓았습니다.' : ''}</p>`;
       this.open(
-        `<div class="eyebrow">${atTable ? 'NØMAD / LAB' : 'CARGO HOLD'}</div><h2>${atTable ? '실험대' : '화물칸 ' + u.cargo + '/20'}</h2>${atTable ? (rows ? '' : '<p class="text">화물칸이 비어 있습니다.</p>') : holdInfo}${rows}<div class="panelActions">${!atTable && u.liveCargo ? `<button id="freeHold">${u.freeing ? '내려보내기 취소' : '다음 착륙지에서 내려보내기'}</button>` : ''}${atTable && seated ? '<button id="clearTable">주민 돌려보내기</button>' : ''}<button id="closeHold" class="primary">닫기 ↗</button></div>`,
+        `<div class="eyebrow">${atTable ? 'NØMAD / LAB' : 'CARGO HOLD'}</div><h2>${atTable ? '실험대' : '화물칸 ' + u.cargo + '/20'}</h2>${atTable ? (rows ? '' : '<p class="text">화물칸이 비어 있습니다.</p>') : holdInfo}${rows}<div class="panelActions">${!atTable && u.liveCargo ? `<button id="freeHold">${u.freeing ? '내려보내기 취소' : '다음 착륙지에서 내려보내기'}</button>` : ''}<button id="closeHold" class="primary">닫기 ↗</button></div>`,
       );
       for (const row of $('panel').querySelectorAll('.labPassenger')) {
         const person = u.hold[Number(row.dataset.slot)];
         for (const button of row.querySelectorAll('[data-task]'))
           button.onclick = () => interior.useLab(person, button.dataset.task);
       }
-      if ($('clearTable')) $('clearTable').onclick = () => {
-        interior.clearLabSubject();
-        this.close();
-      };
       if ($('freeHold'))
         $('freeHold').onclick = () => {
           const on = u.setFreeing(!u.freeing);
@@ -7138,14 +7145,23 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       const tz = z0 + 7.5,
         t = group(g, [0, 0, tz]);
       mesh(t, 'box', [0, 0.45, 0], [2.6, 0.9, 1.1], C.panel);
-      mesh(t, 'box', [0, 0.95, 0], [3, 0.14, 1.45], '#c9ccc6', { em: 0.12 });
-      mesh(t, 'cylinder', [0, 1.02, 0], [1.1, 0.02, 1.1], '#7fd4d0', { alpha: 0.3, em: 0.8 });
-      for (const sd of [-1, 1]) {
-        const arm = mesh(t, 'cylinder', [sd * 1.35, 2.15, 0], [0.12, 2.3, 0.12], C.edge);
-        mesh(t, 'box', [sd * 0.75, 3.2, 0], [1.5, 0.22, 0.7], C.panel);
-        mesh(t, 'box', [sd * 0.62, 3.03, 0], [0.9, 0.06, 0.4], C.light, { em: 1.4, type: 1 });
+      mesh(t, 'box', [0, 0.95, 0], [3.16, 0.14, 2.1], '#c9ccc6', { em: 0.12 });
+      mesh(t, 'box', [0, 1.02, 0], [3.04, 0.034, 1.99], '#748987');
+      for (const side of [-1, 1]) {
+        mesh(t, 'box', [0, 1.044, side * 1.015], [3.05, 0.035, 0.045], C.edge);
+        mesh(t, 'box', [side * 1.55, 1.035, 0], [0.045, 0.04, 2.02], C.edge);
+        mesh(t, 'box', [side * 1.585, 0.944, 0], [0.012, 0.025, 1.65], C.light, { em: 0.9 });
+        for (let i = -3; i <= 3; i++)
+          mesh(t, 'box', [side * 1.40, 1.038, i * 0.15], [0.15, 0.003, 0.023], '#415655');
       }
-      mesh(g, 'box', [0, 4.4, tz], [3.4, 0.05, 1.2], C.light, { em: 1.25, type: 1 });
+      const labLamps = group(t, [0, 0, -1.32]);
+      for (const sd of [-1, 1]) {
+        mesh(labLamps, 'cylinder', [sd * 1.35, 1.64, 0], [0.12, 3.28, 0.12], C.edge);
+        mesh(labLamps, 'box', [sd * 1.35, 0.08, 0], [0.32, 0.16, 0.32], C.panel);
+        mesh(labLamps, 'box', [sd * 0.75, 3.2, 0], [1.5, 0.22, 0.7], C.panel);
+        mesh(labLamps, 'box', [sd * 0.62, 3.03, 0], [0.9, 0.06, 0.4], C.light, { em: 1.4, type: 1 });
+      }
+      mesh(g, 'box', [0, 6.98, tz - 1.65], [3.4, 0.05, 1.2], C.light, { em: 1.25, type: 1 });
       this.labScanner = mesh(t, 'box', [0, 1.6, 0], [0.035, 0.85, 1.35], '#83f9da', { alpha: 0.42, em: 1.4 });
       this.labScanner.visible = false;
       this.solids.push({ min: [-1.9, -1, tz - 1.2], max: [1.9, 4, tz + 1.2], gallery: true });
@@ -7209,6 +7225,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.yaw = aim.yaw;
       this.pitch = aim.pitch;
       this.game.currentInteract = null;
+      this.labPose.table = new K.SpecimenTable(this, this.labPose);
       this.updateLabPose(0);
     }
     updateLabPose(dt) {
@@ -7221,14 +7238,11 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       }
       pose.time = Math.min(0.7, pose.time + dt);
       const t = M.smooth(0, 0.7, pose.time), angle = t * Math.PI / 2;
-      pose.fig.p = [-Math.sin(angle), 1.28 - Math.cos(angle), pose.z + (1 - t) * 0.85];
+      const table = pose.table;
+      pose.fig.p = table.target.map((v,i) => M.lerp(pose.home[i],v,t));
       pose.fig.r = [-angle, -Math.PI / 2, 0];
+      table.update(dt, t);
       if (pose.time < 0.7) return;
-      if (pose.task === 'dissect') {
-        pose.task = null;
-        K.openSpecimen(this.game.ui, pose.person);
-        return;
-      }
       if (pose.task === 'route') {
         pose.task = null;
         pose.scan = pose.person.result ? 2.2 : 0;
@@ -7248,9 +7262,15 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         this.game.ui.labMonitor(pose);
       }
     }
+    leaveTable() {
+      if (!this.labPose?.table) return;
+      this.clearLabSubject();
+      this.updateTrophies();
+    }
     clearLabSubject() {
       if (!this.labPose) return;
-      const { fig, home } = this.labPose;
+      const { fig, home, table } = this.labPose;
+      table?.dispose();
       fig.p = home;
       fig.r = [0, Math.PI, 0];
       this.labPose = null;
@@ -7358,7 +7378,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     update(dt, input) {
       for (const a of this.animators || []) a(dt);
       this.updateLabPose(dt);
-      if (this.game.paused) return;
+      if (this.game.paused || this.labPose?.table) return;
       const [dx, dy] = input.look();
       this.yaw -= dx;
       this.pitch = M.clamp(this.pitch - dy, -1.25, 1.25);
@@ -7376,15 +7396,6 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.walk += M.len(v) * dt * 7;
       const bob = Math.sin(this.walk) * 0.024 * this.game.settings.shake;
       let eye = [this.position[0], 1.85 + bob, this.position[2]];
-      if (this.labPose) {
-        const t = M.smooth(0, 0.7, this.labPose.time);
-        const center = [0, 1.35, this.labPose.z];
-        eye[1] += 0.75 * t;
-        const offset = M.sub(eye, center), distance = M.len(offset);
-        // Keep the whole table within the horizontal field of view on a narrow phone.
-        const fit = 1.65 / (Math.tan(37 * Math.PI / 180) * Math.min(1, innerWidth / innerHeight));
-        if (fit > distance) eye = M.add(eye, M.mul(offset, t * (fit / distance - 1)));
-      }
       this.game.engine.camera = {
         p: eye,
         yaw: this.yaw,
@@ -10482,9 +10493,9 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
   K.Residents = Residents;
   K.specimenPose = function (sp) {
     resetQ();
-    Q.aLz = Q.aRz = 0.93;
+    Q.aLz = Q.aRz = 0.43;
     Q.eL = Q.eR = 0.08;
-    Q.lLz = Q.lRz = 0.55;
+    Q.lLz = Q.lRz = 0.30;
     Q.hdp = -0.04;
     bones(BONES, sp, 0, 0, 0, 0, 1);
     return new Float32Array(BONES);
@@ -12295,31 +12306,15 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
   }
   K.Barren = Barren;
 })((window.KO ||= {}));
-// FILE: src/ui/cargo-specimen.js
+// FILE: src/interior/specimen-table.js
 (function (K) {
   'use strict';
-  const style = document.createElement('style');
-  style.textContent = `
-/* Cargo workbench */
-.holdOrigin{display:block;margin-top:4px;color:#9bb4b0;font-size:11px}
-.labPassenger{flex-wrap:wrap;gap:6px}
-.labPassenger>span{flex:1 1 105px}
-.labChoices{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
-.labChoices button{min-height:44px;padding:6px 10px;white-space:nowrap}
-.panel.specimenPanel{width:min(96vw,515px);padding:clamp(12px,3vw,25px);text-align:left}
-.specimenPanel h2{margin:6px 0 10px}.specimenPanel h2 small{font-size:.46em;margin-left:6px;color:#a2bcb5}
-#specimenTray{display:block;width:auto;height:auto;max-width:100%;max-height:56dvh;aspect-ratio:360/326;margin:0 auto;touch-action:none;cursor:crosshair;border:1px solid #47655e;border-radius:9px;background:linear-gradient(90deg,#9fc8b50b 1px,transparent 1px) 0 0/22px 22px,linear-gradient(#9fc8b50b 1px,transparent 1px) 0 0/22px 22px,radial-gradient(ellipse at 42% 36%,#526b63,#263c36 72%,#192b27);box-shadow:inset 0 0 0 4px #243c35,inset 0 0 0 5px #597169}
-#specimenStatus{min-height:1.5em;margin:9px 0;color:#cedbd4;font-size:13px}
-#discardSpecimen[hidden]{display:none}
-.specimenPanel .panelActions{margin-top:7px}
-@media(max-height:480px) and (orientation:landscape){.panel.specimenPanel{display:grid;grid-template-columns:minmax(0,1fr) minmax(155px,.72fr);gap:4px 16px;width:min(94vw,630px);align-items:center}.specimenPanel #specimenTray{grid-column:1;grid-row:1/6;max-height:75dvh}.specimenPanel .eyebrow,.specimenPanel h2,.specimenPanel #specimenStatus,.specimenPanel .panelActions{grid-column:2}.specimenPanel .panelActions{display:grid;gap:6px}.specimenPanel .panelActions button{min-height:40px;padding:8px}}
-`;
-  document.head.appendChild(style);
-  const W = 360,
-    H = 326;
-  const boneGroup = [0, 0, 0, 1, 2, 3, 4, 5, 6, 7];
-  const parents = [-1, 0, 0, 2, 0, 4, 0, 0];
-  const names = [
+  const { M, group, mesh } = K,
+    TAU = Math.PI * 2;
+  const parents = [-1, 0, 0, 2, 0, 4, 0, 0],
+    groupForBone = [0, 0, 0, 1, 2, 3, 4, 5, 6, 7],
+    joints = [2, 3, 4, 5, 6, 7, 8, 9];
+  const labels = [
     '몸통',
     '머리',
     '왼쪽 위팔',
@@ -12329,343 +12324,625 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     '왼쪽 다리',
     '오른쪽 다리',
   ];
-  const drawOrder = [7, 6, 4, 2, 0, 5, 3, 1];
-  const zero = [0, 0];
-  const css = (rgb, light = 1) => 'rgb(' + rgb.map(c => Math.round(Math.min(255, c * 255 * light))).join(',') + ')';
-  const clamp = K.M.clamp;
-  const clampPoint = (point, center) => [
-    clamp(point[0], 18 - center[0], W - 18 - center[0]),
-    clamp(point[1], 16 - center[1], H - 16 - center[1]),
-  ];
-  // Bake the actual passenger meshes into movable layers once. Colour and joints come from the surface species.
-  function cutout(engine, sp, person) {
-    const pose = K.specimenPose(sp),
-      matrix = new Float32Array(16);
-    const layers = names.map(() => ({ faces: [], minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity }));
-    const colors = sp.colors[person.pal % sp.palettes.length];
-    sp.parts.forEach((part, i) => {
-      if (part.dyn === 'halo') return;
-      const geo = engine.sources[part.geo],
-        layer = layers[boneGroup[part.bone]];
-      if (!geo || !layer) return;
-      K.Mat.mul(matrix, 0, pose, part.bone * 16, part.m, 0);
-      const pts = [];
-      for (let j = 0; j < geo.p.length; j += 3) {
-        const [x, y, z] = geo.p.slice(j, j + 3);
-        const wx = matrix[0] * x + matrix[4] * y + matrix[8] * z + matrix[12];
-        const wy = matrix[1] * x + matrix[5] * y + matrix[9] * z + matrix[13];
-        const wz = matrix[2] * x + matrix[6] * y + matrix[10] * z + matrix[14];
-        pts.push([wx, -wy, wz]);
-        layer.minX = Math.min(layer.minX, wx);
-        layer.maxX = Math.max(layer.maxX, wx);
-        layer.minY = Math.min(layer.minY, -wy);
-        layer.maxY = Math.max(layer.maxY, -wy);
-      }
-      for (let j = 0; j < geo.idx.length; j += 3) {
-        const [a, b, c] = [pts[geo.idx[j]], pts[geo.idx[j + 1]], pts[geo.idx[j + 2]]];
-        const normal = K.M.cross(K.M.sub(b, a), K.M.sub(c, a));
-        if (Math.abs(normal[2]) < 0.000001) continue;
-        const n = K.M.norm(normal),
-          sign = Math.sign(n[2]);
-        const light = 0.51 + 0.55 * Math.max(0, sign * (-0.46 * n[0] - 0.56 * n[1] + 0.67 * n[2])) + 0.1 * part.em;
-        layer.faces.push({ pts: [a, b, c], z: a[2] + b[2] + c[2], color: css(colors[i], light) });
-      }
-    });
-    const left = Math.min(...layers.map(l => l.minX)),
-      right = Math.max(...layers.map(l => l.maxX));
-    const top = Math.min(...layers.map(l => l.minY)),
-      bottom = Math.max(...layers.map(l => l.maxY));
-    const scale = Math.min(230 / (right - left), 228 / (bottom - top)) * clamp(0.93 + 0.07 * person.scale, 0.86, 1.08);
-    const px = x => W / 2 + (x - (left + right) / 2) * scale;
-    const py = y => H / 2 + (y - (top + bottom) / 2) * scale;
-    const joints = [2, 3, 4, 5, 6, 7, 8, 9];
-    layers.forEach((l, id) => {
-      l.joint = [px(pose[joints[id] * 16 + 12]), py(-pose[joints[id] * 16 + 13])];
-      if (!l.faces.length) {
-        l.center = l.joint;
-        return;
-      }
-      l.x = Math.floor(px(l.minX)) - 1;
-      l.y = Math.floor(py(l.minY)) - 1;
-      l.w = Math.ceil(px(l.maxX)) - l.x + 2;
-      l.h = Math.ceil(py(l.maxY)) - l.y + 2;
-      l.center = [l.x + l.w / 2, l.y + l.h / 2];
-      l.img = document.createElement('canvas');
-      l.img.width = l.w * 2;
-      l.img.height = l.h * 2;
-      const ctx = l.img.getContext('2d', { willReadFrequently: true });
-      ctx.scale(2, 2);
-      ctx.lineWidth = 0.46;
-      ctx.lineJoin = 'round';
-      l.faces.sort((a, b) => a.z - b.z);
-      for (const f of l.faces) {
-        ctx.beginPath();
-        f.pts.forEach(([x, y], n) => (n ? ctx.lineTo(px(x) - l.x, py(y) - l.y) : ctx.moveTo(px(x) - l.x, py(y) - l.y)));
-        ctx.closePath();
-        ctx.fillStyle = ctx.strokeStyle = f.color;
-        ctx.fill();
-        ctx.stroke();
-      }
-      l.alpha = ctx.getImageData(0, 0, l.img.width, l.img.height).data;
-      delete l.faces;
-    });
-    return layers;
-  }
-  K.openSpecimen = function (ui, person) {
-    const game = ui.game,
-      u = game.universe,
-      slot = u.hold.indexOf(person);
-    if (slot < 0) return ui.openLab();
-    const sp = K.Species[person.species] || K.Species.subject;
-    ui.open(`<div class="eyebrow">NØMAD / LAB · ${String(slot + 1).padStart(2, '0')}</div>
-      <h2>해부 <small>${K.escapeHTML(sp.name)}</small></h2>
-      <canvas id="specimenTray" width="720" height="652" aria-label="실험대 위의 주민. 머리와 팔다리를 잡아당겨 분리하세요."></canvas>
-      <div id="specimenStatus" role="status"></div>
-      <div class="panelActions"><button class="secondary danger" id="discardSpecimen">표본 폐기</button><button class="primary" id="backToLab">실험대로</button></div>`);
-    const panel = document.getElementById('panel'),
-      canvas = document.getElementById('specimenTray');
-    const status = document.getElementById('specimenStatus'),
-      discard = document.getElementById('discardSpecimen');
-    panel.classList.add('specimenPanel');
-    const ctx = canvas.getContext('2d'),
-      layers = cutout(game.engine, sp, person);
-    let grip = null,
-      frame = 0,
-      last = 0,
-      drops = [],
-      returnMotion = null,
-      recoil = null,
-      closed = false;
-    const parts = () => person.pieces || {};
-    const blood = css(sp.blood, 1.35);
-    function caption(message) {
-      discard.hidden = !person.pieces;
-      status.textContent =
-        message ||
-        (person.pieces ? '분리한 조각은 다시 집어 옮길 수 있습니다.' : '머리나 팔다리를 집고 바깥으로 당기세요.');
-    }
-    function offset(id) {
-      if (id === 0) {
-        if (recoil) return [recoil.x * recoil.k, recoil.y * recoil.k];
-        if (grip && !parts()[grip.id]) return grip.offset.map((v, i) => (v - grip.origin[i]) * 0.15);
-      }
-      if (grip?.id === id) return grip.offset;
-      if (returnMotion?.id === id) return returnMotion.offset;
-      return (
-        (parts()[id] && clampPoint(parts()[id], layers[id].center)) || (parents[id] >= 0 ? offset(parents[id]) : zero)
-      );
-    }
-    function point(e) {
-      const r = canvas.getBoundingClientRect();
-      return [((e.clientX - r.left) * W) / r.width, ((e.clientY - r.top) * H) / r.height];
-    }
-    function pick(x, y) {
-      let best = -1,
-        bestDist = Infinity;
-      for (const id of drawOrder.slice().reverse()) {
-        const l = layers[id];
-        if (!l.img) continue;
-        const [dx, dy] = offset(id);
-        for (const [ox, oy] of [
-          [0, 0],
-          [-4, 0],
-          [4, 0],
-          [0, -4],
-          [0, 4],
-          [-7, 0],
-          [7, 0],
-          [0, 7],
-          [0, -7],
-        ]) {
-          const a = Math.floor((x - dx - l.x + ox) * 2),
-            b = Math.floor((y - dy - l.y + oy) * 2);
-          if (a < 0 || b < 0 || a >= l.img.width || b >= l.img.height || l.alpha[(b * l.img.width + a) * 4 + 3] < 55)
-            continue;
-          const d = Math.abs(ox) + Math.abs(oy);
-          if (d < bestDist) {
-            best = id;
-            bestDist = d;
+  const style = document.createElement('style');
+  style.textContent = `
+.holdOrigin{display:block;margin-top:4px;color:#9bb4b0;font-size:11px}.labPassenger{flex-wrap:wrap;gap:6px}.labPassenger>span{flex:1 1 105px}.labChoices{display:flex;gap:5px;flex-wrap:wrap}.labChoices button{min-height:44px;padding:6px 10px;white-space:nowrap}
+body.tableWork #hud>:not(#tableTools):not(#labMonitor){display:none!important}
+body.tableWork #world{cursor:grab;touch-action:none}body.tableWork #world:active{cursor:grabbing}
+#tableTools{position:absolute;inset:0;pointer-events:none;color:#e5efea}
+#tableTools header,#tableTools footer{position:absolute;left:max(12px,env(safe-area-inset-left));right:max(12px,env(safe-area-inset-right));display:flex;align-items:center;gap:8px}
+#tableTools header{top:max(12px,env(safe-area-inset-top));justify-content:space-between}
+#tableTools footer{bottom:max(12px,env(safe-area-inset-bottom));justify-content:center}
+#tableTools output,#tableTools strong{padding:5px 9px;background:#102023da;font-size:13px;border-radius:3px}
+#tableTools button{min-height:44px;padding:6px 14px;background:#15292de8;border:1px solid #7d9790;color:#e9f5ef;pointer-events:auto}
+#tableTools output{position:absolute;top:64px;left:12px}
+#tableTools button[hidden]{display:none}body.tableWork #labMonitor{top:62px;pointer-events:auto}
+`;
+  document.head.appendChild(style);
+
+  // A bevel catches the work light on the edges of the foundry workers' armour.
+  function roundedBox() {
+    const p = [],
+      n = [],
+      idx = [],
+      steps = 6,
+      r = 0.18;
+    for (let axis = 0; axis < 3; axis++)
+      for (const side of [-1, 1]) {
+        const start = p.length / 3;
+        for (let j = 0; j <= steps; j++)
+          for (let i = 0; i <= steps; i++) {
+            const v = [0, 0, 0];
+            v[axis] = side * 0.5;
+            v[(axis + 1) % 3] = i / steps - 0.5;
+            v[(axis + 2) % 3] = j / steps - 0.5;
+            const q = v.map((x) => M.clamp(x, -0.5 + r, 0.5 - r)),
+              normal = M.norm(M.sub(v, q));
+            p.push(...M.add(q, M.mul(normal, r)));
+            n.push(...normal);
           }
-          break;
+        for (let j = 0; j < steps; j++)
+          for (let i = 0; i < steps; i++) {
+            const a = start + j * (steps + 1) + i,
+              b = a + 1,
+              c = a + steps + 1,
+              d = c + 1;
+            idx.push(...(side > 0 ? [a, b, c, b, d, c] : [a, c, b, b, c, d]));
+          }
+      }
+    return { p, n, idx };
+  }
+  const unit = [1, 1, 1];
+  const origin = [0, 0, 0];
+  function inFrame(matrix, v, direction = false) {
+    const a = Array.from(matrix.slice(0, 3)),
+      b = Array.from(matrix.slice(4, 7)),
+      c = Array.from(matrix.slice(8, 11));
+    const cross = M.cross(b, c),
+      det = M.dot(a, cross);
+    const d = direction ? v : M.sub(v, [matrix[12], matrix[13], matrix[14]]);
+    return [M.dot(d, cross) / det, M.dot(d, M.cross(c, a)) / det, M.dot(d, M.cross(a, b)) / det];
+  }
+  function rayMesh(ray, node, geo) {
+    const o = inFrame(node.world, ray.o),
+      d = inFrame(node.world, ray.d, true);
+    if (!Number.isFinite(M.rayBox(o, d, [-1.1, -1.1, -1.1], [1.1, 1.1, 1.1]))) return Infinity;
+    let nearest = Infinity;
+    const { p, idx } = geo;
+    for (let i = 0; i < idx.length; i += 3) {
+      const a = idx[i] * 3,
+        b = idx[i + 1] * 3,
+        c = idx[i + 2] * 3;
+      const ab = [p[b] - p[a], p[b + 1] - p[a + 1], p[b + 2] - p[a + 2]],
+        ac = [p[c] - p[a], p[c + 1] - p[a + 1], p[c + 2] - p[a + 2]];
+      const h = M.cross(d, ac),
+        det = M.dot(ab, h);
+      if (Math.abs(det) < 1e-8) continue;
+      const s = [o[0] - p[a], o[1] - p[a + 1], o[2] - p[a + 2]],
+        u = M.dot(s, h) / det;
+      if (u < 0 || u > 1) continue;
+      const q = M.cross(s, ab),
+        v = M.dot(d, q) / det;
+      if (v < 0 || u + v > 1) continue;
+      const t = M.dot(ac, q) / det;
+      if (t > 0 && t < nearest) nearest = t;
+    }
+    return nearest;
+  }
+  function rotation(m) {
+    const x = Math.asin(-M.clamp(m[9], -1, 1));
+    return Math.abs(m[9]) < 0.99999
+      ? [x, Math.atan2(m[8], m[10]), Math.atan2(m[1], m[5])]
+      : [x, Math.atan2(-m[2], m[0]), 0];
+  }
+  function strand(node, a, b, width) {
+    const delta = M.sub(b, a),
+      len = M.len(delta);
+    node.visible = len > 0.002;
+    node.p = M.mul(M.add(a, b), 0.5);
+    node.r = [Math.acos(M.clamp(delta[1] / (len || 1), -1, 1)), Math.atan2(delta[0], delta[2]), 0];
+    node.s = [width, len, width];
+  }
+  class SpecimenTable {
+    constructor(ship, pose) {
+      this.ship = ship;
+      this.pose = pose;
+      this.game = ship.game;
+      this.person = pose.person;
+      this.sp = K.Species[this.person.species] || K.Species.subject;
+      this.canvas = this.game.engine.canvas;
+      this.previousFigures = pose.fig.children.slice();
+      for (const child of this.previousFigures) child.visible = false;
+      this.actor = group(pose.fig);
+      this.actor.s = pose.fig.s.map((v) => 1 / v);
+      this.fromAmbient = this.game.engine.ambient;
+      this.fromCamera = { ...this.game.engine.camera, p: this.game.engine.camera.p.slice() };
+      this.angle = 0;
+      this.elevation = this.canvas.clientWidth > this.canvas.clientHeight ? 1.06 : 0.94;
+      this.grip = null;
+      this.drops = [];
+      this.makeBody();
+      this.splashes = group(ship.galleryRoot, [0, 1.04, pose.z]);
+      this.fibres = [0, 1, 2].map((_, i) =>
+        mesh(this.actor, 'cylinder', origin, unit, i === 1 ? '#dc9c7b' : this.sp.blood),
+      );
+      this.fibres.forEach((n) => (n.visible = false));
+      this.shadow = group(ship.galleryRoot, [0, 1.037, pose.z]);
+      this.shades = this.parts.map(() => mesh(this.shadow, 'lowDisc', origin, unit, '#152222', { alpha: 0.21 }));
+      this.tools = document.createElement('section');
+      this.tools.id = 'tableTools';
+      this.tools.innerHTML =
+        '<header><strong></strong><button type="button" data-do="exit">일어서기</button></header><footer><button type="button" data-do="scan">항로 조사</button><button type="button" data-do="clear">표본 폐기</button><button type="button" data-do="next">다른 주민</button></footer><output aria-live="polite" ></output>';
+      this.tools.querySelector('strong').textContent = '실험대 · ' + this.sp.name;
+      this.hint = this.tools.querySelector('output');
+      this.note('몸을 잡고 당기기 · 빈 곳을 끌어 둘러보기');
+      this.tools.querySelector('[data-do="exit"]').onclick = () => ship.leaveTable();
+      this.tools.querySelector('[data-do="next"]').onclick = () => this.game.ui.openLab();
+      this.tools.querySelector('[data-do="clear"]').onclick = () => {
+        this.end();
+        this.game.universe.discardSpecimen(this.person);
+        this.game.ui.openLab();
+      };
+      this.tools.querySelector('[data-do="scan"]').onclick = () => {
+        if (!this.person.pieces) pose.task = 'route';
+      };
+      this.controls();
+      this.game.ui.hud.appendChild(this.tools);
+      document.body.classList.add('tableWork');
+      document.getElementById('toast')?.classList.remove('show');
+      this.game.input.clear();
+      this.game.input.enabled = false;
+      document.exitPointerLock?.();
+      this.events = new AbortController();
+      const on = (name, fn) =>
+        this.canvas.addEventListener(name, (e) => fn.call(this, e), { signal: this.events.signal });
+      on('pointerdown', this.down);
+      on('pointermove', this.move);
+      on('pointerup', this.end);
+      on('pointercancel', this.end);
+      on('lostpointercapture', this.end);
+      window.addEventListener('blur', () => this.end(), { signal: this.events.signal });
+    }
+    note(text) {
+      this.hint.textContent = text;
+      this.hintTime = 3.2;
+    }
+    controls() {
+      this.tools.querySelector('[data-do="scan"]').hidden =
+        !!this.person.pieces || this.pose.scan != null || this.pose.task === 'route';
+      this.tools.querySelector('[data-do="clear"]').hidden = !this.person.pieces;
+    }
+    makeBody() {
+      const eng = this.game.engine,
+        sp = this.sp,
+        bones = K.specimenPose(sp);
+      if (!eng.sources.benchRound) eng.addGeometry('benchRound', roundedBox());
+      const scale = (1.95 * M.clamp(this.person.scale, 0.6, 1.13)) / sp.height;
+      this.parts = labels.map((_, id) => ({
+        id,
+        meshes: [],
+        contactPoints: [],
+        lo: [Infinity, Infinity, Infinity],
+        hi: [-Infinity, -Infinity, -Infinity],
+        joint: Array.from(bones.slice(joints[id] * 16 + 12, joints[id] * 16 + 15)).map((v) => v * scale),
+        velocity: [0, 0, 0],
+        spin: [0, 0, 0],
+      }));
+      const colors = sp.colors[this.person.pal % sp.palettes.length];
+      const add = (id, geo, mat, col, em = 0) => {
+        const part = this.parts[id],
+          src = eng.sources[geo];
+        const m = M.mm(M.compose(origin, origin, [scale, scale, scale]), mat);
+        const points = src.p;
+        for (let j = 0; j < points.length; j += 3) {
+          const v = M.transform(m, [points[j], points[j + 1], points[j + 2]]);
+          part.contactPoints.push(...v);
+          for (let a = 0; a < 3; a++) {
+            part.lo[a] = Math.min(part.lo[a], v[a]);
+            part.hi[a] = Math.max(part.hi[a], v[a]);
+          }
+        }
+        part.meshes.push({ geo, m, col, em });
+      };
+      sp.parts.forEach((piece, i) => {
+        if (piece.dyn === 'halo') return;
+        const geo =
+          { box: 'benchRound', lowSphere: 'sphere', tinySphere: 'sphere', lowCyl: 'cylinder', lowDome: 'dome' }[
+            piece.geo
+          ] || piece.geo;
+        add(
+          groupForBone[piece.bone],
+          geo,
+          M.mm(bones.subarray(piece.bone * 16, piece.bone * 16 + 16), piece.m),
+          colors[i],
+          piece.em,
+        );
+      });
+      // The same helmet, apron, gauntlets and furnace slit as the worker on the surface, with close-up hardware.
+      if (sp.key === 'cinder' || sp.voice === 'cinder') {
+        const detail = (bone, geo, p, s, c, r = origin, em = 0) =>
+          add(groupForBone[bone], geo, M.mm(bones.subarray(bone * 16, bone * 16 + 16), M.compose(p, r, s)), c, em);
+        for (const side of [-1, 1]) {
+          detail(2, 'benchRound', [side * 0.39, 0.93, 0.51], [0.105, 0.51, 0.09], '#433930', [0, 0, side * 0.14]);
+          for (const y of [0.89, -0.1])
+            detail(2, 'sphere', [side * 0.46, y, 0.532], [0.075, 0.075, 0.047], '#b2a996');
+          detail(3, 'sphere', [side * 0.45, 0.43, 0.15], [0.17, 0.24, 0.28], '#817d74');
+        }
+        for (let i = -2; i <= 2; i++)
+          detail(3, 'benchRound', [i * 0.14, 0.5, 0.52], [0.022, 0.17, 0.024], '#5b4430');
+        for (const bone of [5, 7])
+          for (const y of [-0.46, -0.52]) detail(bone, 'lowCyl', [0, y, 0], [0.43, 0.042, 0.43], '#827a6d');
+      }
+      this.parts.forEach((p) => {
+        p.center = p.meshes.length ? M.mul(M.add(p.lo, p.hi), 0.5) : p.joint.slice();
+        if (!p.meshes.length) p.lo = p.hi = p.center;
+        p.contactPoints = Float32Array.from(p.contactPoints, (v, i) => v - p.center[i % 3]);
+        p.node = group(this.actor, p.center);
+        p.meshes = p.meshes.map(({ geo, m, col, em }) => {
+          const n = mesh(p.node, geo, origin, unit, col, { em });
+          for (let i = 0; i < 3; i++) m[12 + i] -= p.center[i];
+          n.localMatrix = m;
+          return n;
+        });
+      });
+      this.mid = (Math.max(...this.parts.map((p) => p.hi[1])) + Math.min(...this.parts.map((p) => p.lo[1]))) / 2;
+      this.floor = Math.min(...this.parts.map((p) => p.lo[2]));
+      this.target = [-this.mid, 1.045 - this.floor, this.pose.z];
+      for (const p of this.parts.slice(1)) {
+        const parent = this.parts[parents[p.id]];
+        this.actor.remove(p.node);
+        parent.node.add(p.node);
+        p.node.p = M.sub(p.center, parent.center);
+        const normal = M.norm(M.sub(p.center, p.joint)),
+          width = p.id === 1 ? 0.1 : p.id >= 6 ? 0.065 : 0.052;
+        const caps = [
+          this.cap(parent, p.joint, normal, width),
+          this.cap(p, p.joint, M.mul(normal, -1), width * 0.92),
+        ];
+        p.caps = caps;
+      }
+      for (const p of this.parts.slice(1))
+        if (this.person.pieces?.[p.id]) {
+          this.detach(p);
+          const off = this.person.pieces[p.id];
+          p.node.p = [p.center[0] + off[0] / 118, p.center[1] - off[1] / 118, p.center[2]];
+          const saved = this.person.turns?.[p.id];
+          p.node.r = saved
+            ? Array.from(saved, (c) => (parseInt(c, 36) * TAU) / 36)
+            : [0.38 + (p.id % 3) * 0.22, p.id % 2 ? 0.62 : -0.74, p.id * 0.53];
+        }
+      for (const p of this.parts)
+        if (p.loose) {
+          this.limit(p);
+          p.node.p[2] += this.floor - this.bounds(p).lo[2];
+        }
+    }
+    cap(p, joint, normal, w) {
+      const g = group(p.node, M.sub(joint, p.center));
+      g.r = [Math.acos(M.clamp(normal[1], -1, 1)), Math.atan2(normal[0], normal[2]), 0];
+      mesh(g, 'sphere', [0, 0, 0], [w * 2, w * 0.65, w * 1.8], this.sp.blood);
+      for (let i = 0; i < 6; i++) {
+        const a = (i * TAU) / 6;
+        mesh(
+          g,
+          'sphere',
+          [Math.cos(a) * w * 0.61, w * 0.18, Math.sin(a) * w * 0.6],
+          [w * 0.6, w * (i % 2 ? 0.94 : 0.56), w * 0.52],
+          i % 2 ? this.sp.capColor : '#b76859',
+        );
+      }
+      mesh(
+        g,
+        'sphere',
+        [0, w * 0.3, 0],
+        [w * 0.44, w * 0.74, w * 0.5],
+        this.sp.voice === 'cinder' ? '#ffa24e' : '#d9b29c',
+        { em: 0.18 },
+      );
+      g.visible = false;
+      return g;
+    }
+    matrix(p) {
+      const n = p.node,
+        m = M.compose(n.p, n.r);
+      return p.loose || p.id === 0 ? m : M.mm(this.matrix(this.parts[parents[p.id]]), m);
+    }
+    detach(p) {
+      const m = this.matrix(p);
+      p.node.parent.remove(p.node);
+      this.actor.add(p.node);
+      p.node.p = Array.from(m.slice(12, 15));
+      p.node.r = rotation(m);
+      p.loose = true;
+      for (const c of p.caps) c.visible = true;
+    }
+    bounds(p) {
+      const lo = [Infinity, Infinity, Infinity],
+        hi = [-Infinity, -Infinity, -Infinity];
+      for (const q of this.parts) {
+        let root = q;
+        while (root !== p && root.id && !root.loose) root = this.parts[parents[root.id]];
+        if (root !== p) continue;
+        const mat = this.matrix(q);
+        // A tilted helmet touches the metal with its shell, not a corner of its bounding box.
+        const points = q.contactPoints;
+        for (let axis = 0; axis < 3; axis++) {
+          let min = lo[axis], max = hi[axis];
+          const a = mat[axis], b = mat[axis + 4], c = mat[axis + 8], offset = mat[axis + 12];
+          for (let i = 0; i < points.length; i += 3) {
+            const value = offset + a * points[i] + b * points[i + 1] + c * points[i + 2];
+            min = Math.min(min, value);
+            max = Math.max(max, value);
+          }
+          lo[axis] = min;
+          hi[axis] = max;
         }
       }
+      return { lo, hi };
+    }
+    limit(p) {
+      const { lo, hi } = this.bounds(p);
+      p.node.p[0] += Math.max(0, -0.98 - lo[0]) - Math.max(0, hi[0] - 0.98);
+      p.node.p[1] += Math.max(0, this.mid - 1.49 - lo[1]) - Math.max(0, hi[1] - this.mid - 1.49);
+    }
+    save(p) {
+      const offset = [
+        Math.round((p.node.p[0] - p.center[0]) * 118),
+        Math.round((p.center[1] - p.node.p[1]) * 118),
+      ];
+      const turn = p.node.r.map((a) => (((Math.round((a * 36) / TAU) % 36) + 36) % 36).toString(36)).join('');
+      const old = this.person.pieces?.[p.id];
+      if (!old || offset.some((v, i) => v !== old[i]) || this.person.turns?.[p.id] !== turn)
+        this.game.universe.placePiece(this.person, p.id, offset, turn);
+    }
+    camera(t) {
+      const aspect = this.canvas.clientWidth / this.canvas.clientHeight,
+        portrait = aspect < 1;
+      const bearing = (portrait ? -0.12 : 0.6) + this.angle,
+        elev = this.elevation;
+      const k = Math.tan(((portrait ? 56 : 46) * Math.PI) / 360);
+      // Project the long and short axes when orbiting, so the specimen stays reachable on a phone.
+      const across = 1.02 * Math.abs(Math.cos(bearing)) + 1.25 * Math.abs(Math.sin(bearing));
+      const fit = Math.max(portrait ? 2.55 : 2.95, (across / (k * aspect)) * 1.03 + 0.3);
+      const target = [0, 1.14, this.pose.z];
+      const distance = Math.min(fit, (6.7 - target[1]) / Math.sin(elev));
+      const fov = (360 / Math.PI) * Math.atan((k * fit) / distance);
+      const eye = [-Math.cos(bearing) * Math.cos(elev), Math.sin(elev), Math.sin(bearing) * Math.cos(elev)];
+      const dest = M.add(target, M.mul(eye, distance)),
+        p = this.fromCamera.p.map((v, i) => M.lerp(v, dest[i], t));
+      const aim = M.aim(dest, target);
+      this.game.engine.ambient = M.lerp(this.fromAmbient, 0.64, t);
+      this.game.engine.camera = {
+        p,
+        yaw: this.fromCamera.yaw + M.angle(this.fromCamera.yaw, aim.yaw) * t,
+        pitch: M.lerp(this.fromCamera.pitch, aim.pitch, t),
+        roll: 0,
+        fov: M.lerp(this.fromCamera.fov, fov, t),
+      };
+    }
+    ray(x, y) {
+      const r = this.canvas.getBoundingClientRect(),
+        c = this.game.engine.camera,
+        tan = Math.tan((c.fov * Math.PI) / 360);
+      const v = [
+        (((2 * (x - r.left)) / r.width - 1) * tan * r.width) / r.height,
+        (1 - (2 * (y - r.top)) / r.height) * tan,
+        -1,
+      ];
+      return { o: c.p, d: M.norm(M.transform(M.compose(origin, [c.pitch, c.yaw, 0]), v)) };
+    }
+    pick(x, y) {
+      const ray = this.ray(x, y);
+      let best = null,
+        dist = Infinity;
+      for (const p of this.parts)
+        for (const n of p.meshes) {
+          const t = rayMesh(ray, n, this.game.engine.sources[n.geo]);
+          if (t < dist) {
+            best = p;
+            dist = t;
+          }
+        }
       return best;
     }
-    function ellipse(x, y, rx, ry, color) {
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
-      ctx.fill();
+    plane(x, y, height) {
+      const ray = this.ray(x, y);
+      const hit = M.add(ray.o, M.mul(ray.d, (height - ray.o[1]) / Math.min(-0.05, ray.d[1])));
+      return [hit[2] - this.pose.z, hit[0] + this.mid, hit[1] - this.target[1]];
     }
-    function schedule() {
-      if (!frame && !closed) frame = requestAnimationFrame(paint);
-    }
-    function paint(now) {
-      frame = 0;
-      const dt = Math.min(0.04, Math.max(0, (now - last) / 1000));
-      last = now;
-      if (recoil) {
-        recoil.age += dt;
-        recoil.k = Math.exp(-recoil.age * 14) * Math.cos(recoil.age * 34);
-        if (recoil.age > 0.34) recoil = null;
-      }
-      if (returnMotion) {
-        const target = offset(parents[returnMotion.id]);
-        returnMotion.offset = returnMotion.offset.map((v, i) => target[i] + (v - target[i]) * Math.exp(-dt * 22));
-        if (Math.hypot(returnMotion.offset[0] - target[0], returnMotion.offset[1] - target[1]) < 0.3)
-          returnMotion = null;
-      }
-      ctx.setTransform(2, 0, 0, 2, 0, 0);
-      ctx.clearRect(0, 0, W, H);
-      for (let x = 10; x < W - 8; x += 10) {
-        ctx.fillStyle = '#779b925e';
-        ctx.fillRect(x, H - 8, 0.65, x % 50 === 0 ? -7 : -3);
-      }
-      const jointAt = (id, part) => layers[id].joint.map((v, i) => v + offset(part)[i]);
-      for (const key of Object.keys(parts())) {
-        const id = +key,
-          [x, y] = jointAt(id, parents[id]);
-        ellipse(x, y + 3, id === 1 ? 11 : 7, id === 1 ? 5 : 3.8, blood);
-        ellipse(x + 8, y + 8, 2.5, 1.6, blood);
-      }
-      if (grip && !parts()[grip.id]) {
-        const a = jointAt(grip.id, parents[grip.id]),
-          b = jointAt(grip.id, grip.id);
-        for (let i = -1; i <= 1; i++) {
-          ctx.lineWidth = i ? 1.2 : 2.6;
-          ctx.strokeStyle = i ? '#c38279' : blood;
-          ctx.beginPath();
-          ctx.moveTo(a[0] + i * 3, a[1]);
-          ctx.quadraticCurveTo((a[0] + b[0]) / 2 + i * 4, (a[1] + b[1]) / 2 + 3, b[0] + i * 2, b[1]);
-          ctx.stroke();
+    down(e) {
+      if (this.pose.time < 0.7 || this.grip || e.button !== 0) return;
+      const x = e.clientX,
+        y = e.clientY;
+      let p = this.pick(x, y);
+      if (!p && e.pointerType !== 'mouse')
+        for (const [dx, dy] of [
+          [-5, 0],
+          [5, 0],
+          [0, -5],
+          [0, 5],
+        ]) {
+          p = this.pick(x + dx, y + dy);
+          if (p) break;
         }
-      }
-      for (const id of drawOrder) {
-        const l = layers[id];
-        if (!l.img) continue;
-        const [x, y] = offset(id);
-        ctx.shadowColor = '#02100e9c';
-        ctx.shadowBlur = 5;
-        ctx.shadowOffsetY = 3;
-        ctx.drawImage(l.img, l.x + x, l.y + y, l.w, l.h);
-        ctx.shadowBlur = 0;
-        ctx.shadowOffsetY = 0;
-        if (parts()[id]) {
-          const [jx, jy] = jointAt(id, id);
-          ellipse(jx, jy, id === 1 ? 6 : 3.4, id === 1 ? 2.8 : 2, blood);
-          ellipse(jx - 0.7, jy - 0.4, 1.2, 0.8, '#e3b99e');
-        }
-      }
-      drops = drops.filter(d => d.life > 0);
-      for (const d of drops) {
-        d.x += d.vx * dt;
-        d.y += d.vy * dt;
-        d.vy += 90 * dt;
-        d.vx *= Math.exp(-dt * 6);
-        d.life -= dt;
-        ctx.globalAlpha = Math.min(1, d.life * 2);
-        ellipse(d.x, d.y, d.r, d.r * 0.75, blood);
-      }
-      ctx.globalAlpha = 1;
-      if (grip) {
-        const [x, y] = grip.pointer;
-        ctx.lineWidth = 2;
-        ctx.lineCap = 'round';
-        ctx.strokeStyle = '#c6d9cf';
-        ctx.beginPath();
-        ctx.moveTo(x - 3, y - 2);
-        ctx.lineTo(x + 15, y - 23);
-        ctx.lineTo(x + 18, y - 21);
-        ctx.lineTo(x + 3, y + 1);
-        ctx.stroke();
-      }
-      if (recoil || returnMotion || drops.length) schedule();
-    }
-    function down(e) {
-      if (grip || e.button !== 0) return;
-      const pos = point(e),
-        id = pick(...pos);
-      if (id < 1) {
-        if (id === 0) caption('몸통은 고정돼 있습니다. 머리나 팔다리를 집으세요.');
+      e.preventDefault();
+      this.canvas.setPointerCapture(e.pointerId);
+      const g = (this.grip = {
+        pid: e.pointerId,
+        start: [x, y],
+        prev: [x, y],
+        p,
+        orbit: !p,
+        bearing: this.angle,
+        elev: this.elevation,
+      });
+      if (!p) return;
+      if (!p.id) {
+        this.note('몸통 고정 · 머리나 팔다리를 잡으세요');
         return;
       }
-      e.preventDefault();
-      const origin = offset(id).slice();
-      returnMotion = null;
-      grip = { id, pid: e.pointerId, start: pos, pointer: pos, origin, offset: origin.slice(), sounded: false };
-      canvas.setPointerCapture(e.pointerId);
-      if (!document.hidden && !game.contextLost) game.audio.hold(false);
-      caption(names[id] + (parts()[id] ? ' · 이동' : ' · 당기는 중'));
-      schedule();
+      g.local = p.node.p.slice();
+      g.base = Array.from(this.matrix(p).slice(12, 15));
+      g.height = this.target[1] + g.base[2];
+      g.point = this.plane(x, y, g.height);
+      g.wasLoose = p.loose;
+      p.sleep = false;
+      p.velocity = [0, 0, 0];
+      p.spin = [0, 0, 0];
+      g.delta = [0, 0, 0];
+      this.note(labels[p.id]);
     }
-    function move(e) {
-      if (!grip || e.pointerId !== grip.pid) return;
-      const g = grip,
-        id = g.id,
-        pos = point(e),
-        dx = pos[0] - g.start[0],
-        dy = pos[1] - g.start[1];
-      const dist = Math.hypot(dx, dy),
-        threshold = id === 1 ? 39 : 32;
-      g.pointer = pos;
-      const attached = !parts()[id],
-        pull = attached && dist < threshold ? 0.48 : 1;
-      g.offset = clampPoint([g.origin[0] + dx * pull, g.origin[1] + dy * pull], layers[id].center);
-      if (attached && dist >= threshold) {
-        recoil = { x: (dx / dist) * 3, y: (dy / dist) * 3, age: 0, k: 1 };
-        u.placePiece(person, id, g.offset);
-        game.audio.squelch(id === 1 ? 'tear' : 'pop', clamp((pos[0] - W / 2) / (W / 2), -1, 1), 0.8);
-        if (navigator.vibrate && game.input.mobile) navigator.vibrate(18);
-        const [x, y] = layers[id].joint.map((v, i) => v + offset(parents[id])[i]);
-        for (let i = 0; i < 12; i++)
-          drops.push({
-            x,
-            y,
-            vx: dx * (0.45 + Math.random()) + (Math.random() - 0.5) * 65,
-            vy: dy * 0.65 + (Math.random() - 0.5) * 65,
-            r: 1 + Math.random() * 2,
-            life: 0.35 + Math.random() * 0.45,
-          });
-        caption(names[id] + ' 분리');
-      } else if (attached && dist > 16 && !g.sounded) {
-        g.sounded = true;
-        game.audio.squelch('slice', 0, 0.23);
+    move(e) {
+      const g = this.grip;
+      if (!g || e.pointerId !== g.pid) return;
+      const x = e.clientX,
+        y = e.clientY,
+        dx = x - g.start[0],
+        dy = y - g.start[1];
+      if (g.orbit) {
+        this.angle = g.bearing + dx * 0.008;
+        this.elevation = M.clamp(g.elev + dy * 0.004, 0.68, 1.25);
+      } else if (g.p.id) {
+        const p = g.p,
+          delta = M.sub(this.plane(x, y, g.height), g.point),
+          d = Math.hypot(delta[0], delta[1]);
+        const threshold = p.id === 1 ? 0.235 : 0.19;
+        if (!p.loose) {
+          const pm = this.matrix(this.parts[parents[p.id]]);
+          p.node.p = M.add(
+            g.local,
+            inFrame(pm, [delta[0] * 0.4, delta[1] * 0.4, Math.min(0.065, d * 0.26)], true),
+          );
+          this.parts[0].node.r[1] = M.clamp(delta[0] * 0.3, -0.06, 0.06);
+          if (d >= threshold) {
+            this.detach(p);
+            this.pose.task = null;
+            this.pose.scan = null;
+            this.ship.labScanner.visible = false;
+            this.game.ui.labMonitor(null);
+            this.game.audio.squelch(p.id === 1 ? 'tear' : 'pop', 0, 0.9);
+            this.splash(p);
+            this.note(labels[p.id] + ' 분리');
+            if (this.game.input.mobile) navigator.vibrate?.(15);
+          } else if (d > 0.07 && !g.strained) {
+            g.strained = true;
+            this.game.audio.squelch('slice', 0, 0.23);
+          }
+        }
+        if (p.loose) {
+          p.node.p = M.add(g.base, [delta[0], delta[1], 0.13 + Math.min(0.11, d * 0.22)]);
+          const motion = [x - g.prev[0], y - g.prev[1]];
+          p.node.r[0] += M.clamp(motion[1] * 0.009, -0.4, 0.4);
+          p.node.r[1] += M.clamp(motion[0] * 0.011, -0.45, 0.45);
+          this.limit(p);
+          g.delta = M.sub(delta, g.deltaAt || delta);
+          g.deltaAt = delta;
+          if (!this.person.pieces?.[p.id]) {
+            this.save(p);
+            this.controls();
+          }
+        }
       }
-      schedule();
+      g.prev = [x, y];
     }
-    function end(e) {
-      if (!grip || (e && grip.pid !== e.pointerId)) return;
-      if (e?.type === 'pointerup') move(e);
-      const g = grip;
-      if (parts()[g.id]) {
-        if (g.offset.some((v, i) => Math.round(v) !== parts()[g.id][i])) u.placePiece(person, g.id, g.offset);
-      } else returnMotion = { id: g.id, offset: g.offset };
-      grip = null;
-      if (canvas.hasPointerCapture(g.pid)) canvas.releasePointerCapture(g.pid);
-      if (!parts()[g.id]) caption();
-      schedule();
+    end(e) {
+      const g = this.grip;
+      if (!g || (e && e.pointerId !== g.pid)) return;
+      if (e?.type === 'pointerup' && (e.clientX !== g.prev[0] || e.clientY !== g.prev[1])) this.move(e);
+      const p = g.p;
+      if (p?.id) {
+        if (p.loose) {
+          const tap =
+            g.wasLoose &&
+            e?.type === 'pointerup' &&
+            Math.hypot(g.prev[0] - g.start[0], g.prev[1] - g.start[1]) < 6;
+          if (tap) {
+            p.node.p[2] += 0.16;
+            p.node.r[1] += Math.PI;
+            this.note(labels[p.id] + ' 뒤집기');
+          }
+          p.spin = [M.clamp(-g.delta[1] * 5, -2, 2), M.clamp(g.delta[0] * 6, -2, 2), 0.42];
+          p.velocity = [0, 0, tap ? 0.36 : 0];
+          p.sleep = false;
+          this.save(p);
+        } else p.node.p = g.local.slice();
+      }
+      this.grip = null;
+      if (this.canvas.hasPointerCapture(g.pid)) this.canvas.releasePointerCapture(g.pid);
     }
-    canvas.onpointerdown = down;
-    canvas.onpointermove = move;
-    canvas.onpointerup = end;
-    canvas.onpointercancel = end;
-    canvas.onlostpointercapture = end;
-    document.getElementById('backToLab').onclick = () => ui.openLab();
-    discard.onclick = () => {
-      end();
-      u.discardSpecimen(person);
-      ui.openLab();
-    };
-    ui.leaveSpecimen = () => {
-      closed = true;
-      end();
-      cancelAnimationFrame(frame);
-      panel.classList.remove('specimenPanel');
-      ui.leaveSpecimen = null;
-      game.interior.clearLabSubject();
-      game.interior.updateTrophies();
-    };
-    caption();
-    paint(performance.now());
-  };
+    splash(p) {
+      const parent = this.parts[parents[p.id]],
+        at = M.transform(this.matrix(parent), M.sub(p.joint, parent.center));
+      for (let i = 0; i < 9; i++) {
+        const n = mesh(this.actor, 'tinySphere', at, [0.015, 0.018, 0.015], this.sp.blood);
+        this.drops.push({
+          n,
+          v: [(Math.random() - 0.5) * 0.64, (Math.random() - 0.5) * 0.66, 0.25 + Math.random() * 0.57],
+        });
+      }
+      const stain = mesh(
+        this.splashes,
+        'lowDisc',
+        [at[1] - this.mid, 0.002, at[0]],
+        [0.15, 0.008, 0.095],
+        this.sp.blood,
+        { alpha: 0.9 },
+      );
+      stain.r[1] = p.id;
+    }
+    update(dt, t) {
+      this.camera(t);
+      this.hintTime -= dt;
+      this.hint.hidden = this.hintTime < 0 || this.pose.scan != null;
+      const grip = this.grip?.p,
+        attached = grip?.id && !grip.loose;
+      for (const p of this.parts) {
+        if (!p.loose || p === grip || p.sleep) continue;
+        p.velocity[2] -= 3.2 * dt;
+        p.node.p = M.add(p.node.p, M.mul(p.velocity, dt));
+        p.node.r = M.add(p.node.r, M.mul(p.spin, dt));
+        const floor = this.bounds(p).lo[2];
+        if (floor <= this.floor) {
+          p.node.p[2] += this.floor - floor;
+          p.velocity[2] = -p.velocity[2] * 0.15;
+          p.spin = M.mul(p.spin, Math.exp(-dt * 16));
+          if (p.velocity[2] < 0.065 && M.len(p.spin) < 0.1) {
+            p.sleep = true;
+            this.limit(p);
+            this.save(p);
+          }
+        }
+      }
+      this.parts[0].node.r[1] *= Math.exp(-dt * 10);
+      for (const [i, n] of this.fibres.entries()) {
+        if (!attached) {
+          n.visible = false;
+          continue;
+        }
+        const joint = M.sub(grip.joint, grip.center),
+          parent = this.parts[parents[grip.id]];
+        const a = M.transform(this.matrix(parent), M.sub(grip.joint, parent.center)),
+          b = M.transform(this.matrix(grip), joint);
+        a[0] += (i - 1) * 0.014;
+        b[0] += (i - 1) * 0.012;
+        strand(n, a, b, i === 1 ? 0.018 : 0.011);
+      }
+      for (const drop of this.drops) {
+        if (!drop.v) continue;
+        drop.v[2] -= 2.8 * dt;
+        drop.n.p = M.add(drop.n.p, M.mul(drop.v, dt));
+        if (drop.n.p[2] <= this.floor + 0.004) {
+          drop.n.p[2] = this.floor + 0.004;
+          drop.n.s = [0.032, 0.024, 0.009];
+          drop.v = null;
+        }
+      }
+      this.shadow.visible = t === 1;
+      for (const [i, shade] of this.shades.entries()) {
+        const p = this.parts[i],
+          m = this.matrix(p),
+          h = Math.max(0, m[14] - this.floor),
+          extent = M.sub(p.hi, p.lo);
+        shade.p = [m[13] - this.mid + h * 0.055, 0.001, m[12] + h * 0.075];
+        shade.s = [extent[1] * 0.92 + h * 0.14, 0.003, extent[0] * 0.9 + h * 0.12];
+        shade.alpha = M.clamp(0.43 - h * 0.5, 0.08, 0.37);
+      }
+      this.controls();
+    }
+    dispose() {
+      this.end();
+      this.events.abort();
+      this.game.engine.ambient = this.fromAmbient;
+      for (const p of this.parts) if (p.loose && this.game.universe.hold.includes(this.person)) this.save(p);
+      this.actor.parent.remove(this.actor);
+      this.shadow.parent.remove(this.shadow);
+      this.splashes.parent.remove(this.splashes);
+      for (const child of this.previousFigures) child.visible = true;
+      this.tools.remove();
+      document.body.classList.remove('tableWork');
+      this.game.input.clear();
+      this.game.input.enabled = this.game.started && !this.game.paused;
+    }
+  }
+  K.SpecimenTable = SpecimenTable;
 })((window.KO ||= {}));
