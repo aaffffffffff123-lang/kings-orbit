@@ -94,11 +94,23 @@
   };
 
   /* ---------- the trophy: an eye that keeps looking ---------- */
-  K.TrophyModels[ID + '-ruler'] = (root, game, interior) => {
+  const eyeSizes = { small: ['소형', 0.48], medium: ['중형', 0.68], large: ['대형', 0.9], giant: ['거대', 1.16] };
+  function sampleRecord(save, cls) {
+    const prefix = 'y.jar.' + cls + '.';
+    const record = tokensOf(save).find(t => t.startsWith(prefix));
+    const [count, iris] = (record || '').slice(prefix.length).split('.');
+    return { count: Number(count) || 0, color: IRIS[Number(iris)] || IRIS[0] };
+  }
+  K.Living.eyeRecord = (save, trophy) => {
+    const cls = trophy.id.slice((ID + '-eye-').length);
+    return trophy.id.startsWith(ID + '-eye-') && Object.hasOwn(eyeSizes, cls) ? sampleRecord(save, cls) : null;
+  };
+  function eyeModel(root, game, interior, color = MAIN_IRIS, scale = 1) {
     const g = group(root, [0, 0.55, 0]),
       pivot = group(g);
+    g.s = [scale, scale, scale];
     pivot.r[1] = Math.PI; // faces -Z like the heads; it turns toward whoever is near
-    const ball = mesh(pivot, 'sphere', [0, 0, 0], [1.7, 1.7, 1.7], MAIN_IRIS, { type: 20, em: 1, detail: 0.5, seed: 2.31 });
+    const ball = mesh(pivot, 'sphere', [0, 0, 0], [1.7, 1.7, 1.7], color, { type: 20, em: 1, detail: 0.5, seed: 2.31 });
     const strand = group(g, [0, -0.5, 0.45]);
     // the optic nerve hangs from under the eye and lies on the pedestal in its own blood
     [
@@ -142,7 +154,11 @@
     };
     if (interior?.animators) interior.animators.push(dt => g.tick(dt, game.engine.camera.p));
     return g;
-  };
+  }
+  K.TrophyModels[ID + '-ruler'] = eyeModel;
+  for (const [cls, [, scale]] of Object.entries(eyeSizes))
+    K.TrophyModels[ID + '-eye-' + cls] = (root, game, interior) =>
+      eyeModel(root, game, interior, sampleRecord(game.save, cls).color, scale);
 
   const ENV = {
     fog: [0.78, 0.33, 0.35],
@@ -226,6 +242,8 @@
             const n = dec2(t, i);
             if (n >= 0) this.burstSaved.add(n);
           }
+        else if (t.startsWith('y.g.'))
+          for (let i = 4; i + 3 <= t.length; i += 3) this.burstSaved.add(parseInt(t.slice(i, i + 3), 36));
         else if (t.startsWith('y.t.'))
           for (let i = 4; i + 3 <= t.length; i += 3) {
             const n = dec2(t, i),
@@ -419,7 +437,7 @@
         this.eyes.push({
           kind: 'eye',
           fixed: true,
-          // the beam cannot carry an eye off as it is; it pulls at it, and all but the great ones come out whole
+          // the beam cannot carry an eye off as it is; it pulls at it, until even the giant eyes come out whole
           anchored: true,
           tug: true,
           pull: 0,
@@ -750,7 +768,6 @@
       return out;
     }
     // Pulling at an eye: it comes up out of the skin on its stalk, and out whole when pulled far enough.
-    // The great ones are rooted too deep: pulled at, they tear open where they are.
     tug(e, stretch, dt, ship) {
       if (e.kind !== 'eye' || e.burst) return null;
       const heavy = { small: 0.35, medium: 0.9, large: 2.2, giant: 5 }[e.cls] || 1;
@@ -760,10 +777,6 @@
       ship.shake = Math.max(ship.shake, 0.04 + Math.min(0.35, e.r * 0.03) * e.pull);
       if (Math.random() < dt * (1.5 + e.r * 0.5)) this.hurt(e.x, e.z, Math.min(0.2, 0.01 + e.r * 0.012), e.r > 1.5);
       if (e.pull < 1) return null;
-      if (e.cls === 'giant') {
-        this.burstEye(e);
-        return null;
-      }
       return this.pluckEye(e);
     }
     untug(e) {
@@ -792,13 +805,28 @@
         },
         r,
       );
-      ball.eye = true;
+      ball.eye = { cls: e.cls, color: e.irisHex, seed: e.seed };
       ball.label = '뽑힌 눈알';
       ball.rest = r * 0.9;
       ball.velocity = [0, 3, 0];
       ball.splat = b => this.splatEye(b);
       this.eyeballs.push(ball);
       return ball;
+    }
+    archiveEye(ball) {
+      const { cls, color } = ball.eye;
+      const save = this.game.save, prefix = 'y.jar.' + cls + '.';
+      const prev = sampleRecord(save, cls);
+      const count = prev.count + 1;
+      const colorIndex = IRIS.indexOf(prev.count ? prev.color : color);
+      const state = save.data.planetStates[ID] ||= { visited: true, destroyed: [] };
+      state.destroyed = (state.destroyed || []).filter(t => !t.startsWith(prefix));
+      state.destroyed.push(prefix + count + '.' + Math.max(0, colorIndex));
+      const name = eyeSizes[cls][0] + ' 지표 눈알';
+      this.snapshot();
+      if (!save.addTrophy({ id: ID + '-eye-' + cls, planet: ID, name, time: new Date().toISOString() }))
+        save.write('checkpoint');
+      return name + ' · ' + count + '개 보관';
     }
     // an eye thrown hard: it bursts where it lands
     splatEye(b) {
@@ -1428,7 +1456,9 @@
     }
     tokens() {
       const out = [];
-      out.push(...pack('y.e.', this.eyes.filter(e => e.burst && !this.inCrater(e)).map(e => enc2(e.i))));
+      const burst = this.eyes.filter(e => e.burst && !this.inCrater(e));
+      out.push(...pack('y.e.', burst.filter(e => e.i < 1296).map(e => enc2(e.i))));
+      out.push(...pack('y.g.', burst.filter(e => e.i >= 1296).map(e => enc3(e.i))));
       out.push(...pack('y.t.', this.tentacles.filter(t => t.cut < t.n && !this.inCrater(t)).map(t => enc2(t.i) + B36[t.cut])));
       const scars = (this.scarList || []).slice(-112),
         near = s => Math.abs(s.x) <= 808 && Math.abs(s.z) <= 808;
@@ -1436,7 +1466,7 @@
       // the wider ground: scars past 808 m keep three characters a coordinate
       out.push(...pack('y.f.', scars.filter(s => !near(s)).map(s => enc3(qfar(s.x)) + enc3(qfar(s.z)))));
       const st = this.game.save.data.planetStates[ID];
-      for (const t of st?.destroyed || []) if (typeof t === 'string' && t.startsWith('y.w.')) out.push(t);
+      for (const t of st?.destroyed || []) if (typeof t === 'string' && (t.startsWith('y.w.') || t.startsWith('y.jar.'))) out.push(t);
       return out;
     }
     inCrater(o) {

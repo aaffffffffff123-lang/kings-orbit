@@ -3600,7 +3600,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       this.hold = [];
       this.sites = new Set();
       this.landingTarget = '';
-      const profiles = new Map();
+      const profiles = new Map(), specimens = new Map();
       this.lost = 0;
       this.freeing = false;
       this.freed = 0;
@@ -3608,6 +3608,16 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       const tokens = this.save.data.planetStates[LEDGER]?.destroyed || [];
       for (const t of tokens) {
         if (typeof t !== 'string') continue;
+        if (t.startsWith('cut.')) {
+          const [, slot, layout] = t.split('.');
+          if (/^\d{1,2}$/.test(slot) && +slot < 20 && /^(?:[1-7][0-9a-z]{4}){1,7}$/.test(layout)) {
+            const pieces = {};
+            for (let i = 0; i < layout.length; i += 5)
+              pieces[layout[i]] = [parseInt(layout.slice(i + 1, i + 3), 36) - 400, parseInt(layout.slice(i + 3, i + 5), 36) - 400];
+            specimens.set(+slot, pieces);
+          }
+          continue;
+        }
         if (t.startsWith('pass.')) {
           const [, slot, from, species, pal, size, child, seed, lead, result] = t.split('.');
           if (Number(slot) >= 0 && Number(slot) < 20 && /^[a-z0-9_-]+$/.test(species || '')) {
@@ -3664,6 +3674,8 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
           });
       }
       this.hold = this.hold.map((from, i) => profiles.get(i) || this.passenger(from, { seed: i + 1, pal: i }));
+      this.hold.forEach((person, i) => { if (specimens.has(i)) person.pieces = specimens.get(i); });
+      if (!this.liveCargo) this.freeing = false;
       this.revision++;
     }
     get planets() {
@@ -3692,7 +3704,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     }
     hasTrophy(id) {
       const def = this.get(id);
-      return !!def && this.save.data.trophies.some(t => t.planet === id || t.id === def.rulerId);
+      return !!def && this.save.data.trophies.some(t => t.id === def.rulerId || (t.planet === id && !t.id.startsWith('p0007-eye-')));
     }
     surfaceReady(id) {
       return this.get(id)?.kind !== 5;
@@ -3716,15 +3728,36 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     get cargo() {
       return this.hold.length;
     }
+    get liveCargo() {
+      return this.hold.reduce((n, p) => n + !p.pieces, 0);
+    }
+    placePiece(person, id, offset) {
+      if (!this.hold.includes(person)) return;
+      if (!person.pieces) {
+        person.pieces = {};
+        this.lost++;
+        if (!this.liveCargo) this.freeing = false;
+      }
+      person.pieces[id] = offset.map(v => Math.round(K.M.clamp(v, -400, 400)));
+      this.flush();
+      this.save.write('checkpoint');
+    }
+    discardSpecimen(person) {
+      const slot = this.hold.indexOf(person);
+      if (slot < 0 || !person.pieces) return;
+      this.hold.splice(slot, 1);
+      this.flush();
+      this.save.write('checkpoint');
+    }
     setFreeing(on) {
-      this.freeing = !!on && this.hold.length > 0;
+      this.freeing = !!on && this.liveCargo > 0;
       this.flush();
       this.save.write('checkpoint');
       return this.freeing;
     }
     takeHold() {
-      const out = this.hold.slice();
-      this.hold = [];
+      const out = this.hold.filter(p => !p.pieces);
+      this.hold = this.hold.filter(p => p.pieces);
       this.freeing = false;
       this.freed += out.length;
       this.flush();
@@ -3799,7 +3832,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         this.hasTrophy(id) || this.hold.some(person => person.from === id));
     }
     readRoute(person) {
-      if (!this.hold.includes(person) || person.result) return;
+      if (!this.hold.includes(person) || person.pieces || person.result) return;
       const id = person.lead;
       if (!id || this.destroyed(id) || this.survivors(id) <= 0) person.result = 'lost';
       else if (this.knownResidentWorld(id)) {
@@ -3950,6 +3983,8 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         'hold-' + this.hold.map(p => p.from || '_').join('.'),
         ...this.hold.map((p, i) => ['pass', i, p.from || '_', p.species, p.pal, Math.round(p.scale * 1000),
           +p.child, p.seed, p.lead || '_', p.result || '_'].join('.')),
+        ...this.hold.flatMap((p, i) => p.pieces ? ['cut.' + i + '.' + Object.entries(p.pieces)
+          .map(([id, offset]) => id + offset.map(v => (v + 400).toString(36).padStart(2, '0')).join('')).join('')] : []),
         ...[...this.sites].map(id => 'site-' + id),
         ...(this.landingTarget ? ['approach-' + this.landingTarget] : []),
         'lost-' + this.lost,
@@ -4723,7 +4758,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         if (person?.result && person.result !== 'lost') this.navigation(person.lead);
       });
       input.bindTap('recoverAction', () => {
-        if (game.mode === 'planet' && !game.descent) game.planet.vehicle.recoverPassenger();
+        if (game.mode === 'planet' && !game.descent) game.planet.vehicle.recoverHeld();
       });
       input.bindTap('returnAction', () => game.returnHome());
       game.input.bindTouch();
@@ -4925,10 +4960,10 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         g.mode === 'interior' ? '누른 채 끌어 빠르게 걷기' : '누른 채 끌어 가속 이동',
       );
       if (g.mode === 'planet') {
-        const btn = $('recoverAction'), full = g.universe.cargoFull();
+        const btn = $('recoverAction'), eye = g.planet.vehicle.grab?.eye, full = !eye && g.universe.cargoFull();
         btn.classList.toggle('hidden', !g.planet.vehicle.canRecover() || !!g.descent);
         btn.disabled = full;
-        btn.textContent = full ? '화물칸 20/20' : g.input.mobile ? '모선 회수' : 'G · 모선 회수';
+        btn.textContent = full ? '화물칸 20/20' : (g.input.mobile ? '' : 'G · ') + (eye ? '트로피 회수' : '모선 회수');
       }
       if (g.mode === 'planet' && g.input.mobile) {
         const vehicle = g.planet.vehicle, target = vehicle.grab;
@@ -5010,6 +5045,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       }
     }
     open(html) {
+      this.leaveSpecimen?.();
       const g = this.game;
       this.backdropPress = null;
       $('title').inert = true;
@@ -5028,6 +5064,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     }
     close() {
       if (this.game.cloudUI?.busy) return;
+      this.leaveSpecimen?.();
       this.game.paused = false;
       this.game.input.enabled = this.game.started;
       this.game.input.clear();
@@ -5041,8 +5078,9 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       const g = this.game,
         s = g.settings;
       this.open(
-        `<div class="eyebrow">NØMAD / SHIP SYSTEMS</div><h2>${g.started ? '잠시 정박' : '항해 설정'}</h2>${g.cloudUI?.menuRow() || ''}<div class="panelRow"><label for="quality">화면 품질</label><select id="quality"><option value="low">저사양</option><option value="balanced">균형</option><option value="high">높음</option></select></div><div class="panelRow"><label for="volume">소리</label><input id="volume" type="range" min="0" max="1" step=".05" value="${s.volume}"></div><div class="panelRow"><label for="sensitivity">시선 감도</label><input id="sensitivity" type="range" min=".3" max="2" step=".05" value="${s.sensitivity}"></div><div class="panelRow"><label for="shake">충돌 화면 흔들림</label><input id="shake" type="range" min="0" max="1" step=".05" value="${s.shake}"></div><div class="panelRow"><label for="touchSetting">화면 터치 조작 표시</label><input id="touchSetting" type="checkbox" ${g.input.mobile ? 'checked' : ''}></div><div class="panelActions"><button class="primary" id="resume">${g.started ? '항해 계속' : '닫기'} ↗</button><button class="secondary" id="helpBtn">조작 안내</button></div><div class="panelActions slim"><button class="secondary" id="exportSave">저장 내보내기</button><button class="secondary" id="importSave">저장 불러오기</button><input id="importInput" type="file" accept=".json,application/json"></div><div class="panelActions slim"><button class="ghost danger" id="resetBtn">진행 기록 초기화</button></div><div class="finePrint">자동 저장: 왕의 머리 회수 · 행성 귀환 · 주기적 항해 저장<br>로컬 파일·시크릿 모드에서는 저장이 제한될 수 있습니다. 저장 파일을 따로 보관할 수 있습니다.<br>FIRST CONTACTS ${K.BUILD || ''} · 상륙 가능한 행성 ${g.universe.planets.filter(p => g.universe.surfaceReady(p.id) && !g.universe.destroyed(p.id)).length}개 / 512개 세계</div>`,
+        `<div class="eyebrow">NØMAD / SHIP SYSTEMS</div><h2>${g.started ? '잠시 정박' : '항해 설정'}</h2>${g.cloudUI?.menuRow() || ''}<div class="panelRow"><label for="quality">화면 품질</label><select id="quality"><option value="low">저사양</option><option value="balanced">균형</option><option value="high">높음</option></select></div><div class="panelRow"><label for="volume">소리</label><input id="volume" type="range" min="0" max="1" step=".05" value="${s.volume}"></div><div class="panelRow"><label for="sensitivity">시선 감도</label><input id="sensitivity" type="range" min=".3" max="2" step=".05" value="${s.sensitivity}"></div><div class="panelRow"><label for="shake">충돌 화면 흔들림</label><input id="shake" type="range" min="0" max="1" step=".05" value="${s.shake}"></div><div class="panelRow"><label for="touchSetting">화면 터치 조작 표시</label><input id="touchSetting" type="checkbox" ${g.input.mobile ? 'checked' : ''}></div><div class="panelActions"><button class="primary" id="resume">${g.started ? '항해 계속' : '닫기'} ↗</button><button class="secondary" id="helpBtn">조작 안내</button>${g.started && g.mode === 'interior' ? '<button class="secondary" id="holdMenu">화물칸</button>' : ''}</div><div class="panelActions slim"><button class="secondary" id="exportSave">저장 내보내기</button><button class="secondary" id="importSave">저장 불러오기</button><input id="importInput" type="file" accept=".json,application/json"></div><div class="panelActions slim"><button class="ghost danger" id="resetBtn">진행 기록 초기화</button></div><div class="finePrint">자동 저장: 왕의 머리 회수 · 행성 귀환 · 주기적 항해 저장<br>로컬 파일·시크릿 모드에서는 저장이 제한될 수 있습니다. 저장 파일을 따로 보관할 수 있습니다.<br>FIRST CONTACTS ${K.BUILD || ''} · 상륙 가능한 행성 ${g.universe.planets.filter(p => g.universe.surfaceReady(p.id) && !g.universe.destroyed(p.id)).length}개 / 512개 세계</div>`,
       );
+      if ($('holdMenu')) $('holdMenu').onclick = () => this.openHold();
       $('quality').value = s.quality;
       $('quality').onchange = e => {
         s.quality = e.target.value;
@@ -5124,14 +5162,20 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     openHold() {
       const u = this.game.universe,
         esc = K.escapeHTML;
-      const rows = u.hold
-        .map(p => `<div class="panelRow"><span>${esc(p.from ? u.displayName(p.from) : '출신 불명')}</span><span>${p.result ? '항로 조사 완료' : '생존'}</span></div>`)
-        .join('');
-      const heads = this.game.save.data.trophies.length;
+      const rows = u.hold.map((p, i) => {
+        const species = K.Species[p.species]?.name || '주민';
+        const status = p.pieces ? '분리한 부위 ' + Object.keys(p.pieces).length + '개' : p.result ? '항로 조사 완료' : '생존';
+        return `<div class="panelRow"><span>${String(i + 1).padStart(2, '0')} · ${esc(species)}<small class="holdOrigin">${esc(p.from ? u.displayName(p.from) : '출신 불명')} · ${status}</small></span><button class="secondary specimenEntry" data-slot="${i}">${p.pieces ? '표본 보기' : '해부대'}</button></div>`;
+      }).join('');
+      const specimens = u.cargo - u.liveCargo;
+      const holdDescription = specimens ? '생존 ' + u.liveCargo + '명 · 표본 ' + specimens + '점' :
+        u.cargo ? (this.game.save.data.trophies.length ? '모두 전시 복도 쪽을 보고 서 있습니다.' : '모두 실험대 쪽을 보고 서 있습니다.') : '비어 있습니다.';
       this.open(
-        `<div class="eyebrow">CARGO HOLD</div><h2>${u.cargo}/20</h2><p class="text">${u.cargo ? (heads ? '모두 전시 복도 쪽을 보고 서 있습니다.' : '모두 실험대 쪽을 보고 서 있습니다.') : '비어 있습니다.'}${u.lost ? '<br>지금까지 ' + u.lost + '명이 돌아가지 못했습니다.' : ''}${u.freed ? '<br>' + u.freed + '명을 내려놓았습니다.' : ''}</p>${rows}<div class="panelActions">${u.cargo ? `<button id="freeHold">${u.freeing ? '내려보내기 취소' : '다음 착륙지에서 내려보내기'}</button>` : ''}<button id="closeHold" class="primary">닫기 ↗</button></div>`,
+        `<div class="eyebrow">CARGO HOLD</div><h2>화물칸 ${u.cargo}/20</h2><p class="text">${holdDescription}${u.lost ? '<br>지금까지 ' + u.lost + '명이 돌아가지 못했습니다.' : ''}${u.freed ? '<br>' + u.freed + '명을 내려놓았습니다.' : ''}</p>${rows}<div class="panelActions">${u.liveCargo ? `<button id="freeHold">${u.freeing ? '내려보내기 취소' : '다음 착륙지에서 내려보내기'}</button>` : ''}<button id="closeHold" class="primary">닫기 ↗</button></div>`,
       );
-      if (u.cargo)
+      for (const b of $('panel').querySelectorAll('.specimenEntry'))
+        b.onclick = () => K.openSpecimen(this, u.hold[Number(b.dataset.slot)]);
+      if (u.liveCargo)
         $('freeHold').onclick = () => {
           const on = u.setFreeing(!u.freeing);
           this.close();
@@ -5175,9 +5219,10 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     inspect(index) {
       const t = this.game.save.data.trophies[index],
         esc = K.escapeHTML,
-        planet = t ? this.game.universe.get(t.planet) : null;
+        planet = t ? this.game.universe.get(t.planet) : null,
+        eye = t && K.Living?.eyeRecord(this.game.save, t);
       this.open(
-        `<div class="eyebrow">ARCHIVE / ${String(index + 1).padStart(2, '0')}</div><h2>${t ? esc(t.name) : '비어 있는 자리'}</h2><p class="text">${t ? esc(K.SurfaceMeta?.[t.planet]?.trophyNote || '그 세계의 왕은 이제 NØMAD와 함께 떠돈다.') : '아직 아무것도 전시되어 있지 않습니다.<br>다음 행성의 자리는 남아 있습니다.'}</p>${t ? `<div class="panelRow"><span>회수지</span><span>${esc(planet?.name || t.planet)}</span></div><div class="panelRow"><span>행성 상태</span><span>${this.game.universe.destroyed(t.planet) ? '소멸 · 전시품 보존' : '존재'}</span></div><div class="panelRow"><span>회수 시각</span><span>${new Date(t.time).toLocaleString('ko-KR')}</span></div>` : ''}<div class="panelActions"><button id="closeInspect" class="primary">구경 계속 ↗</button></div>`,
+        `<div class="eyebrow">ARCHIVE / ${String(index + 1).padStart(2, '0')}</div><h2>${t ? esc(t.name) : '비어 있는 자리'}</h2><p class="text">${t ? esc(K.SurfaceMeta?.[t.planet]?.trophyNote || '그 세계의 왕은 이제 NØMAD와 함께 떠돈다.') : '아직 아무것도 전시되어 있지 않습니다.<br>다음 행성의 자리는 남아 있습니다.'}</p>${eye ? `<div class="panelRow"><span>보관 수량</span><span>${eye.count}개</span></div>` : ''}${t ? `<div class="panelRow"><span>회수지</span><span>${esc(planet?.name || t.planet)}</span></div><div class="panelRow"><span>행성 상태</span><span>${this.game.universe.destroyed(t.planet) ? '소멸 · 전시품 보존' : '존재'}</span></div><div class="panelRow"><span>회수 시각</span><span>${new Date(t.time).toLocaleString('ko-KR')}</span></div>` : ''}<div class="panelActions"><button id="closeInspect" class="primary">구경 계속 ↗</button></div>`,
       );
       $('closeInspect').onclick = () => this.close();
     }
@@ -5842,7 +5887,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       planet.residents.release(ids);
       game.ui.toast(
         ids.length + '명을 내려놓았습니다',
-        (ids.every(p => p.from === planet.id) ? '고향입니다.' : '이곳은 그들의 고향이 아닙니다.') + ' 화물칸이 비었습니다.',
+        (ids.every(p => p.from === planet.id) ? '고향입니다.' : '이곳은 그들의 고향이 아닙니다.') + (u.cargo ? ' 모선에 표본이 남았습니다.' : ' 화물칸이 비었습니다.'),
         7,
       );
       return;
@@ -5875,7 +5920,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     });
     game.ui.toast(
       ids.length + '명을 내려놓았습니다',
-      (ids.every(p => p.from === planet.id) ? '고향입니다.' : '이곳은 그들의 고향이 아닙니다.') + ' 화물칸이 비었습니다.',
+      (ids.every(p => p.from === planet.id) ? '고향입니다.' : '이곳은 그들의 고향이 아닙니다.') + (u.cargo ? ' 모선에 표본이 남았습니다.' : ' 화물칸이 비었습니다.'),
       7,
     );
   };
@@ -6877,7 +6922,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
           (this.auto ? '자동항해 중' : this.warp ? '도약 항해' : inSky && speed < 1 ? '창공 정박' : '자유 항해') +
             this.scanLabel() +
             this.relicLabel() +
-            (this.universe.cargo ? ' · 화물칸 ' + this.universe.cargo + '명' : ''),
+            (this.universe.cargo ? ' · 화물칸 ' + this.universe.cargo + '/20' : ''),
           text,
         );
         this.game.currentInteract = { action: () => this.game.enterInterior('bridge') };
@@ -7084,7 +7129,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         gallery: true,
         p: [0, 1.7, tz],
         radius: 3.4,
-        label: u.cargo ? '실험대' : '실험대 · 화물칸이 비어 있습니다',
+        label: u.liveCargo ? '실험대' : '실험대 · 조사할 주민이 없습니다',
         verb: '실험대에 눕히기',
         action: () => {
           if (this.labPose) {
@@ -7105,14 +7150,18 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       for (const sd of [-1, 1]) mesh(g, 'box', [sd * 7.4, 0.1, hz], [0.06, 0.05, 8.6], C.amber, { em: 1.1, type: 1 });
       const heads = this.game.save.data.trophies.length;
       this.firstPassenger = null;
-      const subject = u.hold.find(p => !p.result) || u.hold[0];
+      const subject = u.hold.find(p => !p.pieces && !p.result) || u.hold.find(p => !p.pieces);
       u.hold.forEach((person, i) => {
         const col = i % 5,
           row = Math.floor(i / 5);
         const fig = heads
           ? group(g, [-3.5 + col * 1.75, 0, hz - 4.1 + row * 1.15])
           : group(g, [-4.4 + col * 2.2, 0, hz - 2.6 + row * 2.1]);
-        K.residentFigure(fig, person.species, person.pal, 1.75, person.scale);
+        if (person.pieces) {
+          mesh(fig, 'box', [0, 0.27, 0], [1, 0.5, 0.78], C.edge);
+          mesh(fig, 'box', [0, 0.54, 0], [1.06, 0.1, 0.84], C.panel);
+          mesh(fig, 'box', [0, 0.6, 0], [0.38, 0.025, 0.16], C.amber);
+        } else K.residentFigure(fig, person.species, person.pal, 1.75, person.scale);
         fig.r[1] = Math.PI;
         fig.s = [1.15, 1.15, 1.15];
         if (person === subject) this.firstPassenger = { fig, person };
@@ -7187,7 +7236,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         key =
           slots.map(x => (x.type === 'head' ? 'h' + x.t.id : 'r' + x.id)).join('|') +
           '#' +
-          this.game.universe.hold.map(p => [p.from, p.species, p.seed, p.result].join('-')).join('.') +
+          this.game.universe.hold.map(p => [p.from, p.species, p.seed, p.result, p.pieces ? 1 : 0].join('-')).join('.') +
           '#' +
           (this.game.universe.freeing ? 1 : 0);
       if (key === this.galleryKey) return;
@@ -7342,8 +7391,8 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
       let ready = !!nearest;
       let verb = nearest?.verb || '';
       if (nearest?.id === 'lab') {
-        ready = this.game.universe.cargo > 0;
-        if (!ready) hint = '실험대 · 화물칸이 비어 있습니다';
+        ready = this.game.universe.liveCargo > 0;
+        if (!ready) hint = '실험대 · 조사할 주민이 없습니다';
         else if (this.labPose) {
           const pose = this.labPose;
           ready = pose.time >= 0.7 && (pose.scan == null || !!pose.person.result);
@@ -7554,7 +7603,7 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         this.kick = 0.017;
       } else this.planet.stopFire();
       if (this.grab) this.updateGrab(dt, f);
-      if (input.take('KeyG')) this.recoverPassenger();
+      if (input.take('KeyG')) this.recoverHeld();
       this.animateRecovery(dt);
       if (input.take('KeyF')) {
         if (this.pulseCooldown <= 0) {
@@ -7623,7 +7672,8 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
         } else if (e.tug) context = '뽑아내는 중 · 뒤로 당기세요';
         else if (this.anchored(e)) context = touch ? '잡아당기는 중 · 놓기로 해제' : '잡아당기는 중 · 우클릭 놓기';
         else context = touch ? '던지기를 끌어 조준 · 손을 떼면 투척' : '좌클릭 던지기 · 우클릭 내려놓기';
-        if (this.canRecover()) context = this.game.universe.cargoFull()
+        if (e.eye) context = touch ? '눈알 견인 중 · 트로피 회수 또는 던지기' : 'G · 트로피 회수　좌클릭 · 던지기　Q · 놓기';
+        else if (this.canRecover()) context = this.game.universe.cargoFull()
           ? '화물칸 20/20 · 던지기 또는 놓기'
           : touch ? '주민 견인 중' : 'G · 모선 회수　좌클릭 · 던지기　Q · 놓기';
       } else {
@@ -7928,34 +7978,39 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     }
     canRecover() {
       const e = this.grab;
-      return !!(e?.alive && e.kind === 'creature' && (e.res || e.freed || e.beg));
+      return !!(e?.alive && (e.eye || (e.kind === 'creature' && (e.res || e.freed || e.beg))));
     }
     recoverPassenger() {
+      if (!this.grab?.eye) this.recoverHeld();
+    }
+    recoverHeld() {
       if (!this.canRecover()) return;
       const u = this.game.universe, e = this.grab;
-      const person = u.loadSurvivor(this.planet.id, e);
-      if (!person) {
+      const p = e.p.slice(), eye = e.eye;
+      const person = eye ? null : u.loadSurvivor(this.planet.id, e);
+      if (!eye && !person) {
         this.game.ui.toast('화물칸이 가득 찼습니다', '20/20 · 견인 중인 주민은 그대로 있습니다.', 3);
         return;
       }
-      const p = e.p.slice();
-      this.planet.residents?.lifted(e);
+      if (person) this.planet.residents?.lifted(e);
       e.alive = false;
       e.node.visible = false;
       this.grab = null;
       this.tension = 0;
-      // Commit both ledgers before optional rendering or audio can interrupt the transfer.
-      this.game.persist('checkpoint');
+      const title = eye ? this.planet.archiveEye(e) : '모선 회수 · 화물칸 ' + u.cargo + '/20';
+      if (person) this.game.persist('checkpoint');
       this.planet.stopTether();
-      this.planet.residents?.alarm(p[0], p[2], 48, 'beam');
+      if (person) this.planet.residents?.alarm(p[0], p[2], 48, 'beam');
       const fx = K.group(this.planet.root, p);
-      const column = K.beam(fx, [0, -1, 0], [0, 200, 0], 1.8, '#a6ffe4', 1.4);
+      const column = K.beam(fx, [0, -1, 0], [0, 200, 0], Math.max(1.8, (eye ? e.radius : 0) * 2), '#a6ffe4', 1.4);
       column.alpha = 0.23;
-      const figure = K.residentFigure(fx, person.species, person.pal, null, person.scale);
-      figure.r[1] = e.yaw || 0;
+      const figure = eye
+        ? K.mesh(fx, 'sphere', [0, 0, 0], Array(3).fill(e.radius * 2), eye.color, { type: 20, em: 1, detail: 0.95, seed: eye.seed })
+        : K.residentFigure(fx, person.species, person.pal, null, person.scale);
+      figure.r = eye ? e.node.r.slice() : [0, e.yaw || 0, 0];
       (this.recoveries ||= []).push({ fx, column, figure, age: 0 });
       this.game.audio.success();
-      this.game.ui.toast('모선 회수 · 화물칸 ' + u.cargo + '/20', '', 2);
+      this.game.ui.toast(title, eye ? '모선 전시 복도' : '', 2.8);
     }
     animateRecovery(dt) {
       if (!this.recoveries) return;
@@ -10393,6 +10448,15 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     }
   }
   K.Residents = Residents;
+  K.specimenPose = function (sp) {
+    resetQ();
+    Q.aLz = Q.aRz = 0.93;
+    Q.eL = Q.eR = 0.08;
+    Q.lLz = Q.lRz = 0.55;
+    Q.hdp = -0.04;
+    bones(BONES, sp, 0, 0, 0, 0, 1);
+    return new Float32Array(BONES);
+  };
   /* A standing figure as ordinary scene nodes (the mothership's hold). height = metres tall in that room. */
   K.residentFigure = function (root, key, seed = 0, height = 1.75, scale = 1) {
     const sp = SPECIES[key] || SPECIES.subject;
@@ -12198,4 +12262,374 @@ void main(){vec2 p=uv;vec3 c=texture(uTex,p).rgb;vec3 b=vec3(0);if(uGlow>.5){for
     }
   }
   K.Barren = Barren;
+})((window.KO ||= {}));
+// FILE: src/ui/cargo-specimen.js
+(function (K) {
+  'use strict';
+  const style = document.createElement('style');
+  style.textContent = `
+/* Cargo workbench */
+.holdOrigin{display:block;margin-top:4px;color:#9bb4b0;font-size:11px}
+.specimenEntry{min-height:42px;min-width:72px}
+.panel.specimenPanel{width:min(96vw,515px);padding:clamp(12px,3vw,25px);text-align:left}
+.specimenPanel h2{margin:6px 0 10px}.specimenPanel h2 small{font-size:.46em;margin-left:6px;color:#a2bcb5}
+#specimenTray{display:block;width:auto;height:auto;max-width:100%;max-height:56dvh;aspect-ratio:360/326;margin:0 auto;touch-action:none;cursor:crosshair;border:1px solid #47655e;border-radius:9px;background:linear-gradient(90deg,#9fc8b50b 1px,transparent 1px) 0 0/22px 22px,linear-gradient(#9fc8b50b 1px,transparent 1px) 0 0/22px 22px,radial-gradient(ellipse at 42% 36%,#526b63,#263c36 72%,#192b27);box-shadow:inset 0 0 0 4px #243c35,inset 0 0 0 5px #597169}
+#specimenStatus{min-height:1.5em;margin:9px 0;color:#cedbd4;font-size:13px}
+#discardSpecimen[hidden]{display:none}
+.specimenPanel .panelActions{margin-top:7px}
+@media(max-height:480px) and (orientation:landscape){.panel.specimenPanel{display:grid;grid-template-columns:minmax(0,1fr) minmax(155px,.72fr);gap:4px 16px;width:min(94vw,630px);align-items:center}.specimenPanel #specimenTray{grid-column:1;grid-row:1/6;max-height:75dvh}.specimenPanel .eyebrow,.specimenPanel h2,.specimenPanel #specimenStatus,.specimenPanel .panelActions{grid-column:2}.specimenPanel .panelActions{display:grid;gap:6px}.specimenPanel .panelActions button{min-height:40px;padding:8px}}
+`;
+  document.head.appendChild(style);
+  const W = 360,
+    H = 326;
+  const boneGroup = [0, 0, 0, 1, 2, 3, 4, 5, 6, 7];
+  const parents = [-1, 0, 0, 2, 0, 4, 0, 0];
+  const names = [
+    '몸통',
+    '머리',
+    '왼쪽 위팔',
+    '왼쪽 아래팔',
+    '오른쪽 위팔',
+    '오른쪽 아래팔',
+    '왼쪽 다리',
+    '오른쪽 다리',
+  ];
+  const drawOrder = [7, 6, 4, 2, 0, 5, 3, 1];
+  const zero = [0, 0];
+  const css = (rgb, light = 1) => 'rgb(' + rgb.map(c => Math.round(Math.min(255, c * 255 * light))).join(',') + ')';
+  const clamp = K.M.clamp;
+  const clampPoint = (point, center) => [
+    clamp(point[0], 18 - center[0], W - 18 - center[0]),
+    clamp(point[1], 16 - center[1], H - 16 - center[1]),
+  ];
+  // Bake the actual passenger meshes into movable layers once. Colour and joints come from the surface species.
+  function cutout(engine, sp, person) {
+    const pose = K.specimenPose(sp),
+      matrix = new Float32Array(16);
+    const layers = names.map(() => ({ faces: [], minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity }));
+    const colors = sp.colors[person.pal % sp.palettes.length];
+    sp.parts.forEach((part, i) => {
+      if (part.dyn === 'halo') return;
+      const geo = engine.sources[part.geo],
+        layer = layers[boneGroup[part.bone]];
+      if (!geo || !layer) return;
+      K.Mat.mul(matrix, 0, pose, part.bone * 16, part.m, 0);
+      const pts = [];
+      for (let j = 0; j < geo.p.length; j += 3) {
+        const [x, y, z] = geo.p.slice(j, j + 3);
+        const wx = matrix[0] * x + matrix[4] * y + matrix[8] * z + matrix[12];
+        const wy = matrix[1] * x + matrix[5] * y + matrix[9] * z + matrix[13];
+        const wz = matrix[2] * x + matrix[6] * y + matrix[10] * z + matrix[14];
+        pts.push([wx, -wy, wz]);
+        layer.minX = Math.min(layer.minX, wx);
+        layer.maxX = Math.max(layer.maxX, wx);
+        layer.minY = Math.min(layer.minY, -wy);
+        layer.maxY = Math.max(layer.maxY, -wy);
+      }
+      for (let j = 0; j < geo.idx.length; j += 3) {
+        const [a, b, c] = [pts[geo.idx[j]], pts[geo.idx[j + 1]], pts[geo.idx[j + 2]]];
+        const normal = K.M.cross(K.M.sub(b, a), K.M.sub(c, a));
+        if (Math.abs(normal[2]) < 0.000001) continue;
+        const n = K.M.norm(normal),
+          sign = Math.sign(n[2]);
+        const light = 0.51 + 0.55 * Math.max(0, sign * (-0.46 * n[0] - 0.56 * n[1] + 0.67 * n[2])) + 0.1 * part.em;
+        layer.faces.push({ pts: [a, b, c], z: a[2] + b[2] + c[2], color: css(colors[i], light) });
+      }
+    });
+    const left = Math.min(...layers.map(l => l.minX)),
+      right = Math.max(...layers.map(l => l.maxX));
+    const top = Math.min(...layers.map(l => l.minY)),
+      bottom = Math.max(...layers.map(l => l.maxY));
+    const scale = Math.min(230 / (right - left), 228 / (bottom - top)) * clamp(0.93 + 0.07 * person.scale, 0.86, 1.08);
+    const px = x => W / 2 + (x - (left + right) / 2) * scale;
+    const py = y => H / 2 + (y - (top + bottom) / 2) * scale;
+    const joints = [2, 3, 4, 5, 6, 7, 8, 9];
+    layers.forEach((l, id) => {
+      l.joint = [px(pose[joints[id] * 16 + 12]), py(-pose[joints[id] * 16 + 13])];
+      if (!l.faces.length) {
+        l.center = l.joint;
+        return;
+      }
+      l.x = Math.floor(px(l.minX)) - 1;
+      l.y = Math.floor(py(l.minY)) - 1;
+      l.w = Math.ceil(px(l.maxX)) - l.x + 2;
+      l.h = Math.ceil(py(l.maxY)) - l.y + 2;
+      l.center = [l.x + l.w / 2, l.y + l.h / 2];
+      l.img = document.createElement('canvas');
+      l.img.width = l.w * 2;
+      l.img.height = l.h * 2;
+      const ctx = l.img.getContext('2d', { willReadFrequently: true });
+      ctx.scale(2, 2);
+      ctx.lineWidth = 0.46;
+      ctx.lineJoin = 'round';
+      l.faces.sort((a, b) => a.z - b.z);
+      for (const f of l.faces) {
+        ctx.beginPath();
+        f.pts.forEach(([x, y], n) => (n ? ctx.lineTo(px(x) - l.x, py(y) - l.y) : ctx.moveTo(px(x) - l.x, py(y) - l.y)));
+        ctx.closePath();
+        ctx.fillStyle = ctx.strokeStyle = f.color;
+        ctx.fill();
+        ctx.stroke();
+      }
+      l.alpha = ctx.getImageData(0, 0, l.img.width, l.img.height).data;
+      delete l.faces;
+    });
+    return layers;
+  }
+  K.openSpecimen = function (ui, person) {
+    const game = ui.game,
+      u = game.universe,
+      slot = u.hold.indexOf(person);
+    if (slot < 0) return ui.openHold();
+    const sp = K.Species[person.species] || K.Species.subject;
+    ui.open(`<div class="eyebrow">NØMAD / CARGO · ${String(slot + 1).padStart(2, '0')}</div>
+      <h2>해부대 <small>${K.escapeHTML(sp.name)}</small></h2>
+      <canvas id="specimenTray" width="720" height="652" aria-label="주민 해부대. 머리와 팔다리를 잡아당겨 분리하세요."></canvas>
+      <div id="specimenStatus" role="status"></div>
+      <div class="panelActions"><button class="secondary danger" id="discardSpecimen">표본 폐기</button><button class="primary" id="backToHold">화물칸 ↗</button></div>`);
+    const panel = document.getElementById('panel'),
+      canvas = document.getElementById('specimenTray');
+    const status = document.getElementById('specimenStatus'),
+      discard = document.getElementById('discardSpecimen');
+    panel.classList.add('specimenPanel');
+    const ctx = canvas.getContext('2d'),
+      layers = cutout(game.engine, sp, person);
+    let grip = null,
+      frame = 0,
+      last = 0,
+      drops = [],
+      returnMotion = null,
+      recoil = null,
+      closed = false;
+    const parts = () => person.pieces || {};
+    const blood = css(sp.blood, 1.35);
+    function caption(message) {
+      discard.hidden = !person.pieces;
+      status.textContent =
+        message ||
+        (person.pieces ? '분리한 조각은 다시 집어 옮길 수 있습니다.' : '머리나 팔다리를 집고 바깥으로 당기세요.');
+    }
+    function offset(id) {
+      if (id === 0) {
+        if (recoil) return [recoil.x * recoil.k, recoil.y * recoil.k];
+        if (grip && !parts()[grip.id]) return grip.offset.map((v, i) => (v - grip.origin[i]) * 0.15);
+      }
+      if (grip?.id === id) return grip.offset;
+      if (returnMotion?.id === id) return returnMotion.offset;
+      return (
+        (parts()[id] && clampPoint(parts()[id], layers[id].center)) || (parents[id] >= 0 ? offset(parents[id]) : zero)
+      );
+    }
+    function point(e) {
+      const r = canvas.getBoundingClientRect();
+      return [((e.clientX - r.left) * W) / r.width, ((e.clientY - r.top) * H) / r.height];
+    }
+    function pick(x, y) {
+      let best = -1,
+        bestDist = Infinity;
+      for (const id of drawOrder.slice().reverse()) {
+        const l = layers[id];
+        if (!l.img) continue;
+        const [dx, dy] = offset(id);
+        for (const [ox, oy] of [
+          [0, 0],
+          [-4, 0],
+          [4, 0],
+          [0, -4],
+          [0, 4],
+          [-7, 0],
+          [7, 0],
+          [0, 7],
+          [0, -7],
+        ]) {
+          const a = Math.floor((x - dx - l.x + ox) * 2),
+            b = Math.floor((y - dy - l.y + oy) * 2);
+          if (a < 0 || b < 0 || a >= l.img.width || b >= l.img.height || l.alpha[(b * l.img.width + a) * 4 + 3] < 55)
+            continue;
+          const d = Math.abs(ox) + Math.abs(oy);
+          if (d < bestDist) {
+            best = id;
+            bestDist = d;
+          }
+          break;
+        }
+      }
+      return best;
+    }
+    function ellipse(x, y, rx, ry, color) {
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    function schedule() {
+      if (!frame && !closed) frame = requestAnimationFrame(paint);
+    }
+    function paint(now) {
+      frame = 0;
+      const dt = Math.min(0.04, Math.max(0, (now - last) / 1000));
+      last = now;
+      if (recoil) {
+        recoil.age += dt;
+        recoil.k = Math.exp(-recoil.age * 14) * Math.cos(recoil.age * 34);
+        if (recoil.age > 0.34) recoil = null;
+      }
+      if (returnMotion) {
+        const target = offset(parents[returnMotion.id]);
+        returnMotion.offset = returnMotion.offset.map((v, i) => target[i] + (v - target[i]) * Math.exp(-dt * 22));
+        if (Math.hypot(returnMotion.offset[0] - target[0], returnMotion.offset[1] - target[1]) < 0.3)
+          returnMotion = null;
+      }
+      ctx.setTransform(2, 0, 0, 2, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+      for (let x = 10; x < W - 8; x += 10) {
+        ctx.fillStyle = '#779b925e';
+        ctx.fillRect(x, H - 8, 0.65, x % 50 === 0 ? -7 : -3);
+      }
+      const jointAt = (id, part) => layers[id].joint.map((v, i) => v + offset(part)[i]);
+      for (const key of Object.keys(parts())) {
+        const id = +key,
+          [x, y] = jointAt(id, parents[id]);
+        ellipse(x, y + 3, id === 1 ? 11 : 7, id === 1 ? 5 : 3.8, blood);
+        ellipse(x + 8, y + 8, 2.5, 1.6, blood);
+      }
+      if (grip && !parts()[grip.id]) {
+        const a = jointAt(grip.id, parents[grip.id]),
+          b = jointAt(grip.id, grip.id);
+        for (let i = -1; i <= 1; i++) {
+          ctx.lineWidth = i ? 1.2 : 2.6;
+          ctx.strokeStyle = i ? '#c38279' : blood;
+          ctx.beginPath();
+          ctx.moveTo(a[0] + i * 3, a[1]);
+          ctx.quadraticCurveTo((a[0] + b[0]) / 2 + i * 4, (a[1] + b[1]) / 2 + 3, b[0] + i * 2, b[1]);
+          ctx.stroke();
+        }
+      }
+      for (const id of drawOrder) {
+        const l = layers[id];
+        if (!l.img) continue;
+        const [x, y] = offset(id);
+        ctx.shadowColor = '#02100e9c';
+        ctx.shadowBlur = 5;
+        ctx.shadowOffsetY = 3;
+        ctx.drawImage(l.img, l.x + x, l.y + y, l.w, l.h);
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
+        if (parts()[id]) {
+          const [jx, jy] = jointAt(id, id);
+          ellipse(jx, jy, id === 1 ? 6 : 3.4, id === 1 ? 2.8 : 2, blood);
+          ellipse(jx - 0.7, jy - 0.4, 1.2, 0.8, '#e3b99e');
+        }
+      }
+      drops = drops.filter(d => d.life > 0);
+      for (const d of drops) {
+        d.x += d.vx * dt;
+        d.y += d.vy * dt;
+        d.vy += 90 * dt;
+        d.vx *= Math.exp(-dt * 6);
+        d.life -= dt;
+        ctx.globalAlpha = Math.min(1, d.life * 2);
+        ellipse(d.x, d.y, d.r, d.r * 0.75, blood);
+      }
+      ctx.globalAlpha = 1;
+      if (grip) {
+        const [x, y] = grip.pointer;
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = '#c6d9cf';
+        ctx.beginPath();
+        ctx.moveTo(x - 3, y - 2);
+        ctx.lineTo(x + 15, y - 23);
+        ctx.lineTo(x + 18, y - 21);
+        ctx.lineTo(x + 3, y + 1);
+        ctx.stroke();
+      }
+      if (recoil || returnMotion || drops.length) schedule();
+    }
+    function down(e) {
+      if (grip || e.button !== 0) return;
+      const pos = point(e),
+        id = pick(...pos);
+      if (id < 1) {
+        if (id === 0) caption('몸통은 고정돼 있습니다. 머리나 팔다리를 집으세요.');
+        return;
+      }
+      e.preventDefault();
+      const origin = offset(id).slice();
+      returnMotion = null;
+      grip = { id, pid: e.pointerId, start: pos, pointer: pos, origin, offset: origin.slice(), sounded: false };
+      canvas.setPointerCapture(e.pointerId);
+      if (!document.hidden && !game.contextLost) game.audio.hold(false);
+      caption(names[id] + (parts()[id] ? ' · 이동' : ' · 당기는 중'));
+      schedule();
+    }
+    function move(e) {
+      if (!grip || e.pointerId !== grip.pid) return;
+      const g = grip,
+        id = g.id,
+        pos = point(e),
+        dx = pos[0] - g.start[0],
+        dy = pos[1] - g.start[1];
+      const dist = Math.hypot(dx, dy),
+        threshold = id === 1 ? 39 : 32;
+      g.pointer = pos;
+      const attached = !parts()[id],
+        pull = attached && dist < threshold ? 0.48 : 1;
+      g.offset = clampPoint([g.origin[0] + dx * pull, g.origin[1] + dy * pull], layers[id].center);
+      if (attached && dist >= threshold) {
+        recoil = { x: (dx / dist) * 3, y: (dy / dist) * 3, age: 0, k: 1 };
+        u.placePiece(person, id, g.offset);
+        game.audio.squelch(id === 1 ? 'tear' : 'pop', clamp((pos[0] - W / 2) / (W / 2), -1, 1), 0.8);
+        if (navigator.vibrate && game.input.mobile) navigator.vibrate(18);
+        const [x, y] = layers[id].joint.map((v, i) => v + offset(parents[id])[i]);
+        for (let i = 0; i < 12; i++)
+          drops.push({
+            x,
+            y,
+            vx: dx * (0.45 + Math.random()) + (Math.random() - 0.5) * 65,
+            vy: dy * 0.65 + (Math.random() - 0.5) * 65,
+            r: 1 + Math.random() * 2,
+            life: 0.35 + Math.random() * 0.45,
+          });
+        caption(names[id] + ' 분리');
+      } else if (attached && dist > 16 && !g.sounded) {
+        g.sounded = true;
+        game.audio.squelch('slice', 0, 0.23);
+      }
+      schedule();
+    }
+    function end(e) {
+      if (!grip || (e && grip.pid !== e.pointerId)) return;
+      if (e?.type === 'pointerup') move(e);
+      const g = grip;
+      if (parts()[g.id]) {
+        if (g.offset.some((v, i) => Math.round(v) !== parts()[g.id][i])) u.placePiece(person, g.id, g.offset);
+      } else returnMotion = { id: g.id, offset: g.offset };
+      grip = null;
+      if (canvas.hasPointerCapture(g.pid)) canvas.releasePointerCapture(g.pid);
+      if (!parts()[g.id]) caption();
+      schedule();
+    }
+    canvas.onpointerdown = down;
+    canvas.onpointermove = move;
+    canvas.onpointerup = end;
+    canvas.onpointercancel = end;
+    canvas.onlostpointercapture = end;
+    document.getElementById('backToHold').onclick = () => ui.openHold();
+    discard.onclick = () => {
+      end();
+      u.discardSpecimen(person);
+      ui.openHold();
+    };
+    ui.leaveSpecimen = () => {
+      closed = true;
+      end();
+      cancelAnimationFrame(frame);
+      panel.classList.remove('specimenPanel');
+      ui.leaveSpecimen = null;
+      game.interior.updateTrophies();
+    };
+    caption();
+    paint(performance.now());
+  };
 })((window.KO ||= {}));
